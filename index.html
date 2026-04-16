@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pharmacy Schedule Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Outfit', sans-serif; }
+    .mono { font-family: 'Space Mono', monospace; }
+    
+    @media print {
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      body { background: white !important; }
+      .schedule-container { 
+        page-break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #000 !important;
+      }
+    }
+    
+    .schedule-cell {
+      border: 1px solid #000;
+      padding: 4px 8px;
+      text-align: center;
+      font-weight: 600;
+    }
+    
+    .gradient-mesh {
+      background: 
+        radial-gradient(at 40% 20%, rgba(16, 185, 129, 0.15) 0px, transparent 50%),
+        radial-gradient(at 80% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+        radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+        radial-gradient(at 80% 50%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 0% 100%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+        linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+    
+    .card-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.02);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      transition: all 0.2s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    input[type="checkbox"] {
+      accent-color: #10b981;
+    }
+    
+    .tab-active {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+    }
+  </style>
+</head>
+<body class="gradient-mesh min-h-screen">
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo } = React;
+
+    // ============================================================
+    // SCHEDULING ENGINE - Ported from VBA V9.9
+    // ============================================================
+    
+    const ScheduleEngine = {
+      parseSegment(seg) {
+        let startHour = -1;
+        let endHour = -1;
+        
+        seg = (seg || '').trim();
+        if (!seg || !seg.includes('-')) return { startHour, endHour };
+        
+        const parts = seg.split('-');
+        if (parts.length < 2) return { startHour, endHour };
+        
+        let startStr = parts[0].trim();
+        let endStr = parts[parts.length - 1].trim();
+        
+        const startAM = startStr.toUpperCase().includes('AM');
+        const startPM = startStr.toUpperCase().includes('PM');
+        const endAM = endStr.toUpperCase().includes('AM');
+        const endPM = endStr.toUpperCase().includes('PM');
+        
+        startStr = startStr.replace(/AM|PM/gi, '').trim();
+        endStr = endStr.replace(/AM|PM/gi, '').trim();
+        
+        if (!startStr || !endStr) return { startHour, endHour };
+        
+        const startParts = startStr.split(':');
+        let h = parseFloat(startParts[0]) || 0;
+        let m = parseFloat(startParts[1]) || 0;
+        startHour = h + m / 60;
+        
+        const endParts = endStr.split(':');
+        h = parseFloat(endParts[0]) || 0;
+        m = parseFloat(endParts[1]) || 0;
+        endHour = h + m / 60;
+        
+        if (startPM && startHour < 12) startHour += 12;
+        if (startAM && startHour === 12) startHour = 0;
+        if (endPM && endHour < 12) endHour += 12;
+        if (endAM && endHour === 12) endHour = 0;
+        
+        if (endPM && !startAM && !startPM && startHour < 12) {
+          startHour += 12;
+        }
+        
+        if ((startAM || startPM) && !endAM && !endPM) {
+          if (endHour <= 12 && endHour < startHour) {
+            endHour += 12;
+          }
+        }
+        
+        return { startHour, endHour };
+      },
+      
+      isOnPTO(emp, checkDate) {
+        const ptoVal = (emp.ptoText || '').trim();
+        if (!ptoVal) return false;
+        if (ptoVal === '✓' || ptoVal.toUpperCase() === 'TRUE' || ptoVal === 'X' || ptoVal === 'x') return true;
+        
+        const ranges = ptoVal.split(',');
+        for (let rng of ranges) {
+          rng = rng.trim();
+          if (rng.includes('-')) {
+            const parts = rng.split('-');
+            const startDate = new Date(parts[0].trim() + '/' + checkDate.getFullYear());
+            const endDate = new Date(parts[1].trim() + '/' + checkDate.getFullYear());
+            if (checkDate >= startDate && checkDate <= endDate) return true;
+          } else {
+            const singleDate = new Date(rng + '/' + checkDate.getFullYear());
+            if (checkDate.toDateString() === singleDate.toDateString()) return true;
+          }
+        }
+        return false;
+      },
+      
+      getSched(emp, weekNum, dayNum) {
+        if (weekNum === 1) return emp.week1?.[dayNum] || '';
+        return emp.week2?.[dayNum] || '';
+      },
+      
+      avail(emp, weekNum, dayNum, block, checkDate, isSunday) {
+        if (this.isOnPTO(emp, checkDate)) return false;
+        
+        const sched = this.getSched(emp, weekNum, dayNum);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        
+        let bS, bE;
+        if (isSunday) {
+          if (block === 1) { bS = 10; bE = 12; }
+          else if (block === 2) { bS = 12; bE = 15; }
+          else { bS = 15; bE = 18.25; }
+        } else {
+          if (block === 1) { bS = 9; bE = 12; }
+          else if (block === 2) { bS = 12; bE = 16.25; }
+          else { bS = 16; bE = 20.25; }
+        }
+        
+        if (sched.includes('/')) {
+          const parts = sched.split('/');
+          for (const seg of parts) {
+            const { startHour, endHour } = this.parseSegment(seg.trim());
+            if (startHour >= 0 && endHour >= 0 && startHour <= bS && endHour >= bE) {
+              return true;
+            }
+          }
+          return false;
+        } else {
+          const { startHour, endHour } = this.parseSegment(sched);
+          if (startHour < 0 || endHour < 0) return false;
+          return startHour <= bS && endHour >= bE;
+        }
+      },
+      
+      availHours(emp, weekNum, dayNum, startH, endH, checkDate) {
+        if (this.isOnPTO(emp, checkDate)) return false;
+        
+        const sched = this.getSched(emp, weekNum, dayNum);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        
+        if (sched.includes('/')) {
+          const parts = sched.split('/');
+          for (const seg of parts) {
+            const { startHour, endHour } = this.parseSegment(seg.trim());
+            if (startHour >= 0 && endHour >= 0 && startHour <= startH && endHour >= endH) {
+              return true;
+            }
+          }
+          return false;
+        } else {
+          const { startHour, endHour } = this.parseSegment(sched);
+          if (startHour < 0 || endHour < 0) return false;
+          return startHour <= startH && endHour >= endH;
+        }
+      },
+      
+      arrivesEarly(emp, weekNum, dayNum, checkDate, isSunday) {
+        if (this.isOnPTO(emp, checkDate)) return false;
+        const sched = this.getSched(emp, weekNum, dayNum);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        
+        const threshold = isSunday ? 9.75 : 8.75;
+        let earliest = 99;
+        
+        if (sched.includes('/')) {
+          const parts = sched.split('/');
+          for (const seg of parts) {
+            const { startHour } = this.parseSegment(seg.trim());
+            if (startHour >= 0 && startHour < earliest) earliest = startHour;
+          }
+        } else {
+          const { startHour } = this.parseSegment(sched);
+          if (startHour >= 0) earliest = startHour;
+        }
+        
+        return earliest <= threshold;
+      },
+      
+      getEmpStartTime(emp, weekNum, dayNum) {
+        const sched = this.getSched(emp, weekNum, dayNum);
+        if (!sched || sched.toUpperCase() === 'OFF') return 99;
+        
+        let earliest = 99;
+        if (sched.includes('/')) {
+          const parts = sched.split('/');
+          for (const seg of parts) {
+            const { startHour } = this.parseSegment(seg.trim());
+            if (startHour >= 0 && startHour < earliest) earliest = startHour;
+          }
+        } else {
+          const { startHour } = this.parseSegment(sched);
+          if (startHour >= 0) earliest = startHour;
+        }
+        return earliest;
+      },
+      
+      isVaultOnly(emp) {
+        return emp.vault && !emp.reception && !emp.lod && !emp.ipad && !emp.registers;
+      },
+      
+      isReceptionOnly(emp) {
+        return emp.reception && !emp.lod && !emp.ipad && !emp.registers;
+      },
+      
+      isiPadOnly(emp) {
+        return emp.ipad && !emp.reception && !emp.lod && !emp.registers;
+      },
+      
+      isRegistersOnly(emp) {
+        return emp.registers && !emp.reception && !emp.lod && !emp.ipad;
+      },
+      
+      worksTwoShifts(emp, weekNum, dayNum, isSunday) {
+        const sched = this.getSched(emp, weekNum, dayNum);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        
+        let minStart = 99, maxEnd = 0;
+        
+        if (sched.includes('/')) {
+          const parts = sched.split('/');
+          for (const seg of parts) {
+            const { startHour, endHour } = this.parseSegment(seg.trim());
+            if (startHour >= 0 && startHour < minStart) minStart = startHour;
+            if (endHour >= 0 && endHour > maxEnd) maxEnd = endHour;
+          }
+        } else {
+          const { startHour, endHour } = this.parseSegment(sched);
+          if (startHour >= 0) minStart = startHour;
+          if (endHour >= 0) maxEnd = endHour;
+        }
+        
+        if (isSunday) {
+          return minStart <= 10 && maxEnd >= 18;
+        } else {
+          return (minStart <= 8.75 && maxEnd >= 16.25) || (minStart <= 12 && maxEnd >= 20.25);
+        }
+      },
+      
+      worksSingleShift(emp, weekNum, dayNum, isSunday) {
+        const sched = this.getSched(emp, weekNum, dayNum);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        if (isSunday) return false;
+        if (this.worksTwoShifts(emp, weekNum, dayNum, isSunday)) return false;
+        
+        let minStart = 99, maxEnd = 0;
+        
+        if (sched.includes('/')) {
+          const parts = sched.split('/');
+          for (const seg of parts) {
+            const { startHour, endHour } = this.parseSegment(seg.trim());
+            if (startHour >= 0 && startHour < minStart) minStart = startHour;
+            if (endHour >= 0 && endHour > maxEnd) maxEnd = endHour;
+          }
+        } else {
+          const { startHour, endHour } = this.parseSegment(sched);
+          if (startHour >= 0) minStart = startHour;
+          if (endHour >= 0) maxEnd = endHour;
+        }
+        
+        return (minStart <= 12 && maxEnd >= 16.25) || (minStart <= 16 && maxEnd >= 20.25);
+      },
+      
+      findRole(employees, weekNum, dayNum, block, role, used, checkDate, isSunday) {
+        // Pass 1: Single-role only
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          
+          let roleMatch = false;
+          let singleRoleMatch = false;
+          
+          switch (role) {
+            case 'REC':
+              roleMatch = emp.reception;
+              singleRoleMatch = this.isReceptionOnly(emp);
+              break;
+            case 'IPAD':
+              roleMatch = emp.ipad;
+              singleRoleMatch = this.isiPadOnly(emp);
+              break;
+            case 'REG':
+              roleMatch = emp.registers;
+              singleRoleMatch = this.isRegistersOnly(emp);
+              break;
+            case 'LOD':
+              roleMatch = emp.lod;
+              singleRoleMatch = true;
+              break;
+          }
+          
+          if (!roleMatch || !singleRoleMatch) continue;
+          if (this.avail(emp, weekNum, dayNum, block, checkDate, isSunday) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        // Pass 2: Any with role
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          
+          let roleMatch = false;
+          switch (role) {
+            case 'REC': roleMatch = emp.reception; break;
+            case 'IPAD': roleMatch = emp.ipad; break;
+            case 'REG': roleMatch = emp.registers; break;
+            case 'LOD': roleMatch = emp.lod; break;
+          }
+          
+          if (!roleMatch) continue;
+          if (this.avail(emp, weekNum, dayNum, block, checkDate, isSunday) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        return 'X';
+      },
+      
+      findRoleRotate(employees, weekNum, dayNum, block, role, used, avoid, checkDate, isSunday) {
+        // Pass 1: Single-role, NOT in avoid
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (avoid.includes(emp.name)) continue;
+          
+          let roleMatch = false;
+          let singleRoleMatch = false;
+          
+          switch (role) {
+            case 'REC':
+              roleMatch = emp.reception;
+              singleRoleMatch = this.isReceptionOnly(emp);
+              break;
+            case 'REG':
+              roleMatch = emp.registers;
+              singleRoleMatch = this.isRegistersOnly(emp);
+              break;
+          }
+          
+          if (!roleMatch || !singleRoleMatch) continue;
+          if (this.avail(emp, weekNum, dayNum, block, checkDate, isSunday) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        // Pass 2: Multi-role, NOT in avoid
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (avoid.includes(emp.name)) continue;
+          
+          let roleMatch = false;
+          switch (role) {
+            case 'REC': roleMatch = emp.reception; break;
+            case 'REG': roleMatch = emp.registers; break;
+          }
+          
+          if (!roleMatch) continue;
+          if (this.avail(emp, weekNum, dayNum, block, checkDate, isSunday) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        // Pass 3 & 4: Fallback (accept avoid)
+        return this.findRole(employees, weekNum, dayNum, block, role, used, checkDate, isSunday);
+      },
+      
+      findIPadSlot(employees, weekNum, dayNum, startH, endH, used, checkDate) {
+        // Pass 1: iPad-only
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (!emp.ipad || !this.isiPadOnly(emp)) continue;
+          if (this.availHours(emp, weekNum, dayNum, startH, endH, checkDate) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        // Pass 2: Any iPad
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (!emp.ipad) continue;
+          if (this.availHours(emp, weekNum, dayNum, startH, endH, checkDate) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        return 'X';
+      },
+      
+      findIPadSlotRotate(employees, weekNum, dayNum, startH, endH, used, avoid, checkDate) {
+        // Pass 1: iPad-only, NOT in avoid
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (avoid.includes(emp.name)) continue;
+          if (!emp.ipad || !this.isiPadOnly(emp)) continue;
+          if (this.availHours(emp, weekNum, dayNum, startH, endH, checkDate) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        // Pass 2: Any iPad, NOT in avoid
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (avoid.includes(emp.name)) continue;
+          if (!emp.ipad) continue;
+          if (this.availHours(emp, weekNum, dayNum, startH, endH, checkDate) && !used.includes(emp.name)) {
+            return emp.name;
+          }
+        }
+        
+        // Fallback
+        return this.findIPadSlot(employees, weekNum, dayNum, startH, endH, used, checkDate);
+      },
+      
+      findVaultPerson(employees, weekNum, dayNum, block, used, checkDate, isSunday) {
+        // Pass 1: Vault-only
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate)) continue;
+          if (emp.vault && this.isVaultOnly(emp)) {
+            if (this.avail(emp, weekNum, dayNum, block, checkDate, isSunday) && !used.includes(emp.name)) {
+              return emp.name;
+            }
+          }
+        }
+        
+        // Pass 2: Any vault
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate)) continue;
+          if (emp.vault) {
+            if (this.avail(emp, weekNum, dayNum, block, checkDate, isSunday) && !used.includes(emp.name)) {
+              return emp.name;
+            }
+          }
+        }
+        
+        return 'X';
+      },
+      
+      formatTime(hour) {
+        const h = Math.floor(hour);
+        const m = Math.round((hour - h) * 60);
+        const suffix = h >= 12 ? ' PM' : ' AM';
+        const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+        return m === 0 ? `${displayH}:00${suffix}` : `${displayH}:${m.toString().padStart(2, '0')}${suffix}`;
+      },
+      
+      isBreakBlocked(breakTime, lunchTimes) {
+        for (const lt of lunchTimes) {
+          if (breakTime >= lt && breakTime < lt + 0.5) return true;
+        }
+        return false;
+      },
+      
+      buildDay(employees, weekNum, dayNum, dayDate, isSunday, cleanRotation) {
+        const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+        const dayTitle = dayNames[dayDate.getDay()];
+        const dateStr = `${dayDate.getMonth() + 1}/${dayDate.getDate()}`;
+        
+        let t1S, t1E, t2S, t2E, t3S, t3E, cleanTime;
+        if (isSunday) {
+          t1S = '10:00 AM'; t1E = '12:00 PM';
+          t2S = '12:00 PM'; t2E = '3:00 PM';
+          t3S = '3:00 PM'; t3E = '6:15 PM';
+          cleanTime = '9:30 (9:45) AM - 10:00 AM';
+        } else {
+          t1S = '9:00 AM'; t1E = '12:00 PM';
+          t2S = '12:00 PM'; t2E = '4:15 PM';
+          t3S = '4:00 PM'; t3E = '8:15 PM';
+          cleanTime = '8:30 (8:45) AM - 9:00 AM';
+        }
+        
+        // Early arrivers for cleaning
+        const earlyList = employees.filter(emp => 
+          this.arrivesEarly(emp, weekNum, dayNum, dayDate, isSunday) && !this.isVaultOnly(emp)
+        );
+        
+        const tasks = ['RECEPTION', 'DISPENSARY', 'VACUUM', 'BATHROOMS', 'KITCHEN'];
+        const cleaning = tasks.map((task, i) => {
+          if (earlyList.length > 0) {
+            const idx = (cleanRotation + i) % earlyList.length;
+            return { task, name: earlyList[idx].name };
+          }
+          return { task, name: 'X' };
+        });
+        
+        // Initialize used trackers
+        let u1 = [], u2 = [], u3 = [];
+        
+        // LOD (doesn't rotate)
+        const lod1 = this.findRole(employees, weekNum, dayNum, 1, 'LOD', u1, dayDate, isSunday);
+        u1.push(lod1);
+        const lod2 = this.findRole(employees, weekNum, dayNum, 2, 'LOD', u2, dayDate, isSunday);
+        u2.push(lod2);
+        const lod3 = this.findRole(employees, weekNum, dayNum, 3, 'LOD', u3, dayDate, isSunday);
+        u3.push(lod3);
+        
+        // Reception with rotation
+        const r1 = this.findRole(employees, weekNum, dayNum, 1, 'REC', u1, dayDate, isSunday);
+        u1.push(r1);
+        const r2 = this.findRole(employees, weekNum, dayNum, 1, 'REC', u1, dayDate, isSunday);
+        u1.push(r2);
+        
+        const r1b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REC', u2, [r1], dayDate, isSunday);
+        u2.push(r1b2);
+        const r2b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REC', u2, [r2], dayDate, isSunday);
+        u2.push(r2b2);
+        
+        const r1b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REC', u3, [r1, r1b2], dayDate, isSunday);
+        u3.push(r1b3);
+        const r2b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REC', u3, [r2, r2b2], dayDate, isSunday);
+        u3.push(r2b3);
+        
+        // iPad with rotation
+        let ip1, ip2a, ip2b, ip3a, ip3b;
+        let ipDisplay1, ipDisplay2, ipDisplay3;
+        let ipTime1, ipTime2, ipTime3;
+        
+        if (isSunday) {
+          ip1 = this.findIPadSlot(employees, weekNum, dayNum, 10, 12, u1, dayDate);
+          u1.push(ip1);
+          ip2a = this.findIPadSlotRotate(employees, weekNum, dayNum, 12, 15, u2, [ip1], dayDate);
+          u2.push(ip2a);
+          ip3a = this.findIPadSlotRotate(employees, weekNum, dayNum, 15, 18.25, u3, [ip1, ip2a], dayDate);
+          u3.push(ip3a);
+          
+          ipDisplay1 = ip1;
+          ipDisplay2 = ip2a;
+          ipDisplay3 = ip3a;
+          ipTime1 = '10:00 AM - 12:00 PM';
+          ipTime2 = '12:00 PM - 3:00 PM';
+          ipTime3 = '3:00 PM - 6:15 PM';
+        } else {
+          ip1 = this.findIPadSlot(employees, weekNum, dayNum, 9, 12, u1, dayDate);
+          u1.push(ip1);
+          
+          ip2a = this.findIPadSlotRotate(employees, weekNum, dayNum, 12, 14, u2, [ip1], dayDate);
+          u2.push(ip2a);
+          ip2b = this.findIPadSlotRotate(employees, weekNum, dayNum, 14, 16, u2, [ip1], dayDate);
+          u2.push(ip2b);
+          
+          ip3a = this.findIPadSlotRotate(employees, weekNum, dayNum, 16, 18, u3, [ip1, ip2a, ip2b], dayDate);
+          u3.push(ip3a);
+          ip3b = this.findIPadSlotRotate(employees, weekNum, dayNum, 18, 20, u3, [ip1, ip2a, ip2b], dayDate);
+          u3.push(ip3b);
+          
+          ipDisplay1 = ip1;
+          ipTime1 = '9:00 AM - 12:00 PM';
+          
+          if (ip2a === ip2b && ip2a !== 'X') {
+            ipDisplay2 = ip2a;
+          } else if (ip2a !== 'X' && ip2b !== 'X' && ip2a !== ip2b) {
+            ipDisplay2 = `${ip2a} 12-2 / ${ip2b} 2-4`;
+          } else if (ip2a !== 'X') {
+            ipDisplay2 = `${ip2a} 12-2 / X 2-4`;
+          } else if (ip2b !== 'X') {
+            ipDisplay2 = `X 12-2 / ${ip2b} 2-4`;
+          } else {
+            ipDisplay2 = 'X';
+          }
+          ipTime2 = '12:00 PM - 4:00 PM';
+          
+          if (ip3a === ip3b && ip3a !== 'X') {
+            ipDisplay3 = ip3a;
+          } else if (ip3a !== 'X' && ip3b !== 'X' && ip3a !== ip3b) {
+            ipDisplay3 = `${ip3a} 4-6 / ${ip3b} 6-8`;
+          } else if (ip3a !== 'X') {
+            ipDisplay3 = `${ip3a} 4-6 / X 6-8`;
+          } else if (ip3b !== 'X') {
+            ipDisplay3 = `X 4-6 / ${ip3b} 6-8`;
+          } else {
+            ipDisplay3 = 'X';
+          }
+          ipTime3 = '4:00 PM - 8:00 PM';
+        }
+        
+        // Registers with rotation
+        let uReg1 = [r1, r2, ip1];
+        let uReg2 = [r1b2, r2b2, ip2a, ip2b].filter(Boolean);
+        let uReg3 = [r1b3, r2b3, ip3a, ip3b].filter(Boolean);
+        
+        // Block 1 registers
+        const rg3b1 = this.findRole(employees, weekNum, dayNum, 1, 'REG', uReg1, dayDate, isSunday);
+        uReg1.push(rg3b1);
+        const a1 = this.findRole(employees, weekNum, dayNum, 1, 'REG', uReg1, dayDate, isSunday);
+        uReg1.push(a1);
+        const a2 = this.findRole(employees, weekNum, dayNum, 1, 'REG', uReg1, dayDate, isSunday);
+        uReg1.push(a2);
+        const a3 = this.findRole(employees, weekNum, dayNum, 1, 'REG', uReg1, dayDate, isSunday);
+        uReg1.push(a3);
+        const rg1 = this.findRole(employees, weekNum, dayNum, 1, 'REG', uReg1, dayDate, isSunday);
+        uReg1.push(rg1);
+        const rg2 = this.findRole(employees, weekNum, dayNum, 1, 'REG', uReg1, dayDate, isSunday);
+        uReg1.push(rg2);
+        
+        // Block 2 registers with rotation
+        const rg3b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REG', uReg2, [rg3b1], dayDate, isSunday);
+        uReg2.push(rg3b2);
+        const a1b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REG', uReg2, [a1], dayDate, isSunday);
+        uReg2.push(a1b2);
+        const a2b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REG', uReg2, [a2], dayDate, isSunday);
+        uReg2.push(a2b2);
+        const a3b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REG', uReg2, [a3], dayDate, isSunday);
+        uReg2.push(a3b2);
+        const rg1b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REG', uReg2, [rg1], dayDate, isSunday);
+        uReg2.push(rg1b2);
+        const rg2b2 = this.findRoleRotate(employees, weekNum, dayNum, 2, 'REG', uReg2, [rg2], dayDate, isSunday);
+        uReg2.push(rg2b2);
+        
+        // Block 3 registers with rotation
+        const rg3b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REG', uReg3, [rg3b1, rg3b2], dayDate, isSunday);
+        uReg3.push(rg3b3);
+        const a1b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REG', uReg3, [a1, a1b2], dayDate, isSunday);
+        uReg3.push(a1b3);
+        const a2b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REG', uReg3, [a2, a2b2], dayDate, isSunday);
+        uReg3.push(a2b3);
+        const a3b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REG', uReg3, [a3, a3b2], dayDate, isSunday);
+        uReg3.push(a3b3);
+        const rg1b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REG', uReg3, [rg1, rg1b2], dayDate, isSunday);
+        uReg3.push(rg1b3);
+        const rg2b3 = this.findRoleRotate(employees, weekNum, dayNum, 3, 'REG', uReg3, [rg2, rg2b2], dayDate, isSunday);
+        uReg3.push(rg2b3);
+        
+        // Vault
+        let vUsed1 = [...uReg1, lod1];
+        const vAU1 = this.findVaultPerson(employees, weekNum, dayNum, 1, vUsed1, dayDate, isSunday);
+        vUsed1.push(vAU1);
+        const vMed1 = this.findVaultPerson(employees, weekNum, dayNum, 1, vUsed1, dayDate, isSunday);
+        
+        let vUsed2 = [...uReg2, lod2];
+        const vAU2 = this.findVaultPerson(employees, weekNum, dayNum, 2, vUsed2, dayDate, isSunday);
+        vUsed2.push(vAU2);
+        const vMed2 = this.findVaultPerson(employees, weekNum, dayNum, 2, vUsed2, dayDate, isSunday);
+        
+        let vUsed3 = [...uReg3, lod3];
+        const vAU3 = this.findVaultPerson(employees, weekNum, dayNum, 3, vUsed3, dayDate, isSunday);
+        vUsed3.push(vAU3);
+        const vMed3 = this.findVaultPerson(employees, weekNum, dayNum, 3, vUsed3, dayDate, isSunday);
+        
+        // Lunches - sorted by start time
+        const lunchEmployees = employees
+          .filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.worksTwoShifts(emp, weekNum, dayNum, isSunday))
+          .map(emp => ({ name: emp.name, startTime: this.getEmpStartTime(emp, weekNum, dayNum) }))
+          .sort((a, b) => a.startTime - b.startTime);
+        
+        const lunches = [];
+        const lunchTimes = [];
+        let lunchTime = 12;
+        for (const emp of lunchEmployees) {
+          if (lunchTime <= 16.5) {
+            lunches.push({ name: emp.name, time: this.formatTime(lunchTime) });
+            lunchTimes.push(lunchTime);
+            lunchTime += 0.5;
+          }
+        }
+        
+        // Breaks - avoid overlapping lunches
+        const breakEmployees = employees
+          .filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.worksSingleShift(emp, weekNum, dayNum, isSunday));
+        
+        const breaks = [];
+        let breakTime = 14;
+        for (const emp of breakEmployees) {
+          while (this.isBreakBlocked(breakTime, lunchTimes) && breakTime <= 17) {
+            breakTime += 0.25;
+          }
+          if (breakTime <= 17) {
+            breaks.push({ name: emp.name, time: this.formatTime(breakTime) });
+            breakTime += 0.25;
+          }
+        }
+        
+        // Stats
+        const countFilled = (n) => n === 'X' ? 0 : 1;
+        const stats = {
+          vaultB1: 2, vaultB2: 2, vaultB3: 2,
+          recB1: countFilled(r1) + countFilled(r2),
+          recB2: countFilled(r1b2) + countFilled(r2b2),
+          recB3: countFilled(r1b3) + countFilled(r2b3),
+          regB1: countFilled(rg3b1) + countFilled(a1) + countFilled(a2) + countFilled(a3) + countFilled(rg1) + countFilled(rg2),
+          regB2: countFilled(rg3b2) + countFilled(a1b2) + countFilled(a2b2) + countFilled(a3b2) + countFilled(rg1b2) + countFilled(rg2b2),
+          regB3: countFilled(rg3b3) + countFilled(a1b3) + countFilled(a2b3) + countFilled(a3b3) + countFilled(rg1b3) + countFilled(rg2b3),
+          ipadB1: countFilled(ip1),
+          ipadB2: isSunday ? countFilled(ip2a) : (countFilled(ip2a) + countFilled(ip2b) >= 1 ? 1 : 0),
+          ipadB3: isSunday ? countFilled(ip3a) : (countFilled(ip3a) + countFilled(ip3b) >= 1 ? 1 : 0),
+        };
+        
+        return {
+          dayTitle,
+          dateStr,
+          fullTitle: `${dayTitle} ${dateStr}`,
+          cleanTime,
+          cleaning,
+          times: { t1S, t1E, t2S, t2E, t3S, t3E },
+          lod: [
+            { name: lod1, time: `${t1S} - ${t1E}` },
+            { name: lod2, time: `${t2S} - ${t2E}` },
+            { name: lod3, time: `${t3S} - ${t3E}` },
+          ],
+          reception: [
+            { r1, r2, time: `${t1S} - ${t1E}` },
+            { r1: r1b2, r2: r2b2, time: `${t2S} - ${t2E}` },
+            { r1: r1b3, r2: r2b3, time: `${t3S} - ${t3E}` },
+          ],
+          ipad: [
+            { display: ipDisplay1, time: ipTime1 },
+            { display: ipDisplay2, time: ipTime2 },
+            { display: ipDisplay3, time: ipTime3 },
+          ],
+          medCheckout: [
+            { mc1: rg1, mc2: rg2, med3au1: rg3b1, time: `${t1S} - ${t1E}` },
+            { mc1: rg1b2, mc2: rg2b2, med3au1: rg3b2, time: `${t2S} - ${t2E}` },
+            { mc1: rg1b3, mc2: rg2b3, med3au1: rg3b3, time: `${t3S} - ${t3E}` },
+          ],
+          auCheckout: [
+            { au2: a1, au3: a2, au4: a3, time: `${t1S} - ${t1E}` },
+            { au2: a1b2, au3: a2b2, au4: a3b2, time: `${t2S} - ${t2E}` },
+            { au2: a1b3, au3: a2b3, au4: a3b3, time: `${t3S} - ${t3E}` },
+          ],
+          vault: [
+            { au: vAU1 === 'X' ? 'RPH' : vAU1, med: vMed1 === 'X' ? 'RPH' : vMed1, time: `${t1S} - ${t1E}` },
+            { au: vAU2 === 'X' ? 'RPH' : vAU2, med: vMed2 === 'X' ? 'RPH' : vMed2, time: `${t2S} - ${t2E}` },
+            { au: vAU3 === 'X' ? 'RPH' : vAU3, med: vMed3 === 'X' ? 'RPH' : vMed3, time: `${t3S} - ${t3E}` },
+          ],
+          vaultOpen: isSunday ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
+          lunches,
+          breaks,
+          stats,
+          isSunday,
+        };
+      },
+      
+      generateAllSchedules(employees, week1Start, week2Start) {
+        const schedules = [];
+        let cleanRotation = 0;
+        
+        for (let w = 1; w <= 2; w++) {
+          const weekStart = w === 1 ? new Date(week1Start) : new Date(week2Start);
+          for (let d = 1; d <= 7; d++) {
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(dayDate.getDate() + (d - 1));
+            const isSunday = d === 7;
+            
+            const schedule = this.buildDay(employees, w, d, dayDate, isSunday, cleanRotation);
+            schedule.weekNum = w;
+            schedule.dayNum = d;
+            schedules.push(schedule);
+            cleanRotation++;
+          }
+        }
+        
+        return schedules;
+      }
+    };
+
+    // ============================================================
+    // COMPONENTS
+    // ============================================================
+    
+    const Checkbox = ({ checked, onChange, label }) => (
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="w-4 h-4 rounded"
+        />
+        <span className="text-sm text-gray-700">{label}</span>
+      </label>
+    );
+    
+    const NameCell = ({ name }) => (
+      <div className={`schedule-cell font-bold text-base ${name === 'X' ? 'bg-gray-400' : 'bg-white'}`}>
+        {name.toUpperCase()}
+      </div>
+    );
+    
+    const TimeCell = ({ time }) => (
+      <div className="schedule-cell bg-gray-100 text-sm">
+        {time}
+      </div>
+    );
+    
+    const HeaderCell = ({ children, color = 'black', textColor = 'white' }) => {
+      const bgColors = {
+        black: 'bg-black',
+        green: 'bg-[#67d50d]',
+        blue: 'bg-[#bdd7ee]',
+        yellow: 'bg-[#ffe699]',
+        cyan: 'bg-[#00b0f0]',
+      };
+      const textColors = {
+        black: 'text-white',
+        green: 'text-black',
+        blue: 'text-black',
+        yellow: 'text-black',
+        cyan: 'text-white',
+      };
+      
+      return (
+        <div className={`schedule-cell font-bold text-lg ${bgColors[color]} ${textColors[color]}`}>
+          {children}
+        </div>
+      );
+    };
+    
+    const ScheduleDisplay = ({ schedule }) => {
+      if (!schedule) return null;
+      
+      return (
+        <div className="schedule-container bg-white p-6 rounded-lg card-shadow fade-in">
+          {/* Header */}
+          <div className="text-center mb-4">
+            <h2 className="text-4xl font-black">{schedule.fullTitle}</h2>
+            <p className="text-gray-500 mt-1 bg-gray-100 py-2 rounded">{schedule.cleanTime}</p>
+          </div>
+          
+          {/* Cleaning */}
+          <div className="grid grid-cols-5 gap-1 mb-4">
+            {schedule.cleaning.map((c, i) => (
+              <div key={i} className="schedule-cell text-red-600 font-bold text-sm">
+                {c.name.toUpperCase()} - {c.task}
+              </div>
+            ))}
+          </div>
+          
+          {/* LOD */}
+          <div className="mb-6">
+            <HeaderCell color="black">LEADER OF THE DAY</HeaderCell>
+            <div className="grid grid-cols-2 gap-0">
+              {schedule.lod.map((l, i) => (
+                <React.Fragment key={i}>
+                  <NameCell name={l.name} />
+                  <TimeCell time={l.time} />
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          
+          {/* Front End Reception */}
+          <div className="mb-6">
+            <div className="schedule-cell font-bold text-2xl bg-[#67d50d] text-black">
+              FRONT END RECEPTION
+            </div>
+            
+            <div className="grid grid-cols-6 gap-0">
+              <div className="col-span-2"><HeaderCell color="green">RECEPTION 1</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="green">RECEPTION 2</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="green">iPAD</HeaderCell></div>
+              
+              {schedule.reception.map((r, i) => (
+                <React.Fragment key={i}>
+                  <NameCell name={r.r1} />
+                  <TimeCell time={r.time} />
+                  <NameCell name={r.r2} />
+                  <TimeCell time={r.time} />
+                  <div className={`schedule-cell font-bold text-sm ${schedule.ipad[i].display === 'X' ? 'bg-gray-400' : 'bg-white'}`}>
+                    {schedule.ipad[i].display.toUpperCase()}
+                  </div>
+                  <TimeCell time={schedule.ipad[i].time} />
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          
+          {/* Back End Dispensary */}
+          <div className="mb-6">
+            <div className="schedule-cell font-bold text-2xl bg-[#bdd7ee] text-black">
+              BACK END DISPENSARY
+            </div>
+            
+            <div className="grid grid-cols-6 gap-0">
+              <div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 1</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 2</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="blue">MED 3 / AU 1</HeaderCell></div>
+              
+              {schedule.medCheckout.map((m, i) => (
+                <React.Fragment key={i}>
+                  <NameCell name={m.mc1} />
+                  <TimeCell time={m.time} />
+                  <NameCell name={m.mc2} />
+                  <TimeCell time={m.time} />
+                  <NameCell name={m.med3au1} />
+                  <TimeCell time={m.time} />
+                </React.Fragment>
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-6 gap-0 mt-4">
+              <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 2</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 3</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 4</HeaderCell></div>
+              
+              {schedule.auCheckout.map((a, i) => (
+                <React.Fragment key={i}>
+                  <NameCell name={a.au2} />
+                  <TimeCell time={a.time} />
+                  <NameCell name={a.au3} />
+                  <TimeCell time={a.time} />
+                  <NameCell name={a.au4} />
+                  <TimeCell time={a.time} />
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          
+          {/* Vault */}
+          <div className="mb-6">
+            <div className="grid grid-cols-4 gap-0">
+              <div className="col-span-2"><HeaderCell color="yellow">AU LEFT VAULT</HeaderCell></div>
+              <div className="col-span-2"><HeaderCell color="yellow">MEDICAL RIGHT VAULT</HeaderCell></div>
+              
+              <NameCell name="RPH" />
+              <TimeCell time={schedule.vaultOpen} />
+              <NameCell name="RPH" />
+              <TimeCell time={schedule.vaultOpen} />
+              
+              {schedule.vault.map((v, i) => (
+                <React.Fragment key={i}>
+                  <NameCell name={v.au} />
+                  <TimeCell time={v.time} />
+                  <NameCell name={v.med} />
+                  <TimeCell time={v.time} />
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          
+          {/* Lunches & Breaks Side Panel */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <HeaderCell color="black">LUNCH BREAK</HeaderCell>
+              <div className="grid grid-cols-3 gap-0">
+                <div className="schedule-cell bg-green-100 font-bold text-sm">NAME</div>
+                <div className="schedule-cell bg-green-100 font-bold text-sm">TIME</div>
+                <div className="schedule-cell bg-green-100 font-bold text-sm">COVERED BY</div>
+                {schedule.lunches.map((l, i) => (
+                  <React.Fragment key={i}>
+                    <div className="schedule-cell font-bold text-sm">{l.name.toUpperCase()}</div>
+                    <div className="schedule-cell text-sm">{l.time}</div>
+                    <div className="schedule-cell text-sm">X</div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <HeaderCell color="black">15-MINUTE BREAK</HeaderCell>
+              <div className="grid grid-cols-3 gap-0">
+                <div className="schedule-cell bg-green-100 font-bold text-sm">NAME</div>
+                <div className="schedule-cell bg-green-100 font-bold text-sm">TIME</div>
+                <div className="schedule-cell bg-green-100 font-bold text-sm">COVERED BY</div>
+                {schedule.breaks.map((b, i) => (
+                  <React.Fragment key={i}>
+                    <div className="schedule-cell font-bold text-sm">{b.name.toUpperCase()}</div>
+                    <div className="schedule-cell text-sm">{b.time}</div>
+                    <div className="schedule-cell text-sm">X</div>
+                  </React.Fragment>
+                ))}
+                {schedule.breaks.length === 0 && (
+                  <div className="col-span-3 schedule-cell text-gray-400 text-sm italic">No breaks scheduled</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+    
+    const StaffingSummary = ({ schedules }) => {
+      const StatCell = ({ value, min, isIPad }) => {
+        const ok = isIPad ? value >= 1 : value >= min;
+        return (
+          <div className={`schedule-cell text-sm ${ok ? 'bg-green-200' : 'bg-red-200'}`}>
+            {value}
+          </div>
+        );
+      };
+      
+      return (
+        <div className="bg-white p-6 rounded-lg card-shadow fade-in">
+          <h2 className="text-2xl font-bold text-center mb-4 text-blue-700">DAILY STAFFING SUMMARY</h2>
+          <p className="text-center text-sm text-blue-600 mb-6">
+            IDEAL: 2 Vault, 2 Reception, 2 Registers (9-12), 3 Registers (12-8), 1 iPad
+          </p>
+          
+          {[1, 2].map(week => (
+            <div key={week} className="mb-6">
+              <div className="schedule-cell font-bold text-lg bg-black text-white">WEEK {week}</div>
+              
+              {schedules.filter(s => s.weekNum === week).map((s, i) => (
+                <div key={i} className="mb-2">
+                  <div className="schedule-cell font-bold bg-blue-600 text-white text-left px-4">
+                    {s.fullTitle}
+                  </div>
+                  <div className="grid grid-cols-5 gap-0">
+                    <div className="schedule-cell bg-blue-100 font-bold text-sm"></div>
+                    <div className="schedule-cell bg-blue-100 font-bold text-sm">VAULT</div>
+                    <div className="schedule-cell bg-blue-100 font-bold text-sm">RECEPTION</div>
+                    <div className="schedule-cell bg-blue-100 font-bold text-sm">REGISTERS</div>
+                    <div className="schedule-cell bg-blue-100 font-bold text-sm">iPAD</div>
+                    
+                    <div className="schedule-cell text-sm">{s.isSunday ? '10-12' : '9-12'}</div>
+                    <StatCell value={s.stats.vaultB1} min={2} />
+                    <StatCell value={s.stats.recB1} min={2} />
+                    <StatCell value={s.stats.regB1} min={2} />
+                    <StatCell value={s.stats.ipadB1} min={1} isIPad />
+                    
+                    <div className="schedule-cell text-sm">{s.isSunday ? '12-3' : '12-4'}</div>
+                    <StatCell value={s.stats.vaultB2} min={2} />
+                    <StatCell value={s.stats.recB2} min={2} />
+                    <StatCell value={s.stats.regB2} min={3} />
+                    <StatCell value={s.stats.ipadB2} min={1} isIPad />
+                    
+                    <div className="schedule-cell text-sm">{s.isSunday ? '3-6' : '4-8'}</div>
+                    <StatCell value={s.stats.vaultB3} min={2} />
+                    <StatCell value={s.stats.recB3} min={2} />
+                    <StatCell value={s.stats.regB3} min={3} />
+                    <StatCell value={s.stats.ipadB3} min={1} isIPad />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    };
+    
+    const EmployeeForm = ({ employee, onSave, onCancel }) => {
+      const [form, setForm] = useState(employee || {
+        name: '',
+        vault: false,
+        reception: false,
+        lod: false,
+        ipad: false,
+        registers: false,
+        ptoText: '',
+        notes: '',
+        week1: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' },
+        week2: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' },
+      });
+      
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      
+      return (
+        <div className="bg-white p-6 rounded-lg card-shadow">
+          <h3 className="text-xl font-bold mb-4">{employee ? 'Edit Employee' : 'Add Employee'}</h3>
+          
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                placeholder="Employee name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">PTO</label>
+              <input
+                type="text"
+                value={form.ptoText}
+                onChange={(e) => setForm({ ...form, ptoText: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                placeholder="e.g., 3/1-3/5 or ✓"
+              />
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-4 mb-4">
+            <Checkbox label="Vault" checked={form.vault} onChange={(v) => setForm({ ...form, vault: v })} />
+            <Checkbox label="Reception" checked={form.reception} onChange={(v) => setForm({ ...form, reception: v })} />
+            <Checkbox label="LOD" checked={form.lod} onChange={(v) => setForm({ ...form, lod: v })} />
+            <Checkbox label="iPad" checked={form.ipad} onChange={(v) => setForm({ ...form, ipad: v })} />
+            <Checkbox label="Registers" checked={form.registers} onChange={(v) => setForm({ ...form, registers: v })} />
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Week 1 Schedule</label>
+            <div className="grid grid-cols-7 gap-2">
+              {dayNames.map((day, i) => (
+                <div key={i}>
+                  <label className="block text-xs text-gray-500 mb-1">{day}</label>
+                  <input
+                    type="text"
+                    value={form.week1[i + 1] || ''}
+                    onChange={(e) => setForm({ ...form, week1: { ...form.week1, [i + 1]: e.target.value } })}
+                    className="w-full px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="OFF"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Week 2 Schedule</label>
+            <div className="grid grid-cols-7 gap-2">
+              {dayNames.map((day, i) => (
+                <div key={i}>
+                  <label className="block text-xs text-gray-500 mb-1">{day}</label>
+                  <input
+                    type="text"
+                    value={form.week2[i + 1] || ''}
+                    onChange={(e) => setForm({ ...form, week2: { ...form.week2, [i + 1]: e.target.value } })}
+                    className="w-full px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="OFF"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => onSave(form)}
+              className="btn-primary px-4 py-2 text-white rounded-lg font-medium"
+            >
+              Save
+            </button>
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 bg-gray-200 rounded-lg font-medium hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    };
+    
+    const EmployeeList = ({ employees, onEdit, onDelete }) => (
+      <div className="bg-white rounded-lg card-shadow overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold">Name</th>
+              <th className="px-4 py-3 text-center text-sm font-semibold">V</th>
+              <th className="px-4 py-3 text-center text-sm font-semibold">R</th>
+              <th className="px-4 py-3 text-center text-sm font-semibold">L</th>
+              <th className="px-4 py-3 text-center text-sm font-semibold">I</th>
+              <th className="px-4 py-3 text-center text-sm font-semibold">Reg</th>
+              <th className="px-4 py-3 text-center text-sm font-semibold">PTO</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map((emp, i) => (
+              <tr key={i} className="border-t hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium">{emp.name}</td>
+                <td className="px-4 py-3 text-center">{emp.vault ? '✓' : ''}</td>
+                <td className="px-4 py-3 text-center">{emp.reception ? '✓' : ''}</td>
+                <td className="px-4 py-3 text-center">{emp.lod ? '✓' : ''}</td>
+                <td className="px-4 py-3 text-center">{emp.ipad ? '✓' : ''}</td>
+                <td className="px-4 py-3 text-center">{emp.registers ? '✓' : ''}</td>
+                <td className="px-4 py-3 text-center text-sm">{emp.ptoText || '-'}</td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => onEdit(i)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                  <button onClick={() => onDelete(i)} className="text-red-600 hover:underline">Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+    
+    // ============================================================
+    // MAIN APP
+    // ============================================================
+    
+    const App = () => {
+      const [tab, setTab] = useState('schedule');
+      const [employees, setEmployees] = useState([]);
+      const [schedules, setSchedules] = useState([]);
+      const [week1Start, setWeek1Start] = useState('');
+      const [week2Start, setWeek2Start] = useState('');
+      const [selectedDay, setSelectedDay] = useState(0);
+      const [editingEmployee, setEditingEmployee] = useState(null);
+      const [showAddForm, setShowAddForm] = useState(false);
+      
+      // Load from localStorage
+      useEffect(() => {
+        const saved = localStorage.getItem('pharmacy-scheduler');
+        if (saved) {
+          const data = JSON.parse(saved);
+          setEmployees(data.employees || []);
+          setWeek1Start(data.week1Start || '');
+          setWeek2Start(data.week2Start || '');
+        }
+      }, []);
+      
+      // Save to localStorage
+      useEffect(() => {
+        localStorage.setItem('pharmacy-scheduler', JSON.stringify({
+          employees,
+          week1Start,
+          week2Start,
+          savedDate: new Date().toDateString()
+        }));
+      }, [employees, week1Start, week2Start]);
+      
+      // Auto-select today's schedule
+      useEffect(() => {
+        if (schedules.length > 0 && week1Start) {
+          const today = new Date();
+          const w1 = new Date(week1Start);
+          const w2 = new Date(week2Start);
+          
+          for (let i = 0; i < schedules.length; i++) {
+            const schedDate = new Date(i < 7 ? w1 : w2);
+            schedDate.setDate(schedDate.getDate() + (i % 7));
+            if (schedDate.toDateString() === today.toDateString()) {
+              setSelectedDay(i);
+              return;
+            }
+          }
+        }
+      }, [schedules, week1Start, week2Start]);
+      
+      const generateSchedules = () => {
+        if (!week1Start || !week2Start || employees.length === 0) {
+          alert('Please add employees and select week start dates first.');
+          return;
+        }
+        
+        const scheds = ScheduleEngine.generateAllSchedules(employees, week1Start, week2Start);
+        setSchedules(scheds);
+        setTab('schedule');
+      };
+      
+      const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            
+            // Parse employees from Excel format
+            const newEmployees = [];
+            for (let i = 2; i < json.length; i++) {
+              const row = json[i];
+              if (!row[0]) continue;
+              
+              const isCheck = (v) => v === '✓' || v === 'X' || v === 'x' || v === true || v === 'TRUE';
+              
+              newEmployees.push({
+                name: row[0] || '',
+                vault: isCheck(row[1]),
+                reception: isCheck(row[2]),
+                lod: isCheck(row[3]),
+                ipad: isCheck(row[4]),
+                registers: isCheck(row[5]),
+                ptoText: row[6] || '',
+                notes: row[7] || '',
+                week1: {
+                  1: row[8] || '', 2: row[9] || '', 3: row[10] || '',
+                  4: row[11] || '', 5: row[12] || '', 6: row[13] || '', 7: row[14] || ''
+                },
+                week2: {
+                  1: row[15] || '', 2: row[16] || '', 3: row[17] || '',
+                  4: row[18] || '', 5: row[19] || '', 6: row[20] || '', 7: row[21] || ''
+                }
+              });
+            }
+            
+            setEmployees(newEmployees);
+            alert(`Imported ${newEmployees.length} employees successfully!`);
+          } catch (err) {
+            alert('Error reading file. Please ensure it matches the expected format.');
+            console.error(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+      
+      const handleSaveEmployee = (emp) => {
+        if (editingEmployee !== null) {
+          const updated = [...employees];
+          updated[editingEmployee] = emp;
+          setEmployees(updated);
+          setEditingEmployee(null);
+        } else {
+          setEmployees([...employees, emp]);
+          setShowAddForm(false);
+        }
+      };
+      
+      const handleDeleteEmployee = (index) => {
+        if (confirm('Delete this employee?')) {
+          setEmployees(employees.filter((_, i) => i !== index));
+        }
+      };
+      
+      const handlePrint = () => {
+        window.print();
+      };
+      
+      return (
+        <div className="min-h-screen pb-20">
+          {/* Header */}
+          <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+                    <span className="text-white text-xl">💊</span>
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-gray-900">Pharmacy Scheduler</h1>
+                    <p className="text-xs text-gray-500">V9.9 • Position Rotation • Smart Breaks</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  {['employees', 'schedule', 'summary'].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                        tab === t ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </header>
+          
+          <main className="max-w-7xl mx-auto px-4 py-6">
+            {/* Employees Tab */}
+            {tab === 'employees' && (
+              <div className="fade-in">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold">Employee Management</h2>
+                  <div className="flex gap-2">
+                    <label className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium cursor-pointer hover:bg-blue-700">
+                      Import Excel/CSV
+                      <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
+                    </label>
+                    <button
+                      onClick={() => setShowAddForm(true)}
+                      className="btn-primary px-4 py-2 text-white rounded-lg font-medium"
+                    >
+                      + Add Employee
+                    </button>
+                  </div>
+                </div>
+                
+                {(showAddForm || editingEmployee !== null) && (
+                  <div className="mb-6">
+                    <EmployeeForm
+                      employee={editingEmployee !== null ? employees[editingEmployee] : null}
+                      onSave={handleSaveEmployee}
+                      onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }}
+                    />
+                  </div>
+                )}
+                
+                {employees.length > 0 ? (
+                  <EmployeeList
+                    employees={employees}
+                    onEdit={(i) => setEditingEmployee(i)}
+                    onDelete={handleDeleteEmployee}
+                  />
+                ) : (
+                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
+                    <p className="text-gray-500 mb-4">No employees yet. Add manually or import from Excel.</p>
+                  </div>
+                )}
+                
+                {/* Week Date Pickers */}
+                <div className="mt-6 bg-white p-6 rounded-lg card-shadow">
+                  <h3 className="font-bold mb-4">Week Start Dates</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Week 1 Start (Monday)</label>
+                      <input
+                        type="date"
+                        value={week1Start}
+                        onChange={(e) => {
+                          setWeek1Start(e.target.value);
+                          // Auto-set week 2 to 7 days later
+                          const d = new Date(e.target.value);
+                          d.setDate(d.getDate() + 7);
+                          setWeek2Start(d.toISOString().split('T')[0]);
+                        }}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Week 2 Start (Monday)</label>
+                      <input
+                        type="date"
+                        value={week2Start}
+                        onChange={(e) => setWeek2Start(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={generateSchedules}
+                    className="mt-4 btn-primary px-6 py-3 text-white rounded-lg font-bold text-lg w-full"
+                  >
+                    🗓️ Generate All Schedules
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Schedule Tab */}
+            {tab === 'schedule' && (
+              <div className="fade-in">
+                {schedules.length > 0 ? (
+                  <>
+                    <div className="no-print flex items-center justify-between mb-6">
+                      <div className="flex flex-wrap gap-2">
+                        {schedules.map((s, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setSelectedDay(i)}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                              selectedDay === i
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-white hover:bg-gray-100 border'
+                            }`}
+                          >
+                            {s.isSunday ? '☀️' : ''} {s.dateStr}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handlePrint}
+                        className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900"
+                      >
+                        🖨️ Print
+                      </button>
+                    </div>
+                    
+                    <ScheduleDisplay schedule={schedules[selectedDay]} />
+                  </>
+                ) : (
+                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
+                    <p className="text-gray-500 mb-4">No schedules generated yet.</p>
+                    <button
+                      onClick={() => setTab('employees')}
+                      className="btn-primary px-6 py-2 text-white rounded-lg font-medium"
+                    >
+                      Go to Employees →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Summary Tab */}
+            {tab === 'summary' && (
+              <div className="fade-in">
+                {schedules.length > 0 ? (
+                  <StaffingSummary schedules={schedules} />
+                ) : (
+                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
+                    <p className="text-gray-500">Generate schedules first to see the summary.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    };
+    
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
