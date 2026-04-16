@@ -22,18 +22,1216 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .tab-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
     .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
-    .emp-shape { width: 12px; height: 12px; display: inline-block; margin-right: 4px; flex-shrink: 0; }
   </style>
 </head>
 <body class="gradient-mesh min-h-screen">
   <div id="root"></div>
   <script type="text/babel">
-      // File upload handler
-      const handleFileUpload = e => {
+    const { useState, useEffect, useMemo } = React;
+    
+    const EMPLOYEE_COLORS = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#F43F5E','#0EA5E9','#A855F7','#22C55E','#EAB308','#E11D48','#7C3AED','#0D9488','#DC2626','#2563EB','#16A34A'];
+    const SHAPES = ['circle','square','diamond','triangle','star','hexagon'];
+    const CLEANING_AREAS = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
+    const CLEANING_TASKS = {
+      RECEPTION: ['Wipe down front counter','Clean glass doors','Sweep and mop floor','Empty trash','Organize displays','Sanitize touchscreens'],
+      DISPENSARY: ['Wipe down counters','Clean screens/keyboards','Organize bins','Restock supplies','Clean printers','Sanitize stations'],
+      VACUUM: ['Vacuum carpeted areas','Vacuum behind counters','Vacuum break room','Empty vacuum','Check for clogs'],
+      BATHROOMS: ['Sanitize toilets','Clean sinks/mirrors','Refill supplies','Empty trash','Mop floors'],
+      KITCHEN: ['Wash dishes','Wipe counters','Clean microwave','Clean fridge','Empty trash','Mop floor']
+    };
+    const TIME_SLOTS = [{value:'',label:'OFF'},{value:'8:30 AM - 12:00 PM',label:'8:30 AM - 12:00 PM'},{value:'8:45 AM - 12:00 PM',label:'8:45 AM - 12:00 PM'},{value:'8:30 AM - 4:15 PM',label:'8:30 AM - 4:15 PM'},{value:'8:45 AM - 4:15 PM',label:'8:45 AM - 4:15 PM'},{value:'12:00 PM - 8:15 PM',label:'12:00 PM - 8:15 PM'},{value:'12:00 PM - 4:15 PM',label:'12:00 PM - 4:15 PM'},{value:'4:00 PM - 8:15 PM',label:'4:00 PM - 8:15 PM'},{value:'8:30 AM - 8:15 PM',label:'8:30 AM - 8:15 PM'},{value:'8:45 AM - 8:15 PM',label:'8:45 AM - 8:15 PM'}];
+    const SUNDAY_TIME_SLOTS = [{value:'',label:'OFF'},{value:'9:30 AM - 6:15 PM',label:'9:30 AM - 6:15 PM'},{value:'9:45 AM - 6:15 PM',label:'9:45 AM - 6:15 PM'}];
+    
+    const formatToEST = (iso) => new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit',hour12:true});
+    const getESTHour = () => { const d = new Date(); return parseInt(d.toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false})); };
+    
+    const EmpShape = ({ color, shape }) => {
+      const base = { width:12, height:12, display:'inline-block', marginRight:4, backgroundColor:color };
+      if(shape==='circle') return <span style={{...base,borderRadius:'50%'}}></span>;
+      if(shape==='square') return <span style={{...base,borderRadius:2}}></span>;
+      if(shape==='diamond') return <span style={{...base,transform:'rotate(45deg) scale(0.7)',borderRadius:2}}></span>;
+      if(shape==='triangle') return <span style={{width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',borderBottom:'12px solid '+color,display:'inline-block',marginRight:4}}></span>;
+      if(shape==='star') return <span style={{...base,clipPath:'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'}}></span>;
+      if(shape==='hexagon') return <span style={{...base,clipPath:'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'}}></span>;
+      return <span style={{...base,borderRadius:'50%'}}></span>;
+    };
+
+    const ScheduleEngine = {
+      parseSegment(seg) {
+        let startHour = -1, endHour = -1;
+        seg = (seg || '').trim();
+        if (!seg || !seg.includes('-')) return { startHour, endHour };
+        const parts = seg.split('-');
+        if (parts.length < 2) return { startHour, endHour };
+        let startStr = parts[0].trim();
+        let endStr = parts[parts.length - 1].trim();
+        const startAM = startStr.toUpperCase().includes('AM');
+        const startPM = startStr.toUpperCase().includes('PM');
+        const endAM = endStr.toUpperCase().includes('AM');
+        const endPM = endStr.toUpperCase().includes('PM');
+        startStr = startStr.replace(/AM|PM/gi, '').trim();
+        endStr = endStr.replace(/AM|PM/gi, '').trim();
+        if (!startStr || !endStr) return { startHour, endHour };
+        const sp = startStr.split(':');
+        let h = parseFloat(sp[0]) || 0;
+        let m = parseFloat(sp[1]) || 0;
+        startHour = h + m / 60;
+        const ep = endStr.split(':');
+        h = parseFloat(ep[0]) || 0;
+        m = parseFloat(ep[1]) || 0;
+        endHour = h + m / 60;
+        if (startPM && startHour < 12) startHour += 12;
+        if (startAM && startHour === 12) startHour = 0;
+        if (endPM && endHour < 12) endHour += 12;
+        if (endAM && endHour === 12) endHour = 0;
+        if (endPM && !startAM && !startPM && startHour < 12) startHour += 12;
+        if ((startAM || startPM) && !endAM && !endPM && endHour <= 12 && endHour < startHour) endHour += 12;
+        return { startHour, endHour };
+      },
+      
+      isOnPTO(emp, checkDate) {
+        const ptoVal = (emp.ptoText || '').trim();
+        if (!ptoVal) return false;
+        if (ptoVal === '✓' || ptoVal.toUpperCase() === 'TRUE' || ptoVal === 'X' || ptoVal === 'x') return true;
+        const ranges = ptoVal.split(',');
+        for (let rng of ranges) {
+          rng = rng.trim();
+          if (rng.includes('-')) {
+            const pts = rng.split('-');
+            const sd = new Date(pts[0].trim() + '/' + checkDate.getFullYear());
+            const ed = new Date(pts[1].trim() + '/' + checkDate.getFullYear());
+            if (checkDate >= sd && checkDate <= ed) return true;
+          } else {
+            const single = new Date(rng + '/' + checkDate.getFullYear());
+            if (checkDate.toDateString() === single.toDateString()) return true;
+          }
+        }
+        return false;
+      },
+      
+      getSched(emp, wk, dy) { return wk === 1 ? (emp.week1 && emp.week1[dy]) || '' : (emp.week2 && emp.week2[dy]) || ''; },
+      
+      avail(emp, wk, dy, block, checkDate, isSunday) {
+        if (this.isOnPTO(emp, checkDate)) return false;
+        const sched = this.getSched(emp, wk, dy);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        let bS, bE;
+        if (isSunday) {
+          if (block === 1) { bS = 10; bE = 12; }
+          else if (block === 2) { bS = 12; bE = 15; }
+          else { bS = 15; bE = 18.25; }
+        } else {
+          if (block === 1) { bS = 9; bE = 12; }
+          else if (block === 2) { bS = 12; bE = 16.25; }
+          else { bS = 16; bE = 20.25; }
+        }
+        const { startHour, endHour } = this.parseSegment(sched);
+        if (startHour < 0 || endHour < 0) return false;
+        return startHour <= bS && endHour >= bE;
+      },
+      
+      availHours(emp, wk, dy, startH, endH, checkDate) {
+        if (this.isOnPTO(emp, checkDate)) return false;
+        const sched = this.getSched(emp, wk, dy);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        const { startHour, endHour } = this.parseSegment(sched);
+        if (startHour < 0 || endHour < 0) return false;
+        return startHour <= startH && endHour >= endH;
+      },
+      
+      arrivesEarly(emp, wk, dy, checkDate, isSunday) {
+        if (this.isOnPTO(emp, checkDate)) return false;
+        const sched = this.getSched(emp, wk, dy);
+        if (!sched || sched.toUpperCase() === 'OFF') return false;
+        const threshold = isSunday ? 9.75 : 8.75;
+        const { startHour } = this.parseSegment(sched);
+        return startHour >= 0 && startHour <= threshold;
+      },
+      
+      getEmpStartTime(emp, wk, dy) {
+        const sched = this.getSched(emp, wk, dy);
+        if (!sched || sched.toUpperCase() === 'OFF') return 99;
+        const { startHour } = this.parseSegment(sched);
+        return startHour >= 0 ? startHour : 99;
+      },
+      
+      getEmpEndTime(emp, wk, dy) {
+        const sched = this.getSched(emp, wk, dy);
+        if (!sched || sched.toUpperCase() === 'OFF') return 0;
+        const { endHour } = this.parseSegment(sched);
+        return endHour >= 0 ? endHour : 0;
+      },
+      
+      getEmpHours(emp, wk, dy) {
+        const s = this.getEmpStartTime(emp, wk, dy);
+        const e = this.getEmpEndTime(emp, wk, dy);
+        if (s === 99 || e === 0) return 0;
+        return e - s;
+      },
+      
+      isVaultOnly: (e) => e.vault && !e.reception && !e.lod && !e.ipad && !e.registers,
+      isReceptionOnly: (e) => e.reception && !e.lod && !e.ipad && !e.registers,
+      isiPadOnly: (e) => e.ipad && !e.reception && !e.lod && !e.registers,
+      isRegistersOnly: (e) => e.registers && !e.reception && !e.lod && !e.ipad,
+      worksTwoShifts(emp, wk, dy) { return this.getEmpHours(emp, wk, dy) >= 7; },
+      worksSingleShift(emp, wk, dy) { const h = this.getEmpHours(emp, wk, dy); return h >= 4 && h < 7; },
+      
+      findRole(employees, wk, dy, block, role, used, checkDate, isSunday, excludeLOD) {
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (excludeLOD && emp.lod) continue;
+          let roleMatch = false, singleRoleMatch = false;
+          if (role === 'REC') { roleMatch = emp.reception; singleRoleMatch = this.isReceptionOnly(emp); }
+          else if (role === 'IPAD') { roleMatch = emp.ipad; singleRoleMatch = this.isiPadOnly(emp); }
+          else if (role === 'REG') { roleMatch = emp.registers; singleRoleMatch = this.isRegistersOnly(emp); }
+          else if (role === 'LOD') { roleMatch = emp.lod; singleRoleMatch = true; }
+          if (!roleMatch || !singleRoleMatch) continue;
+          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+        }
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (excludeLOD && emp.lod) continue;
+          let roleMatch = false;
+          if (role === 'REC') roleMatch = emp.reception;
+          else if (role === 'IPAD') roleMatch = emp.ipad;
+          else if (role === 'REG') roleMatch = emp.registers;
+          else if (role === 'LOD') roleMatch = emp.lod;
+          if (!roleMatch) continue;
+          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+        }
+        return 'X';
+      },
+      
+      findRoleRotate(employees, wk, dy, block, role, used, avoid, checkDate, isSunday) {
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name)) continue;
+          let roleMatch = false, singleRoleMatch = false;
+          if (role === 'REC') { roleMatch = emp.reception; singleRoleMatch = this.isReceptionOnly(emp); }
+          else if (role === 'REG') { roleMatch = emp.registers; singleRoleMatch = this.isRegistersOnly(emp); }
+          if (!roleMatch || !singleRoleMatch) continue;
+          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+        }
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name)) continue;
+          const roleMatch = role === 'REC' ? emp.reception : emp.registers;
+          if (!roleMatch) continue;
+          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+        }
+        return this.findRole(employees, wk, dy, block, role, used, checkDate, isSunday, false);
+      },
+      
+      findIPadSlot(employees, wk, dy, startH, endH, used, checkDate) {
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
+          if (!emp.ipad || !this.isiPadOnly(emp)) continue;
+          if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name;
+        }
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || !emp.ipad) continue;
+          if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name;
+        }
+        return 'X';
+      },
+      
+      findIPadSlotRotate(employees, wk, dy, startH, endH, used, avoid, checkDate) {
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name)) continue;
+          if (!emp.ipad || !this.isiPadOnly(emp)) continue;
+          if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name;
+        }
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name) || !emp.ipad) continue;
+          if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name;
+        }
+        return this.findIPadSlot(employees, wk, dy, startH, endH, used, checkDate);
+      },
+      
+      findVaultPerson(employees, wk, dy, block, used, checkDate, isSunday) {
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate)) continue;
+          if (emp.vault && this.isVaultOnly(emp) && this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+        }
+        for (const emp of employees) {
+          if (this.isOnPTO(emp, checkDate) || !emp.vault) continue;
+          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+        }
+        return 'X';
+      },
+      
+      formatTime(hour) {
+        const h = Math.floor(hour);
+        const m = Math.round((hour - h) * 60);
+        const suffix = h >= 12 ? ' PM' : ' AM';
+        const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+        return m === 0 ? displayH + ':00' + suffix : displayH + ':' + m.toString().padStart(2, '0') + suffix;
+      },
+      
+      isBreakBlocked(breakTime, lunchTimes) {
+        for (const lt of lunchTimes) {
+          if (breakTime >= lt && breakTime < lt + 0.5) return true;
+        }
+        return false;
+      },
+      
+      buildDay(employees, wk, dy, dayDate, isSunday, cleanRotation) {
+        const dayNames = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+        const dayTitle = dayNames[dayDate.getDay()];
+        const dateStr = (dayDate.getMonth()+1) + '/' + dayDate.getDate();
+        
+        let t1S, t1E, t2S, t2E, t3S, t3E, cleanTime;
+        if (isSunday) {
+          t1S = '10:00 AM'; t1E = '12:00 PM';
+          t2S = '12:00 PM'; t2E = '3:00 PM';
+          t3S = '3:00 PM'; t3E = '6:15 PM';
+          cleanTime = '9:30 (9:45) AM - 10:00 AM';
+        } else {
+          t1S = '9:00 AM'; t1E = '12:00 PM';
+          t2S = '12:00 PM'; t2E = '4:15 PM';
+          t3S = '4:00 PM'; t3E = '8:15 PM';
+          cleanTime = '8:30 (8:45) AM - 9:00 AM';
+        }
+        
+        const earlyList = employees.filter(emp => this.arrivesEarly(emp, wk, dy, dayDate, isSunday) && !this.isVaultOnly(emp));
+        const tasks = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
+        const cleaning = tasks.map((task, i) => {
+          if (earlyList.length > 0) {
+            const idx = (cleanRotation + i) % earlyList.length;
+            return { task: task, name: earlyList[idx].name };
+          }
+          return { task: task, name: 'X' };
+        });
+        
+        let u1 = [], u2 = [], u3 = [];
+        
+        const lod1 = this.findRole(employees, wk, dy, 1, 'LOD', u1, dayDate, isSunday, false); u1.push(lod1);
+        const lod2 = this.findRole(employees, wk, dy, 2, 'LOD', u2, dayDate, isSunday, false); u2.push(lod2);
+        const lod3 = this.findRole(employees, wk, dy, 3, 'LOD', u3, dayDate, isSunday, false); u3.push(lod3);
+        
+        const r1 = this.findRole(employees, wk, dy, 1, 'REC', u1.slice(), dayDate, isSunday, true); u1.push(r1);
+        const r2 = this.findRole(employees, wk, dy, 1, 'REC', u1.slice(), dayDate, isSunday, true); u1.push(r2);
+        const r1b2 = this.findRoleRotate(employees, wk, dy, 2, 'REC', u2.slice(), [r1, lod2], dayDate, isSunday); u2.push(r1b2);
+        const r2b2 = this.findRoleRotate(employees, wk, dy, 2, 'REC', u2.slice(), [r2, lod2], dayDate, isSunday); u2.push(r2b2);
+        const r1b3 = this.findRoleRotate(employees, wk, dy, 3, 'REC', u3.slice(), [r1, r1b2, lod3], dayDate, isSunday); u3.push(r1b3);
+        const r2b3 = this.findRoleRotate(employees, wk, dy, 3, 'REC', u3.slice(), [r2, r2b2, lod3], dayDate, isSunday); u3.push(r2b3);
+        
+        let ip1, ip2a, ip2b, ip3a, ip3b, ipDisplay1, ipDisplay2, ipDisplay3, ipTime1, ipTime2, ipTime3;
+        
+        if (isSunday) {
+          ip1 = this.findIPadSlot(employees, wk, dy, 10, 12, u1, dayDate); u1.push(ip1);
+          ip2a = this.findIPadSlotRotate(employees, wk, dy, 12, 15, u2, [ip1], dayDate); u2.push(ip2a);
+          ip3a = this.findIPadSlotRotate(employees, wk, dy, 15, 18.25, u3, [ip1, ip2a], dayDate); u3.push(ip3a);
+          ipDisplay1 = ip1; ipDisplay2 = ip2a; ipDisplay3 = ip3a;
+          ipTime1 = '10:00 AM - 12:00 PM'; ipTime2 = '12:00 PM - 3:00 PM'; ipTime3 = '3:00 PM - 6:15 PM';
+        } else {
+          ip1 = this.findIPadSlot(employees, wk, dy, 9, 12, u1, dayDate); u1.push(ip1);
+          ip2a = this.findIPadSlotRotate(employees, wk, dy, 12, 14, u2, [ip1], dayDate); u2.push(ip2a);
+          ip2b = this.findIPadSlotRotate(employees, wk, dy, 14, 16, u2, [ip1], dayDate); u2.push(ip2b);
+          ip3a = this.findIPadSlotRotate(employees, wk, dy, 16, 18, u3, [ip1, ip2a, ip2b], dayDate); u3.push(ip3a);
+          ip3b = this.findIPadSlotRotate(employees, wk, dy, 18, 20, u3, [ip1, ip2a, ip2b], dayDate); u3.push(ip3b);
+          ipDisplay1 = ip1; ipTime1 = '9:00 AM - 12:00 PM';
+          if (ip2a === ip2b && ip2a !== 'X') ipDisplay2 = ip2a;
+          else if (ip2a !== 'X' && ip2b !== 'X') ipDisplay2 = ip2a + ' 12-2 / ' + ip2b + ' 2-4';
+          else if (ip2a !== 'X') ipDisplay2 = ip2a + ' 12-2';
+          else if (ip2b !== 'X') ipDisplay2 = ip2b + ' 2-4';
+          else ipDisplay2 = 'X';
+          ipTime2 = '12:00 PM - 4:00 PM';
+          if (ip3a === ip3b && ip3a !== 'X') ipDisplay3 = ip3a;
+          else if (ip3a !== 'X' && ip3b !== 'X') ipDisplay3 = ip3a + ' 4-6 / ' + ip3b + ' 6-8';
+          else if (ip3a !== 'X') ipDisplay3 = ip3a + ' 4-6';
+          else if (ip3b !== 'X') ipDisplay3 = ip3b + ' 6-8';
+          else ipDisplay3 = 'X';
+          ipTime3 = '4:00 PM - 8:00 PM';
+        }
+        
+        let uReg1 = [r1, r2, ip1];
+        let uReg2 = [r1b2, r2b2, ip2a, ip2b].filter(Boolean);
+        let uReg3 = [r1b3, r2b3, ip3a, ip3b].filter(Boolean);
+        
+        const rg3b1 = lod1 !== 'X' ? lod1 : this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(rg3b1);
+        const a1 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(a1);
+        const a2 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(a2);
+        const a3 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(a3);
+        const rg1 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(rg1);
+        const rg2 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(rg2);
+        
+        const rg3b2 = lod2 !== 'X' ? lod2 : this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [rg3b1], dayDate, isSunday); uReg2.push(rg3b2);
+        const a1b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [a1], dayDate, isSunday); uReg2.push(a1b2);
+        const a2b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [a2], dayDate, isSunday); uReg2.push(a2b2);
+        const a3b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [a3], dayDate, isSunday); uReg2.push(a3b2);
+        const rg1b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [rg1], dayDate, isSunday); uReg2.push(rg1b2);
+        const rg2b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [rg2], dayDate, isSunday); uReg2.push(rg2b2);
+        
+        const rg3b3 = lod3 !== 'X' ? lod3 : this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [rg3b1, rg3b2], dayDate, isSunday); uReg3.push(rg3b3);
+        const a1b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [a1, a1b2], dayDate, isSunday); uReg3.push(a1b3);
+        const a2b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [a2, a2b2], dayDate, isSunday); uReg3.push(a2b3);
+        const a3b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [a3, a3b2], dayDate, isSunday); uReg3.push(a3b3);
+        const rg1b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [rg1, rg1b2], dayDate, isSunday); uReg3.push(rg1b3);
+        const rg2b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [rg2, rg2b2], dayDate, isSunday); uReg3.push(rg2b3);
+        
+        let vUsed1 = uReg1.concat([lod1]);
+        const vAU1 = this.findVaultPerson(employees, wk, dy, 1, vUsed1, dayDate, isSunday); vUsed1.push(vAU1);
+        const vMed1 = this.findVaultPerson(employees, wk, dy, 1, vUsed1, dayDate, isSunday);
+        
+        let vUsed2 = uReg2.concat([lod2]);
+        const vAU2 = this.findVaultPerson(employees, wk, dy, 2, vUsed2, dayDate, isSunday); vUsed2.push(vAU2);
+        const vMed2 = this.findVaultPerson(employees, wk, dy, 2, vUsed2, dayDate, isSunday);
+        
+        let vUsed3 = uReg3.concat([lod3]);
+        const vAU3 = this.findVaultPerson(employees, wk, dy, 3, vUsed3, dayDate, isSunday); vUsed3.push(vAU3);
+        const vMed3 = this.findVaultPerson(employees, wk, dy, 3, vUsed3, dayDate, isSunday);
+        
+        const lunchEmployees = employees
+          .filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.worksTwoShifts(emp, wk, dy))
+          .map(emp => ({ name: emp.name, startTime: this.getEmpStartTime(emp, wk, dy) }))
+          .sort((a, b) => a.startTime - b.startTime);
+        
+        const lunches = [];
+        const lunchTimes = [];
+        let lunchTime = 12;
+        for (const emp of lunchEmployees) {
+          if (lunchTime <= 16.5) {
+            lunches.push({ name: emp.name, time: this.formatTime(lunchTime), cover: '' });
+            lunchTimes.push(lunchTime);
+            lunchTime += 0.5;
+          }
+        }
+        
+        const breakEmployees = employees.filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.worksSingleShift(emp, wk, dy));
+        const breaks = [];
+        const breakSlots = [14, 14.25, 14.5, 14.75, 15, 15.25, 15.5, 15.75, 16, 16.25, 16.5, 16.75, 17, 17.25, 17.5, 17.75];
+        let breakIdx = 0;
+        for (const emp of breakEmployees) {
+          while (breakIdx < breakSlots.length && this.isBreakBlocked(breakSlots[breakIdx], lunchTimes)) breakIdx++;
+          if (breakIdx < breakSlots.length) {
+            breaks.push({ name: emp.name, time: this.formatTime(breakSlots[breakIdx]), cover: '' });
+            breakIdx++;
+          }
+        }
+        const defaultBreakTimes = ['2:00 PM','2:15 PM','2:30 PM','2:45 PM','3:00 PM','3:15 PM','3:30 PM','3:45 PM','4:00 PM','4:15 PM','4:30 PM','4:45 PM','5:00 PM','5:15 PM','5:30 PM','5:45 PM'];
+        while (breaks.length < 8) breaks.push({ name: '', time: defaultBreakTimes[breaks.length] || '5:45 PM', cover: '' });
+        
+        const cf = (n) => n && n !== 'X' ? 1 : 0;
+        const stats = {
+          vaultB1: cf(vAU1) + cf(vMed1), vaultB2: cf(vAU2) + cf(vMed2), vaultB3: cf(vAU3) + cf(vMed3),
+          recB1: cf(r1) + cf(r2), recB2: cf(r1b2) + cf(r2b2), recB3: cf(r1b3) + cf(r2b3),
+          regB1: cf(rg3b1) + cf(a1) + cf(a2) + cf(a3) + cf(rg1) + cf(rg2),
+          regB2: cf(rg3b2) + cf(a1b2) + cf(a2b2) + cf(a3b2) + cf(rg1b2) + cf(rg2b2),
+          regB3: cf(rg3b3) + cf(a1b3) + cf(a2b3) + cf(a3b3) + cf(rg1b3) + cf(rg2b3),
+          ipadB1: cf(ip1),
+          ipadB2: isSunday ? cf(ip2a) : Math.min(1, cf(ip2a) + cf(ip2b)),
+          ipadB3: isSunday ? cf(ip3a) : Math.min(1, cf(ip3a) + cf(ip3b))
+        };
+        
+        return {
+          dayTitle: dayTitle, dateStr: dateStr, fullTitle: dayTitle + ' ' + dateStr, cleanTime: cleanTime, cleaning: cleaning,
+          times: { t1S: t1S, t1E: t1E, t2S: t2S, t2E: t2E, t3S: t3S, t3E: t3E },
+          lod: [{ name: lod1, time: t1S + ' - ' + t1E }, { name: lod2, time: t2S + ' - ' + t2E }, { name: lod3, time: t3S + ' - ' + t3E }],
+          reception: [{ r1: r1, r2: r2, time: t1S + ' - ' + t1E }, { r1: r1b2, r2: r2b2, time: t2S + ' - ' + t2E }, { r1: r1b3, r2: r2b3, time: t3S + ' - ' + t3E }],
+          ipad: [{ display: ipDisplay1, time: ipTime1 }, { display: ipDisplay2, time: ipTime2 }, { display: ipDisplay3, time: ipTime3 }],
+          medCheckout: [{ mc1: rg1, mc2: rg2, med3au1: rg3b1, time: t1S + ' - ' + t1E }, { mc1: rg1b2, mc2: rg2b2, med3au1: rg3b2, time: t2S + ' - ' + t2E }, { mc1: rg1b3, mc2: rg2b3, med3au1: rg3b3, time: t3S + ' - ' + t3E }],
+          auCheckout: [{ au2: a1, au3: a2, au4: a3, time: t1S + ' - ' + t1E }, { au2: a1b2, au3: a2b2, au4: a3b2, time: t2S + ' - ' + t2E }, { au2: a1b3, au3: a2b3, au4: a3b3, time: t3S + ' - ' + t3E }],
+          vault: [{ au: vAU1 === 'X' ? 'RPH' : vAU1, med: vMed1 === 'X' ? 'RPH' : vMed1, time: t1S + ' - ' + t1E }, { au: vAU2 === 'X' ? 'RPH' : vAU2, med: vMed2 === 'X' ? 'RPH' : vMed2, time: t2S + ' - ' + t2E }, { au: vAU3 === 'X' ? 'RPH' : vAU3, med: vMed3 === 'X' ? 'RPH' : vMed3, time: t3S + ' - ' + t3E }],
+          vaultOpen: isSunday ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
+          lunches: lunches, breaks: breaks, stats: stats, isSunday: isSunday, weekNum: wk, dayNum: dy,
+          date: dayDate.toISOString(), generatedAt: new Date().toISOString()
+        };
+      },
+      
+      generateSingleDayStandalone(employees, targetDate, cleanRotation) {
+        const target = new Date(targetDate);
+        const dayOfWeek = target.getDay();
+        const isSunday = dayOfWeek === 0;
+        return this.buildDay(employees, 1, dayOfWeek === 0 ? 7 : dayOfWeek, target, isSunday, cleanRotation || 0);
+      },
+      
+      generateSingleDay(employees, targetDate, week1Start, week2Start, cleanRotation) {
+        const w1 = new Date(week1Start);
+        const w2 = new Date(week2Start);
+        const target = new Date(targetDate);
+        let weekNum = 0, dayNum = 0;
+        for (let d = 0; d < 7; d++) {
+          const checkDate = new Date(w1);
+          checkDate.setDate(checkDate.getDate() + d);
+          if (checkDate.toDateString() === target.toDateString()) { weekNum = 1; dayNum = d + 1; break; }
+        }
+        if (weekNum === 0) {
+          for (let d = 0; d < 7; d++) {
+            const checkDate = new Date(w2);
+            checkDate.setDate(checkDate.getDate() + d);
+            if (checkDate.toDateString() === target.toDateString()) { weekNum = 2; dayNum = d + 1; break; }
+          }
+        }
+        if (weekNum === 0) return null;
+        return this.buildDay(employees, weekNum, dayNum, target, dayNum === 7, cleanRotation || 0);
+      },
+      
+      generateAllSchedules(employees, week1Start, week2Start) {
+        const schedules = [];
+        let cleanRotation = 0;
+        for (let w = 1; w <= 2; w++) {
+          const weekStart = w === 1 ? new Date(week1Start) : new Date(week2Start);
+          for (let d = 1; d <= 7; d++) {
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(dayDate.getDate() + (d - 1));
+            schedules.push(this.buildDay(employees, w, d, dayDate, d === 7, cleanRotation));
+            cleanRotation++;
+          }
+        }
+        return schedules;
+      }
+    };
+
+    // Components
+    const CleaningModal = ({ task, onClose, onSubmit, existingLog }) => {
+      const [checked, setChecked] = useState(existingLog ? existingLog.tasks || {} : {});
+      const [initials, setInitials] = useState(existingLog ? existingLog.initials || '' : '');
+      const tasks = CLEANING_TASKS[task] || [];
+      const isViewOnly = !!existingLog;
+      const allChecked = tasks.every((_, i) => checked[i]);
+      
+      const selectAll = () => {
+        const newChecked = {};
+        tasks.forEach((_, i) => { newChecked[i] = true; });
+        setChecked(newChecked);
+      };
+      
+      const handleSubmit = () => {
+        if (!initials.trim()) { alert('Please enter your initials'); return; }
+        if (!allChecked) { alert('Please complete all tasks'); return; }
+        onSubmit({ task: task, initials: initials.trim().toUpperCase(), tasks: checked, completedAt: new Date().toISOString() });
+        onClose();
+      };
+      
+      return (
+        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg card-shadow fade-in max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">{task} Cleaning Tasks {isViewOnly && <span className="text-sm font-normal text-gray-500">- Completed by {existingLog.initials}</span>}</h2>
+            {!isViewOnly && <button onClick={selectAll} className="mb-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200">✓ Select All</button>}
+            <div className="space-y-2 mb-4">
+              {tasks.map((t, i) => (
+                <label key={i} className={'flex items-start gap-3 p-2 rounded ' + (isViewOnly ? '' : 'hover:bg-gray-50 cursor-pointer')}>
+                  <input type="checkbox" checked={checked[i] || false} onChange={(e) => !isViewOnly && setChecked({...checked, [i]: e.target.checked})} disabled={isViewOnly} className="mt-1 w-5 h-5" />
+                  <span className="text-sm">{t}</span>
+                </label>
+              ))}
+            </div>
+            {!isViewOnly && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Your Initials</label>
+                <input type="text" value={initials} onChange={(e) => setInitials(e.target.value.slice(0, 4))} className="w-full px-4 py-2 border rounded-lg uppercase" placeholder="e.g., JD" maxLength={4} />
+              </div>
+            )}
+            <div className="flex gap-2">
+              {!isViewOnly && <button onClick={handleSubmit} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Submit</button>}
+              <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">{isViewOnly ? 'Close' : 'Cancel'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+    
+    const NameEditDropdown = ({ value, employees, empShapes, onSelect, onClose }) => {
+      const options = ['X'].concat(employees.map(e => e.name).sort());
+      return (
+        <div className="absolute top-full left-0 z-50 bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[150px]">
+          {options.map((name, i) => (
+            <div key={i} onClick={() => { onSelect(name); onClose(); }} className={'px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center gap-2 ' + (value === name ? 'bg-emerald-50' : '')}>
+              {name !== 'X' && empShapes[name.toUpperCase()] && <EmpShape color={empShapes[name.toUpperCase()].color} shape={empShapes[name.toUpperCase()].shape} />}
+              <span className={name === 'X' ? 'text-gray-500' : ''}>{name}</span>
+            </div>
+          ))}
+        </div>
+      );
+    };
+    
+    const EditableNameCell = ({ name, employees, empShapes, onUpdate, canEdit }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const shape = name && name !== 'X' && name !== 'RPH' && empShapes[name.toUpperCase()] ? empShapes[name.toUpperCase()] : null;
+      return (
+        <div className="relative">
+          <div onClick={() => canEdit && setIsOpen(!isOpen)} className={'schedule-cell font-bold text-sm ' + (!name || name === 'X' ? 'bg-gray-400' : 'bg-white') + (canEdit ? ' cursor-pointer hover:bg-gray-50' : '')}>
+            {shape && <EmpShape color={shape.color} shape={shape.shape} />}
+            {(name || 'X').toUpperCase()}
+          </div>
+          {isOpen && <NameEditDropdown value={name} employees={employees} empShapes={empShapes} onSelect={onUpdate} onClose={() => setIsOpen(false)} />}
+        </div>
+      );
+    };
+    
+    const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
+    const HeaderCell = ({ children, color }) => {
+      const colors = { black: 'bg-black text-white', green: 'bg-[#67d50d] text-black', blue: 'bg-[#bdd7ee] text-black', yellow: 'bg-[#ffe699] text-black' };
+      return <div className={'schedule-cell font-bold text-base ' + (colors[color] || colors.black)}>{children}</div>;
+    };
+
+    const ScheduleDisplay = ({ schedule, empShapes, onCleaningClick, employees, onScheduleUpdate, isEditable }) => {
+      if (!schedule) return null;
+      
+      const getShape = (name) => name && name !== 'X' && name !== 'RPH' && empShapes[name.toUpperCase()] ? empShapes[name.toUpperCase()] : null;
+      
+      const NameCell = ({ name }) => {
+        const shape = getShape(name);
+        return (
+          <div className={'schedule-cell font-bold text-sm ' + (!name || name === 'X' ? 'bg-gray-400' : 'bg-white')}>
+            {shape && <EmpShape color={shape.color} shape={shape.shape} />}
+            {(name || 'X').toUpperCase()}
+          </div>
+        );
+      };
+      
+      const updateField = (path, value) => {
+        if (!onScheduleUpdate) return;
+        const newSched = JSON.parse(JSON.stringify(schedule));
+        const parts = path.split('.');
+        let obj = newSched;
+        for (let i = 0; i < parts.length - 1; i++) {
+          obj = obj[parts[i]];
+        }
+        obj[parts[parts.length - 1]] = value;
+        newSched.manuallyEdited = true;
+        newSched.editedAt = new Date().toISOString();
+        onScheduleUpdate(newSched);
+      };
+      
+      return (
+        <div className="schedule-container bg-white p-4 rounded-lg card-shadow fade-in">
+          <div className="text-center mb-3">
+            <h2 className="font-black text-3xl">{schedule.fullTitle}</h2>
+            <p className="text-gray-500 text-sm bg-gray-100 py-1 rounded">{schedule.cleanTime}</p>
+          </div>
+          
+          <div className="grid grid-cols-5 gap-1 mb-3">
+            {schedule.cleaning.map((c, i) => (
+              <button key={i} onClick={() => onCleaningClick && onCleaningClick(c.task)} className="schedule-cell text-red-600 font-bold text-xs py-1 hover:bg-red-50 cursor-pointer transition-colors">
+                {getShape(c.name) && <EmpShape color={getShape(c.name).color} shape={getShape(c.name).shape} />}
+                {c.name.toUpperCase()} - {c.task}
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <div className="mb-3">
+                <HeaderCell color="black">LEADER OF THE DAY</HeaderCell>
+                <div className="grid grid-cols-2 gap-0">
+                  {schedule.lod.map((l, i) => (
+                    <React.Fragment key={i}>
+                      {isEditable ? <EditableNameCell name={l.name} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('lod.' + i + '.name', v)} canEdit={true} /> : <NameCell name={l.name} />}
+                      <TimeCell time={l.time} />
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mb-3">
+                <div className="schedule-cell font-bold text-lg bg-[#67d50d] text-black">FRONT END RECEPTION</div>
+                <div className="grid grid-cols-6 gap-0">
+                  <div className="col-span-2"><HeaderCell color="green">RECEPTION 1</HeaderCell></div>
+                  <div className="col-span-2"><HeaderCell color="green">RECEPTION 2</HeaderCell></div>
+                  <div className="col-span-2"><HeaderCell color="green">iPAD</HeaderCell></div>
+                  {schedule.reception.map((r, i) => (
+                    <React.Fragment key={i}>
+                      {isEditable ? <EditableNameCell name={r.r1} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('reception.' + i + '.r1', v)} canEdit={true} /> : <NameCell name={r.r1} />}
+                      <TimeCell time={r.time} />
+                      {isEditable ? <EditableNameCell name={r.r2} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('reception.' + i + '.r2', v)} canEdit={true} /> : <NameCell name={r.r2} />}
+                      <TimeCell time={r.time} />
+                      <div className={'schedule-cell font-bold text-xs ' + (schedule.ipad[i].display === 'X' ? 'bg-gray-400' : 'bg-white')}>{schedule.ipad[i].display.toUpperCase()}</div>
+                      <TimeCell time={schedule.ipad[i].time} />
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mb-3">
+                <div className="schedule-cell font-bold text-lg bg-[#bdd7ee] text-black">BACK END DISPENSARY</div>
+                <div className="grid grid-cols-6 gap-0">
+                  <div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 1</HeaderCell></div>
+                  <div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 2</HeaderCell></div>
+                  <div className="col-span-2"><HeaderCell color="blue">MED 3 / AU 1</HeaderCell></div>
+                  {schedule.medCheckout.map((m, i) => (
+                    <React.Fragment key={i}>
+                      {isEditable ? <EditableNameCell name={m.mc1} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('medCheckout.' + i + '.mc1', v)} canEdit={true} /> : <NameCell name={m.mc1} />}
+                      <TimeCell time={m.time} />
+                      {isEditable ? <EditableNameCell name={m.mc2} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('medCheckout.' + i + '.mc2', v)} canEdit={true} /> : <NameCell name={m.mc2} />}
+                      <TimeCell time={m.time} />
+                      {isEditable ? <EditableNameCell name={m.med3au1} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('medCheckout.' + i + '.med3au1', v)} canEdit={true} /> : <NameCell name={m.med3au1} />}
+                      <TimeCell time={m.time} />
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div className="grid grid-cols-6 gap-0 mt-2">
+                  <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 2</HeaderCell></div>
+                  <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 3</HeaderCell></div>
+                  <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 4</HeaderCell></div>
+                  {schedule.auCheckout.map((a, i) => (
+                    <React.Fragment key={i}>
+                      {isEditable ? <EditableNameCell name={a.au2} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('auCheckout.' + i + '.au2', v)} canEdit={true} /> : <NameCell name={a.au2} />}
+                      <TimeCell time={a.time} />
+                      {isEditable ? <EditableNameCell name={a.au3} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('auCheckout.' + i + '.au3', v)} canEdit={true} /> : <NameCell name={a.au3} />}
+                      <TimeCell time={a.time} />
+                      {isEditable ? <EditableNameCell name={a.au4} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('auCheckout.' + i + '.au4', v)} canEdit={true} /> : <NameCell name={a.au4} />}
+                      <TimeCell time={a.time} />
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-4 gap-0">
+                <div className="col-span-2"><HeaderCell color="yellow">AU LEFT VAULT</HeaderCell></div>
+                <div className="col-span-2"><HeaderCell color="yellow">MEDICAL RIGHT VAULT</HeaderCell></div>
+                <NameCell name="RPH" /><TimeCell time={schedule.vaultOpen} />
+                <NameCell name="RPH" /><TimeCell time={schedule.vaultOpen} />
+                {schedule.vault.map((v, i) => (
+                  <React.Fragment key={i}>
+                    {isEditable ? <EditableNameCell name={v.au} employees={employees || []} empShapes={empShapes} onUpdate={(val) => updateField('vault.' + i + '.au', val)} canEdit={true} /> : <NameCell name={v.au} />}
+                    <TimeCell time={v.time} />
+                    {isEditable ? <EditableNameCell name={v.med} employees={employees || []} empShapes={empShapes} onUpdate={(val) => updateField('vault.' + i + '.med', val)} canEdit={true} /> : <NameCell name={v.med} />}
+                    <TimeCell time={v.time} />
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+            
+            <div className="w-80">
+              <div className="mb-3">
+                <HeaderCell color="black">LUNCH BREAK</HeaderCell>
+                <div className="grid grid-cols-3 gap-0">
+                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
+                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
+                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
+                  {schedule.lunches.map((l, i) => (
+                    <React.Fragment key={i}>
+                      <div className="schedule-cell font-bold text-xs py-1">
+                        {getShape(l.name) && <EmpShape color={getShape(l.name).color} shape={getShape(l.name).shape} />}
+                        {l.name.toUpperCase()}
+                      </div>
+                      <div className="schedule-cell text-xs py-1">{l.time}</div>
+                      {isEditable ? <EditableNameCell name={l.cover || ''} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('lunches.' + i + '.cover', v)} canEdit={true} /> : <div className="schedule-cell text-xs py-1">{l.cover || ''}</div>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mb-3">
+                <HeaderCell color="black">15-MIN BREAK</HeaderCell>
+                <div className="grid grid-cols-3 gap-0">
+                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
+                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
+                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
+                  {schedule.breaks.slice(0, 8).map((b, i) => (
+                    <React.Fragment key={i}>
+                      <div className="schedule-cell font-bold text-xs py-1">
+                        {b.name && getShape(b.name) && <EmpShape color={getShape(b.name).color} shape={getShape(b.name).shape} />}
+                        {b.name ? b.name.toUpperCase() : ''}
+                      </div>
+                      <div className="schedule-cell text-xs py-1">{b.time}</div>
+                      {isEditable ? <EditableNameCell name={b.cover || ''} employees={employees || []} empShapes={empShapes} onUpdate={(v) => updateField('breaks.' + i + '.cover', v)} canEdit={true} /> : <div className="schedule-cell text-xs py-1">{b.cover || ''}</div>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <HeaderCell color="black">DEPOSITS</HeaderCell>
+                <div className="grid grid-cols-2 gap-0">
+                  <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">TIME</div>
+                  <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">PERSON</div>
+                  <div className="schedule-cell text-xs py-1">9:00 AM - 12:00 PM</div>
+                  <div className="schedule-cell text-xs py-1">LOD</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {isEditable && schedule.manuallyEdited && <div className="mt-2 text-xs text-amber-600">⚠️ Manually edited at {formatToEST(schedule.editedAt)}</div>}
+        </div>
+      );
+    };
+
+    const StaffingSummary = ({ schedules, allSchedules, onDaySelect }) => {
+      const [selectedIdx, setSelectedIdx] = useState(null);
+      const [viewMonth, setViewMonth] = useState(new Date().getMonth());
+      const [viewYear, setViewYear] = useState(new Date().getFullYear());
+      
+      const getIdeal = (isSunday) => isSunday ? { vault: [1,1,1], rec: [2,2,2], reg: [3,3,3] } : { vault: [2,2,2], rec: [2,2,2], reg: [2,3,3] };
+      const getBlockTimes = (isSunday, block) => {
+        if (isSunday) return block === 1 ? '10A-12P' : block === 2 ? '12P-3P' : '3P-6:15P';
+        return block === 1 ? '9A-12P' : block === 2 ? '12P-4:15P' : '4P-8:15P';
+      };
+      
+      const getIssues = (s) => {
+        const ideal = getIdeal(s.isSunday);
+        const issues = [];
+        if (s.stats.vaultB1 < ideal.vault[0]) issues.push('Vault B1: need ' + ideal.vault[0] + ', have ' + s.stats.vaultB1);
+        if (s.stats.vaultB2 < ideal.vault[1]) issues.push('Vault B2: need ' + ideal.vault[1] + ', have ' + s.stats.vaultB2);
+        if (s.stats.vaultB3 < ideal.vault[2]) issues.push('Vault B3: need ' + ideal.vault[2] + ', have ' + s.stats.vaultB3);
+        if (s.stats.recB1 < ideal.rec[0]) issues.push('Reception B1: need ' + ideal.rec[0] + ', have ' + s.stats.recB1);
+        if (s.stats.recB2 < ideal.rec[1]) issues.push('Reception B2: need ' + ideal.rec[1] + ', have ' + s.stats.recB2);
+        if (s.stats.recB3 < ideal.rec[2]) issues.push('Reception B3: need ' + ideal.rec[2] + ', have ' + s.stats.recB3);
+        if (s.stats.regB1 < ideal.reg[0]) issues.push('Registers B1: need ' + ideal.reg[0] + ', have ' + s.stats.regB1);
+        if (s.stats.regB2 < ideal.reg[1]) issues.push('Registers B2: need ' + ideal.reg[1] + ', have ' + s.stats.regB2);
+        if (s.stats.regB3 < ideal.reg[2]) issues.push('Registers B3: need ' + ideal.reg[2] + ', have ' + s.stats.regB3);
+        return issues;
+      };
+      
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+      const days = [];
+      for (let i = 0; i < firstDayOfMonth; i++) days.push(null);
+      for (let i = 1; i <= daysInMonth; i++) days.push(i);
+      
+      const getSchedForDay = (day) => {
+        if (!day || !allSchedules) return null;
+        const dateStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        return allSchedules[dateStr];
+      };
+      
+      const selected = selectedIdx !== null && schedules[selectedIdx] ? schedules[selectedIdx] : null;
+      const issues = selected ? getIssues(selected) : [];
+      
+      return (
+        <div className="fade-in">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl mb-6">
+            <h2 className="text-2xl font-bold mb-4">Staffing Requirements</h2>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="bg-white/20 rounded-lg p-4">
+                <h3 className="font-bold mb-2">Monday - Saturday</h3>
+                <div className="text-sm space-y-1">
+                  <p>• Vault: 2 people (all shifts)</p>
+                  <p>• Reception: 2 people (all shifts)</p>
+                  <p>• Registers: 2 (9-12), 3 (12-4), 3 (4-8)</p>
+                  <p>• iPad: 1 person (all shifts)</p>
+                </div>
+              </div>
+              <div className="bg-white/20 rounded-lg p-4">
+                <h3 className="font-bold mb-2">Sunday</h3>
+                <div className="text-sm space-y-1">
+                  <p>• Vault: 1 person (all shifts)</p>
+                  <p>• Reception: 2 people (all shifts)</p>
+                  <p>• Registers: 3 people (all shifts)</p>
+                  <p>• iPad: 1 person (all shifts)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg card-shadow p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
+              <h3 className="font-bold text-xl">{monthNames[viewMonth]} {viewYear}</h3>
+              <button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
+            </div>
+            <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">
+              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {days.map((day, i) => {
+                const sched = getSchedForDay(day);
+                const iss = sched ? getIssues(sched) : [];
+                const hasIssues = iss.length > 0;
+                const today = new Date();
+                const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+                return (
+                  <div key={i} onClick={() => {
+                    if (sched) {
+                      const idx = schedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === new Date(sched.date).toISOString().split('T')[0]);
+                      if (idx >= 0) { setSelectedIdx(idx); if (onDaySelect) onDaySelect(idx); }
+                    }
+                  }} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer transition-all ' + (!day ? 'bg-gray-50 border-transparent' : 'hover:bg-gray-50') + ' ' + (sched ? (hasIssues ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300') : 'border-gray-200') + ' ' + (isToday ? 'ring-2 ring-blue-500' : '')}>
+                    {day && (
+                      <>
+                        <div className={'font-bold ' + (isToday ? 'text-blue-600' : '')}>{day}</div>
+                        {sched && <div className={'text-xs mt-1 ' + (hasIssues ? 'text-red-600' : 'text-emerald-600')}>{hasIssues ? '⚠️ ' + iss.length + ' issue' + (iss.length > 1 ? 's' : '') : '✓ OK'}</div>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          {selected && (
+            <div className="bg-white rounded-xl p-6 card-shadow">
+              <h3 className="text-xl font-bold mb-4">{selected.fullTitle}</h3>
+              {issues.length === 0 ? (
+                <div className="bg-emerald-100 text-emerald-800 p-4 rounded-lg">✓ All positions adequately staffed!</div>
+              ) : (
+                <div className="bg-red-100 text-red-800 p-4 rounded-lg">
+                  <p className="font-bold mb-2">⚠️ Staffing Shortages:</p>
+                  <ul className="list-disc list-inside text-sm">{issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+                </div>
+              )}
+              <div className="mt-4 grid grid-cols-4 gap-4">
+                {['Vault','Reception','Registers','iPad'].map(area => (
+                  <div key={area} className="bg-gray-50 p-3 rounded-lg">
+                    <div className="font-bold text-sm mb-2">{area}</div>
+                    <div className="text-xs space-y-1">
+                      <div className="flex justify-between"><span>Block 1 ({getBlockTimes(selected.isSunday, 1)}):</span><span className="font-bold">{area === 'Vault' ? selected.stats.vaultB1 : area === 'Reception' ? selected.stats.recB1 : area === 'Registers' ? selected.stats.regB1 : selected.stats.ipadB1}</span></div>
+                      <div className="flex justify-between"><span>Block 2 ({getBlockTimes(selected.isSunday, 2)}):</span><span className="font-bold">{area === 'Vault' ? selected.stats.vaultB2 : area === 'Reception' ? selected.stats.recB2 : area === 'Registers' ? selected.stats.regB2 : selected.stats.ipadB2}</span></div>
+                      <div className="flex justify-between"><span>Block 3 ({getBlockTimes(selected.isSunday, 3)}):</span><span className="font-bold">{area === 'Vault' ? selected.stats.vaultB3 : area === 'Reception' ? selected.stats.recB3 : area === 'Registers' ? selected.stats.regB3 : selected.stats.ipadB3}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const CleaningLogsCalendar = ({ cleaningLogs, onViewLog }) => {
+      const today = new Date();
+      const [viewMonth, setViewMonth] = useState(today.getMonth());
+      const [viewYear, setViewYear] = useState(today.getFullYear());
+      const [selectedDate, setSelectedDate] = useState(null);
+      
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+      const days = [];
+      for (let i = 0; i < firstDayOfMonth; i++) days.push(null);
+      for (let i = 1; i <= daysInMonth; i++) days.push(i);
+      
+      const getLogsForDate = (day) => {
+        if (!day) return [];
+        const dateStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        return cleaningLogs[dateStr] || [];
+      };
+      
+      const getCompletedAreas = (logs) => new Set(logs.map(l => l.task)).size;
+      const getMissingAreas = (logs) => {
+        const completed = new Set(logs.map(l => l.task));
+        return CLEANING_AREAS.filter(a => !completed.has(a));
+      };
+      
+      const selectedLogs = selectedDate ? getLogsForDate(selectedDate) : [];
+      const missingAreas = selectedDate ? getMissingAreas(selectedLogs) : [];
+      
+      return (
+        <div className="fade-in">
+          <div className="bg-white rounded-lg card-shadow p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
+              <h3 className="font-bold text-xl">{monthNames[viewMonth]} {viewYear}</h3>
+              <button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
+            </div>
+            <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">
+              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {days.map((day, i) => {
+                const logs = getLogsForDate(day);
+                const completed = getCompletedAreas(logs);
+                const allDone = completed === 5;
+                const partial = completed > 0 && completed < 5;
+                const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+                return (
+                  <div key={i} onClick={() => day && setSelectedDate(day)} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer transition-all ' + (!day ? 'bg-gray-50 border-transparent' : 'hover:bg-gray-50') + ' ' + (allDone ? 'bg-emerald-50 border-emerald-300' : partial ? 'bg-amber-50 border-amber-300' : 'border-gray-200') + ' ' + (selectedDate === day ? 'ring-2 ring-blue-500' : '') + ' ' + (isToday ? 'border-blue-500 border-2' : '')}>
+                    {day && (
+                      <>
+                        <div className={'font-bold ' + (isToday ? 'text-blue-600' : '')}>{day}</div>
+                        {completed > 0 && <div className={'text-xs mt-1 ' + (allDone ? 'text-emerald-600' : 'text-amber-600')}>{completed}/5 Areas</div>}
+                        {completed === 0 && isToday && <div className="text-xs mt-1 text-red-500">⚠️ None</div>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          {selectedDate && (
+            <div className="bg-white rounded-lg card-shadow p-6">
+              <h3 className="font-bold text-lg mb-4">Cleaning Log - {monthNames[viewMonth]} {selectedDate}, {viewYear}</h3>
+              {selectedLogs.length === 0 ? (
+                <p className="text-gray-500">No cleaning tasks logged for this day.</p>
+              ) : (
+                <div className="space-y-3">
+                  {selectedLogs.map((log, i) => (
+                    <div key={i} onClick={() => onViewLog && onViewLog(log)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
+                      <div><span className="font-bold">{log.task}</span><span className="text-gray-500 ml-2">by {log.initials}</span></div>
+                      <span className="text-sm text-gray-500">{formatToEST(log.completedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {missingAreas.length > 0 && (
+                <div className="mt-4 p-3 bg-red-50 rounded-lg">
+                  <p className="font-bold text-red-700 text-sm mb-1">⚠️ Missing Areas:</p>
+                  <p className="text-red-600 text-sm">{missingAreas.join(', ')}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+    
+    const EmployeeForm = ({ employee, onSave, onCancel }) => {
+      const [form, setForm] = useState(employee || {
+        name: '', vault: false, reception: false, lod: false, ipad: false, registers: false, ptoText: '', notes: '',
+        week1: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' },
+        week2: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' }
+      });
+      const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      
+      return (
+        <div className="bg-white p-4 rounded-lg card-shadow">
+          <h3 className="text-lg font-bold mb-3">{employee ? 'Edit Employee' : 'Add Employee'}</h3>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div><label className="block text-xs font-medium mb-1">Name</label><input type="text" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Employee name" /></div>
+            <div><label className="block text-xs font-medium mb-1">PTO</label><input type="text" value={form.ptoText} onChange={(e) => setForm({...form, ptoText: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 3/1-3/5" /></div>
+          </div>
+          <div className="flex flex-wrap gap-4 mb-3">
+            {['vault','reception','lod','ipad','registers'].map(role => (
+              <label key={role} className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form[role]} onChange={(e) => setForm({...form, [role]: e.target.checked})} className="w-4 h-4" />
+                <span className="text-sm capitalize">{role}</span>
+              </label>
+            ))}
+          </div>
+          <div className="mb-3">
+            <label className="block text-xs font-medium mb-1">Week 1</label>
+            <div className="grid grid-cols-7 gap-1">
+              {dayNames.map((day, i) => (
+                <div key={i}>
+                  <div className="text-[10px] text-gray-500 text-center mb-1">{day}</div>
+                  <select value={form.week1[i + 1] || ''} onChange={(e) => setForm({...form, week1: {...form.week1, [i + 1]: e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">
+                    {(i === 6 ? SUNDAY_TIME_SLOTS : TIME_SLOTS).map((slot, si) => <option key={si} value={slot.value}>{slot.label}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mb-3">
+            <label className="block text-xs font-medium mb-1">Week 2</label>
+            <div className="grid grid-cols-7 gap-1">
+              {dayNames.map((day, i) => (
+                <div key={i}>
+                  <div className="text-[10px] text-gray-500 text-center mb-1">{day}</div>
+                  <select value={form.week2[i + 1] || ''} onChange={(e) => setForm({...form, week2: {...form.week2, [i + 1]: e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">
+                    {(i === 6 ? SUNDAY_TIME_SLOTS : TIME_SLOTS).map((slot, si) => <option key={si} value={slot.value}>{slot.label}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => onSave(form)} className="btn-primary px-4 py-2 text-white rounded-lg text-sm font-medium">Save</button>
+            <button onClick={onCancel} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Cancel</button>
+          </div>
+        </div>
+      );
+    };
+    
+    const LoginModal = ({ onLogin, onClose }) => {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [error, setError] = useState('');
+      const handleLogin = () => { if (username === 'supervisor' && password === 'admin123') onLogin(); else setError('Invalid username or password'); };
+      return (
+        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 w-full max-w-md card-shadow fade-in">
+            <h2 className="text-2xl font-bold mb-6 text-center">Supervisor Login</h2>
+            {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}
+            <div className="mb-4"><label className="block text-sm font-medium mb-1">Username</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-3 border rounded-lg" placeholder="Enter username" /></div>
+            <div className="mb-6"><label className="block text-sm font-medium mb-1">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 border rounded-lg" placeholder="Enter password" onKeyPress={(e) => e.key === 'Enter' && handleLogin()} /></div>
+            <div className="flex gap-3"><button onClick={handleLogin} className="flex-1 btn-primary px-4 py-3 text-white rounded-lg font-bold">Login</button><button onClick={onClose} className="px-4 py-3 bg-gray-200 rounded-lg font-medium">Cancel</button></div>
+          </div>
+        </div>
+      );
+    };
+    
+    const MonthlyCalendar = ({ generatedDays, onDayClick, allSchedules }) => {
+      const today = new Date();
+      const [viewMonth, setViewMonth] = useState(today.getMonth());
+      const [viewYear, setViewYear] = useState(today.getFullYear());
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+      const days = [];
+      for (let i = 0; i < firstDayOfMonth; i++) days.push(null);
+      for (let i = 1; i <= daysInMonth; i++) days.push(i);
+      
+      const isDateGenerated = (day) => {
+        if (!day) return null;
+        const dateStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        return generatedDays[dateStr];
+      };
+      
+      return (
+        <div className="bg-white rounded-lg card-shadow p-4">
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); }} className="p-1 hover:bg-gray-100 rounded text-lg">←</button>
+            <h3 className="font-bold">{monthNames[viewMonth]} {viewYear}</h3>
+            <button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); }} className="p-1 hover:bg-gray-100 rounded text-lg">→</button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">{['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d}>{d}</div>)}</div>
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((day, i) => {
+              const generated = isDateGenerated(day);
+              const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+              return (
+                <div key={i} onClick={() => day && onDayClick(new Date(viewYear, viewMonth, day))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 ' + (!day ? 'bg-gray-50 border-transparent' : '') + ' ' + (generated ? 'bg-emerald-100 border-emerald-400' : 'border-gray-200') + ' ' + (isToday ? 'ring-2 ring-blue-500' : '')}>
+                  {day && (
+                    <>
+                      <div className={'font-bold ' + (isToday ? 'text-blue-600' : '')}>{day}</div>
+                      {generated && <div className="text-[7px] text-emerald-700 leading-tight mt-0.5">✓ {formatToEST(generated)}</div>}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    const App = () => {
+      const [tab, setTab] = useState('schedule');
+      const [employees, setEmployees] = useState([]);
+      const [schedules, setSchedules] = useState([]);
+      const [allSchedules, setAllSchedules] = useState({});
+      const [generatedDays, setGeneratedDays] = useState({});
+      const [cleaningLogs, setCleaningLogs] = useState({});
+      const [week1Start, setWeek1Start] = useState('');
+      const [week2Start, setWeek2Start] = useState('');
+      const [singleDayDate, setSingleDayDate] = useState('');
+      const [selectedDay, setSelectedDay] = useState(0);
+      const [editingEmployee, setEditingEmployee] = useState(null);
+      const [showAddForm, setShowAddForm] = useState(false);
+      const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [showLoginModal, setShowLoginModal] = useState(false);
+      const [showCleaningModal, setShowCleaningModal] = useState(null);
+      const [viewingLog, setViewingLog] = useState(null);
+      const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+      
+      const empShapes = useMemo(() => {
+        const shapes = {};
+        const sorted = [...employees].sort((a, b) => a.name.localeCompare(b.name));
+        sorted.forEach((emp, i) => {
+          shapes[emp.name.toUpperCase()] = {
+            color: EMPLOYEE_COLORS[i % EMPLOYEE_COLORS.length],
+            shape: SHAPES[Math.floor(i / EMPLOYEE_COLORS.length) % SHAPES.length]
+          };
+        });
+        return shapes;
+      }, [employees]);
+      
+      const sortedEmployees = useMemo(() => [...employees].sort((a, b) => a.name.localeCompare(b.name)), [employees]);
+      
+      useEffect(() => {
+        const saved = localStorage.getItem('pharmacy-scheduler-v3');
+        if (saved) {
+          const data = JSON.parse(saved);
+          setEmployees(data.employees || []);
+          setWeek1Start(data.week1Start || '');
+          setWeek2Start(data.week2Start || '');
+          setSchedules(data.schedules || []);
+          setAllSchedules(data.allSchedules || {});
+          setGeneratedDays(data.generatedDays || {});
+          setCleaningLogs(data.cleaningLogs || {});
+        }
+      }, []);
+      
+      useEffect(() => {
+        localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({
+          employees, week1Start, week2Start, schedules, allSchedules, generatedDays, cleaningLogs
+        }));
+      }, [employees, week1Start, week2Start, schedules, allSchedules, generatedDays, cleaningLogs]);
+      
+      // Auto-flip at 8:15 PM
+      useEffect(() => {
+        const checkTime = () => {
+          const hour = getESTHour();
+          if (hour >= 20) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowKey = tomorrow.toISOString().split('T')[0];
+            if (allSchedules[tomorrowKey]) {
+              const idx = schedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === tomorrowKey);
+              if (idx >= 0 && idx !== selectedDay) setSelectedDay(idx);
+            }
+          }
+        };
+        const interval = setInterval(checkTime, 60000);
+        return () => clearInterval(interval);
+      }, [allSchedules, schedules, selectedDay]);
+      
+      const todaySchedule = useMemo(() => {
+        const hour = getESTHour();
+        const targetDate = new Date();
+        if (hour >= 20) targetDate.setDate(targetDate.getDate() + 1);
+        const dateKey = targetDate.toISOString().split('T')[0];
+        return allSchedules[dateKey] || null;
+      }, [allSchedules]);
+      
+      const generateAllSchedules = () => {
+        if (!week1Start || !week2Start || employees.length === 0) return;
+        const scheds = ScheduleEngine.generateAllSchedules(sortedEmployees, week1Start, week2Start);
+        setSchedules(scheds);
+        const newGenerated = { ...generatedDays };
+        const newAll = { ...allSchedules };
+        scheds.forEach(s => {
+          const key = new Date(s.date).toISOString().split('T')[0];
+          newGenerated[key] = new Date().toISOString();
+          newAll[key] = s;
+        });
+        setGeneratedDays(newGenerated);
+        setAllSchedules(newAll);
+        setSelectedDay(0);
+      };
+      
+      const generateSingleDay = (targetDate) => {
+        if (employees.length === 0) return;
+        let schedule = null;
+        if (week1Start && week2Start) {
+          schedule = ScheduleEngine.generateSingleDay(sortedEmployees, targetDate, week1Start, week2Start, 0);
+        }
+        if (!schedule) {
+          schedule = ScheduleEngine.generateSingleDayStandalone(sortedEmployees, targetDate, 0);
+        }
+        if (!schedule) return;
+        const dateKey = new Date(targetDate).toISOString().split('T')[0];
+        const existingIndex = schedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === dateKey);
+        const newSchedules = [...schedules];
+        if (existingIndex >= 0) newSchedules[existingIndex] = schedule;
+        else {
+          newSchedules.push(schedule);
+          newSchedules.sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+        setSchedules(newSchedules);
+        setGeneratedDays({ ...generatedDays, [dateKey]: new Date().toISOString() });
+        setAllSchedules({ ...allSchedules, [dateKey]: schedule });
+        const newIndex = newSchedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === dateKey);
+        setSelectedDay(newIndex >= 0 ? newIndex : 0);
+      };
+      
+      const handleScheduleUpdate = (newSched) => {
+        const dateKey = new Date(newSched.date).toISOString().split('T')[0];
+        const idx = schedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === dateKey);
+        if (idx >= 0) {
+          const newScheds = [...schedules];
+          newScheds[idx] = newSched;
+          setSchedules(newScheds);
+        }
+        setAllSchedules({ ...allSchedules, [dateKey]: newSched });
+        setHasUnsavedChanges(true);
+      };
+      
+      const saveChanges = () => {
+        localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({
+          employees, week1Start, week2Start, schedules, allSchedules, generatedDays, cleaningLogs
+        }));
+        setHasUnsavedChanges(false);
+        alert('Changes saved!');
+      };
+      
+      const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = evt => {
+        reader.onload = (evt) => {
           try {
             const data = new Uint8Array(evt.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
@@ -43,11 +1241,12 @@
             for (let i = 2; i < json.length; i++) {
               const row = json[i];
               if (!row[0]) continue;
-              const isCheck = v => v === '✓' || v === 'X' || v === 'x' || v === true || v === 'TRUE';
+              const isCheck = (v) => v === '✓' || v === 'X' || v === 'x' || v === true || v === 'TRUE';
               newEmployees.push({
-                name: row[0] || '', vault: isCheck(row[1]), reception: isCheck(row[2]), lod: isCheck(row[3]), ipad: isCheck(row[4]), registers: isCheck(row[5]), ptoText: row[6] || '', notes: row[7] || '',
-                week1: {1: row[8] || '', 2: row[9] || '', 3: row[10] || '', 4: row[11] || '', 5: row[12] || '', 6: row[13] || '', 7: row[14] || ''},
-                week2: {1: row[15] || '', 2: row[16] || '', 3: row[17] || '', 4: row[18] || '', 5: row[19] || '', 6: row[20] || '', 7: row[21] || ''}
+                name: row[0] || '', vault: isCheck(row[1]), reception: isCheck(row[2]), lod: isCheck(row[3]),
+                ipad: isCheck(row[4]), registers: isCheck(row[5]), ptoText: row[6] || '', notes: row[7] || '',
+                week1: { 1: row[8] || '', 2: row[9] || '', 3: row[10] || '', 4: row[11] || '', 5: row[12] || '', 6: row[13] || '', 7: row[14] || '' },
+                week2: { 1: row[15] || '', 2: row[16] || '', 3: row[17] || '', 4: row[18] || '', 5: row[19] || '', 6: row[20] || '', 7: row[21] || '' }
               });
             }
             setEmployees(newEmployees);
@@ -56,97 +1255,69 @@
         reader.readAsArrayBuffer(file);
       };
       
-      const handleSaveEmployee = emp => {
+      const handleSaveEmployee = (emp) => {
         if (editingEmployee !== null) {
-          const updated = [...employees]; updated[editingEmployee] = emp; setEmployees(updated); setEditingEmployee(null);
+          const updated = [...employees];
+          updated[editingEmployee] = emp;
+          setEmployees(updated);
+          setEditingEmployee(null);
         } else {
-          setEmployees([...employees, emp]); setShowAddForm(false);
+          setEmployees([...employees, emp]);
+          setShowAddForm(false);
         }
       };
       
-      const handleCalendarDayClick = date => {
+      const handleCalendarDayClick = (date) => {
         const dateKey = date.toISOString().split('T')[0];
         if (allSchedules[dateKey]) {
-          setSelectedDateKey(dateKey);
+          const idx = schedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === dateKey);
+          if (idx >= 0) setSelectedDay(idx);
+          else {
+            setSchedules([...schedules, allSchedules[dateKey]].sort((a, b) => new Date(a.date) - new Date(b.date)));
+            setSelectedDay(schedules.length);
+          }
         } else {
           generateSingleDay(date);
         }
       };
       
-      const handleCleaningSubmit = log => {
+      const handleCleaningSubmit = (log) => {
         const today = new Date().toISOString().split('T')[0];
         const existing = cleaningLogs[today] || [];
-        // Check if this area was already logged today
-        const filtered = existing.filter(l => l.task !== log.task);
-        setCleaningLogs({ ...cleaningLogs, [today]: [...filtered, log] });
+        setCleaningLogs({ ...cleaningLogs, [today]: [...existing, log] });
       };
       
       const getDateForDay = (wk, dy) => {
         const start = wk === 1 ? new Date(week1Start) : new Date(week2Start);
         start.setDate(start.getDate() + (dy - 1));
-        return `${start.getMonth() + 1}/${start.getDate()}`;
+        return (start.getMonth() + 1) + '/' + start.getDate();
       };
       
-      // Generated days map for calendar
-      const generatedDays = useMemo(() => {
-        const map = {};
-        Object.entries(allSchedules).forEach(([key, sched]) => {
-          map[key] = sched.generatedAt || sched.lastEditedAt || new Date().toISOString();
-        });
-        return map;
-      }, [allSchedules]);
-    const { useState, useEffect, useMemo, useCallback } = React;
-    const EMPLOYEE_COLORS = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#F43F5E','#0EA5E9','#A855F7','#22C55E','#EAB308','#E11D48','#7C3AED','#0D9488','#DC2626','#2563EB','#16A34A'];
-    const SHAPES = ['circle','square','diamond','triangle','star','hexagon','pentagon','cross'];
-    const CLEANING_TASKS = {
-      RECEPTION: ['Wipe down front counter and registers','Clean glass doors and windows','Sweep and mop reception area floor','Empty trash cans','Organize brochures and displays','Sanitize pens and touchscreens'],
-      DISPENSARY: ['Wipe down all counters','Clean computer screens and keyboards','Organize prescription bins','Check and restock supplies','Clean label printers','Sanitize work stations'],
-      VACUUM: ['Vacuum all carpeted areas','Vacuum behind counters','Vacuum break room','Empty vacuum when full','Check vacuum for clogs'],
-      BATHROOMS: ['Clean and sanitize toilets','Clean sinks and mirrors','Refill soap and paper towels','Empty trash','Mop floors','Check supplies stock'],
-      KITCHEN: ['Wash all dishes','Wipe down counters and tables','Clean microwave inside and out','Clean refrigerator (check expiration dates)','Empty trash and recycling','Sweep and mop floor']
-    };
-    const CLEANING_AREAS = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
-    const TIME_SLOTS = [{value:'',label:'OFF'},{value:'8:30 AM - 12:00 PM',label:'8:30 AM - 12:00 PM'},{value:'8:45 AM - 12:00 PM',label:'8:45 AM - 12:00 PM'},{value:'8:30 AM - 4:15 PM',label:'8:30 AM - 4:15 PM'},{value:'8:45 AM - 4:15 PM',label:'8:45 AM - 4:15 PM'},{value:'12:00 PM - 8:15 PM',label:'12:00 PM - 8:15 PM'},{value:'12:00 PM - 4:15 PM',label:'12:00 PM - 4:15 PM'},{value:'4:00 PM - 8:15 PM',label:'4:00 PM - 8:15 PM'},{value:'8:30 AM - 8:15 PM',label:'8:30 AM - 8:15 PM'},{value:'8:45 AM - 8:15 PM',label:'8:45 AM - 8:15 PM'}];
-    const SUNDAY_TIME_SLOTS = [{value:'',label:'OFF'},{value:'9:30 AM - 6:15 PM',label:'9:30 AM - 6:15 PM'},{value:'9:45 AM - 6:15 PM',label:'9:45 AM - 6:15 PM'}];
-    const formatToEST = (isoString) => new Date(isoString).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit',hour12:true});
-    const getESTHour = () => { const now = new Date(); const est = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })); return est.getHours() + est.getMinutes()/60; };
-    
-    // Shape component with color
-    const EmpShape = ({ color, shape }) => {
-      const styles = { width: 12, height: 12, display: 'inline-block', marginRight: 4, backgroundColor: color };
-      switch(shape) {
-        case 'circle': return <span style={{...styles, borderRadius: '50%'}}></span>;
-        case 'square': return <span style={{...styles, borderRadius: 2}}></span>;
-        case 'diamond': return <span style={{...styles, transform: 'rotate(45deg) scale(0.8)', borderRadius: 2}}></span>;
-        case 'triangle': return <span style={{width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',borderBottom:`12px solid ${color}`,display:'inline-block',marginRight:4}}></span>;
-        case 'star': return <span style={{...styles,clipPath:'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'}}></span>;
-        case 'hexagon': return <span style={{...styles,clipPath:'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'}}></span>;
-        case 'pentagon': return <span style={{...styles,clipPath:'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)'}}></span>;
-        case 'cross': return <span style={{...styles,clipPath:'polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%)'}}></span>;
-        default: return <span style={{...styles, borderRadius: '50%'}}></span>;
-      }
-    };
       return (
         <div className="min-h-screen pb-20">
           {showLoginModal && <LoginModal onLogin={() => { setIsLoggedIn(true); setShowLoginModal(false); }} onClose={() => setShowLoginModal(false)} />}
           {showCleaningModal && <CleaningModal task={showCleaningModal} onClose={() => setShowCleaningModal(null)} onSubmit={handleCleaningSubmit} />}
-          {viewCleaningLog && <CleaningModal task={viewCleaningLog.task} existingLog={viewCleaningLog} onClose={() => setViewCleaningLog(null)} />}
+          {viewingLog && <CleaningModal task={viewingLog.task} existingLog={viewingLog} onClose={() => setViewingLog(null)} onSubmit={() => {}} />}
           
           <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40">
             <div className="max-w-[1800px] mx-auto px-4 py-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center"><span className="text-white text-xl">📋</span></div>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+                    <span className="text-white text-xl">📋</span>
+                  </div>
                   <h1 className="text-xl font-bold text-gray-900">Pharmacy Scheduler</h1>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex gap-2">
-                    <button onClick={() => setTab('schedule')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab === 'schedule' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'}`}>Daily Schedule</button>
-                    {isLoggedIn && (<>
-                      <button onClick={() => setTab('employees')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab === 'employees' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'}`}>Employee Master Schedule</button>
-                      <button onClick={() => setTab('summary')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab === 'summary' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'}`}>Staffing Summary</button>
-                      <button onClick={() => setTab('cleaning')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab === 'cleaning' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'}`}>Cleaning Logs</button>
-                    </>)}
+                    <button onClick={() => setTab('schedule')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'schedule' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Daily Schedule</button>
+                    {isLoggedIn && (
+                      <>
+                        <button onClick={() => setTab('employees')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'employees' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Employee Master Schedule</button>
+                        <button onClick={() => setTab('summary')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'summary' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Staffing Summary</button>
+                        <button onClick={() => setTab('cleaning')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'cleaning' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Cleaning Logs</button>
+                      </>
+                    )}
                   </div>
                   {!isLoggedIn ? (
                     <button onClick={() => setShowLoginModal(true)} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🔐 Supervisor Login</button>
@@ -159,211 +1330,154 @@
           </header>
           
           <main className="max-w-[1800px] mx-auto px-4 py-6">
-            {/* Daily Schedule Tab */}
             {tab === 'schedule' && (
               <div className="fade-in">
                 {todaySchedule ? (
                   <>
                     <div className="no-print flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-bold">Today's Schedule {getESTTime() >= 20.25 && <span className="text-sm text-gray-500">(Tomorrow)</span>}</h2>
+                      <h2 className="text-xl font-bold">{getESTHour() >= 20 ? "Tomorrow's" : "Today's"} Schedule</h2>
                       <button onClick={() => window.print()} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900">🖨️ Print</button>
                     </div>
-                    <ScheduleDisplay schedule={todaySchedule} employees={sortedEmployees} empIndices={empIndices} onCleaningClick={setShowCleaningModal} isEditing={false} />
+                    <ScheduleDisplay schedule={todaySchedule} empShapes={empShapes} onCleaningClick={setShowCleaningModal} />
                   </>
                 ) : (
                   <div className="text-center py-12 bg-white rounded-lg card-shadow">
                     <span className="text-5xl mb-4 block">📅</span>
                     <p className="text-gray-500 mb-4">No schedule available for today.</p>
-                    {isLoggedIn ? <button onClick={() => setTab('employees')} className="btn-primary px-6 py-2 text-white rounded-lg font-medium">Go to Employee Master Schedule →</button> : <p className="text-sm text-gray-400">Please contact a supervisor to generate schedules.</p>}
+                    {isLoggedIn ? (
+                      <button onClick={() => setTab('employees')} className="btn-primary px-6 py-2 text-white rounded-lg font-medium">Go to Employee Master Schedule →</button>
+                    ) : (
+                      <p className="text-sm text-gray-400">Please contact a supervisor to generate schedules.</p>
+                    )}
                   </div>
                 )}
               </div>
             )}
-            {/* Employee Master Schedule Tab */}
+            
             {tab === 'employees' && isLoggedIn && (
               <div className="fade-in">
                 <div className="grid grid-cols-12 gap-4">
                   <div className="col-span-3">
                     <div className="bg-white p-4 rounded-lg card-shadow mb-4">
-                      <h3 className="font-bold mb-3">Schedule Period (Optional)</h3>
+                      <h3 className="font-bold mb-3">Schedule Period</h3>
                       <div className="space-y-2">
-                        <div><label className="block text-xs font-medium mb-1">Week 1 Start</label><input type="date" value={week1Start} onChange={e => { setWeek1Start(e.target.value); const d = new Date(e.target.value); d.setDate(d.getDate() + 7); setWeek2Start(d.toISOString().split('T')[0]); }} className="w-full px-2 py-1.5 text-sm border rounded-lg" /></div>
-                        <div><label className="block text-xs font-medium mb-1">Week 2 Start</label><input type="date" value={week2Start} onChange={e => setWeek2Start(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg" /></div>
+                        <div>
+                          <label className="block text-xs font-medium mb-1">Week 1 Start</label>
+                          <input type="date" value={week1Start} onChange={(e) => { setWeek1Start(e.target.value); const d = new Date(e.target.value); d.setDate(d.getDate() + 7); setWeek2Start(d.toISOString().split('T')[0]); }} className="w-full px-2 py-1.5 text-sm border rounded-lg" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium mb-1">Week 2 Start</label>
+                          <input type="date" value={week2Start} onChange={(e) => setWeek2Start(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg" />
+                        </div>
                       </div>
                       {employees.length > 0 && week1Start && week2Start && (
                         <button onClick={generateAllSchedules} className="mt-3 btn-primary px-3 py-2 text-white rounded-lg font-bold text-sm w-full">🗓️ Generate All 14 Days</button>
                       )}
                       <div className="mt-4 pt-4 border-t">
                         <h4 className="font-bold text-sm mb-2">Generate Single Day</h4>
-                        <input type="date" value={singleDayDate} onChange={e => setSingleDayDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2" />
+                        <input type="date" value={singleDayDate} onChange={(e) => setSingleDayDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2" />
                         <button onClick={() => singleDayDate && generateSingleDay(new Date(singleDayDate))} disabled={!singleDayDate || employees.length === 0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button>
                       </div>
                     </div>
-                    <MonthlyCalendar generatedDays={generatedDays} onDayClick={handleCalendarDayClick} />
+                    
+                    <MonthlyCalendar generatedDays={generatedDays} onDayClick={handleCalendarDayClick} allSchedules={allSchedules} />
+                    
                     <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
                       <h3 className="font-bold mb-2">Import</h3>
-                      <label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all"><span className="text-xl">📁</span><p className="text-xs font-medium text-gray-700">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" /></div></label>
+                      <label className="block">
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all">
+                          <span className="text-xl">📁</span>
+                          <p className="text-xs font-medium text-gray-700">Upload Excel</p>
+                          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
+                        </div>
+                      </label>
                       <button onClick={() => setShowAddForm(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
                     </div>
                   </div>
                   
                   <div className="col-span-9">
-                    {/* Day selector buttons */}
-                    {schedulesArray.length > 0 && (
+                    {schedules.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-3">
-                        {schedulesArray.map((s, i) => {
-                          const key = new Date(s.date).toISOString().split('T')[0];
-                          return (
-                            <button key={i} onClick={() => { setSelectedDateKey(key); setEditedSchedule(null); setIsEditing(false); }} className={`px-2 py-1 rounded text-xs font-medium transition-all ${selectedDateKey === key ? 'bg-emerald-600 text-white' : 'bg-white hover:bg-gray-100 border'}`}>
-                              {s.isSunday ? '☀️' : ''} {s.dateStr}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    
-                    {/* Edit/Update controls */}
-                    {selectedSchedule && (
-                      <div className="flex items-center gap-2 mb-3">
-                        {!isEditing ? (
-                          <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">✏️ Edit Schedule</button>
-                        ) : (
-                          <>
-                            <button onClick={saveEditedSchedule} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">💾 Update Schedule</button>
-                            <button onClick={cancelEditing} className="px-4 py-2 bg-gray-300 rounded-lg text-sm font-medium hover:bg-gray-400">Cancel</button>
-                            <span className="text-sm text-gray-500 ml-2">Click any name to change it</span>
-                          </>
-                        )}
+                        {schedules.map((s, i) => (
+                          <button key={i} onClick={() => setSelectedDay(i)} className={'px-2 py-1 rounded text-xs font-medium transition-all ' + (selectedDay === i ? 'bg-emerald-600 text-white' : 'bg-white hover:bg-gray-100 border')}>
+                            {s.isSunday ? '☀️' : ''} {s.dateStr}
+                          </button>
+                        ))}
                       </div>
                     )}
                     
                     {(showAddForm || editingEmployee !== null) && (
-                      <div className="mb-3"><EmployeeForm employee={editingEmployee !== null ? employees[editingEmployee] : null} onSave={handleSaveEmployee} onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }} /></div>
-                    )}
-                    
-                    {selectedSchedule && (
-                      <div className="mb-4">
-                        <ScheduleDisplay schedule={selectedSchedule} employees={sortedEmployees} empIndices={empIndices} onCleaningClick={setShowCleaningModal} isEditing={isEditing} onScheduleUpdate={handleScheduleUpdate} />
+                      <div className="mb-3">
+                        <EmployeeForm employee={editingEmployee !== null ? employees[editingEmployee] : null} onSave={handleSaveEmployee} onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }} />
                       </div>
                     )}
-    const ScheduleEngine = {
-      parseSegment(seg) {
-        let startHour=-1,endHour=-1; seg=(seg||'').trim();
-        if(!seg||!seg.includes('-'))return{startHour,endHour};
-        const parts=seg.split('-'); if(parts.length<2)return{startHour,endHour};
-        let startStr=parts[0].trim(),endStr=parts[parts.length-1].trim();
-        const startAM=startStr.toUpperCase().includes('AM'),startPM=startStr.toUpperCase().includes('PM');
-        const endAM=endStr.toUpperCase().includes('AM'),endPM=endStr.toUpperCase().includes('PM');
-        startStr=startStr.replace(/AM|PM/gi,'').trim();endStr=endStr.replace(/AM|PM/gi,'').trim();
-        if(!startStr||!endStr)return{startHour,endHour};
-        let sp=startStr.split(':'),h=parseFloat(sp[0])||0,m=parseFloat(sp[1])||0;startHour=h+m/60;
-        let ep=endStr.split(':');h=parseFloat(ep[0])||0;m=parseFloat(ep[1])||0;endHour=h+m/60;
-        if(startPM&&startHour<12)startHour+=12;if(startAM&&startHour===12)startHour=0;
-        if(endPM&&endHour<12)endHour+=12;if(endAM&&endHour===12)endHour=0;
-        if(endPM&&!startAM&&!startPM&&startHour<12)startHour+=12;
-        if((startAM||startPM)&&!endAM&&!endPM&&endHour<=12&&endHour<startHour)endHour+=12;
-        return{startHour,endHour};
-      },
-      isOnPTO(emp,checkDate) {
-        const ptoVal=(emp.ptoText||'').trim();if(!ptoVal)return false;
-        if(ptoVal==='✓'||ptoVal.toUpperCase()==='TRUE'||ptoVal==='X'||ptoVal==='x')return true;
-        const ranges=ptoVal.split(',');
-        for(let rng of ranges){rng=rng.trim();
-          if(rng.includes('-')){const parts=rng.split('-');const startDate=new Date(parts[0].trim()+'/'+checkDate.getFullYear());const endDate=new Date(parts[1].trim()+'/'+checkDate.getFullYear());if(checkDate>=startDate&&checkDate<=endDate)return true;}
-          else{const singleDate=new Date(rng+'/'+checkDate.getFullYear());if(checkDate.toDateString()===singleDate.toDateString())return true;}
-        }return false;
-      },
-      getSched(emp,wk,dy){return wk===1?emp.week1?.[dy]||'':emp.week2?.[dy]||'';},
-      avail(emp,wk,dy,block,checkDate,isSunday) {
-        if(this.isOnPTO(emp,checkDate))return false;const sched=this.getSched(emp,wk,dy);if(!sched||sched.toUpperCase()==='OFF')return false;
-        let bS,bE;if(isSunday){if(block===1){bS=10;bE=12;}else if(block===2){bS=12;bE=15;}else{bS=15;bE=18.25;}}
-        else{if(block===1){bS=9;bE=12;}else if(block===2){bS=12;bE=16.25;}else{bS=16;bE=20.25;}}
-        const{startHour,endHour}=this.parseSegment(sched);if(startHour<0||endHour<0)return false;return startHour<=bS&&endHour>=bE;
-      },
-      availHours(emp,wk,dy,startH,endH,checkDate) {
-        if(this.isOnPTO(emp,checkDate))return false;const sched=this.getSched(emp,wk,dy);if(!sched||sched.toUpperCase()==='OFF')return false;
-        const{startHour,endHour}=this.parseSegment(sched);if(startHour<0||endHour<0)return false;return startHour<=startH&&endHour>=endH;
-      },
-      arrivesEarly(emp,wk,dy,checkDate,isSunday) {
-        if(this.isOnPTO(emp,checkDate))return false;const sched=this.getSched(emp,wk,dy);if(!sched||sched.toUpperCase()==='OFF')return false;
-        const threshold=isSunday?9.75:8.75;const{startHour}=this.parseSegment(sched);return startHour>=0&&startHour<=threshold;
-      },
-      getEmpStartTime(emp,wk,dy){const sched=this.getSched(emp,wk,dy);if(!sched||sched.toUpperCase()==='OFF')return 99;const{startHour}=this.parseSegment(sched);return startHour>=0?startHour:99;},
-      getEmpEndTime(emp,wk,dy){const sched=this.getSched(emp,wk,dy);if(!sched||sched.toUpperCase()==='OFF')return 0;const{endHour}=this.parseSegment(sched);return endHour>=0?endHour:0;},
-      getEmpHours(emp,wk,dy){const s=this.getEmpStartTime(emp,wk,dy),e=this.getEmpEndTime(emp,wk,dy);if(s===99||e===0)return 0;return e-s;},
-      isVaultOnly:e=>e.vault&&!e.reception&&!e.lod&&!e.ipad&&!e.registers,
-      isReceptionOnly:e=>e.reception&&!e.lod&&!e.ipad&&!e.registers,
-      isiPadOnly:e=>e.ipad&&!e.reception&&!e.lod&&!e.registers,
-      isRegistersOnly:e=>e.registers&&!e.reception&&!e.lod&&!e.ipad,
-      worksTwoShifts(emp,wk,dy){return this.getEmpHours(emp,wk,dy)>=7;},
-      worksSingleShift(emp,wk,dy){const h=this.getEmpHours(emp,wk,dy);return h>=4&&h<7;},
-      findRole(employees,wk,dy,block,role,used,checkDate,isSunday,excludeLOD=false) {
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp))continue;if(excludeLOD&&emp.lod)continue;
-          let roleMatch=false,singleRoleMatch=false;
-          switch(role){case'REC':roleMatch=emp.reception;singleRoleMatch=this.isReceptionOnly(emp);break;case'IPAD':roleMatch=emp.ipad;singleRoleMatch=this.isiPadOnly(emp);break;case'REG':roleMatch=emp.registers;singleRoleMatch=this.isRegistersOnly(emp);break;case'LOD':roleMatch=emp.lod;singleRoleMatch=true;break;}
-          if(!roleMatch||!singleRoleMatch)continue;if(this.avail(emp,wk,dy,block,checkDate,isSunday)&&!used.includes(emp.name))return emp.name;
-        }
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp))continue;if(excludeLOD&&emp.lod)continue;
-          let roleMatch=false;switch(role){case'REC':roleMatch=emp.reception;break;case'IPAD':roleMatch=emp.ipad;break;case'REG':roleMatch=emp.registers;break;case'LOD':roleMatch=emp.lod;break;}
-          if(!roleMatch)continue;if(this.avail(emp,wk,dy,block,checkDate,isSunday)&&!used.includes(emp.name))return emp.name;
-        }return'X';
-      },
-      findRoleRotate(employees,wk,dy,block,role,used,avoid,checkDate,isSunday) {
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp)||avoid.includes(emp.name))continue;
-          let roleMatch=false,singleRoleMatch=false;switch(role){case'REC':roleMatch=emp.reception;singleRoleMatch=this.isReceptionOnly(emp);break;case'REG':roleMatch=emp.registers;singleRoleMatch=this.isRegistersOnly(emp);break;}
-          if(!roleMatch||!singleRoleMatch)continue;if(this.avail(emp,wk,dy,block,checkDate,isSunday)&&!used.includes(emp.name))return emp.name;
-        }
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp)||avoid.includes(emp.name))continue;
-          let roleMatch=role==='REC'?emp.reception:emp.registers;if(!roleMatch)continue;if(this.avail(emp,wk,dy,block,checkDate,isSunday)&&!used.includes(emp.name))return emp.name;
-        }return this.findRole(employees,wk,dy,block,role,used,checkDate,isSunday);
-      },
-      findIPadSlot(employees,wk,dy,startH,endH,used,checkDate) {
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp))continue;if(!emp.ipad||!this.isiPadOnly(emp))continue;if(this.availHours(emp,wk,dy,startH,endH,checkDate)&&!used.includes(emp.name))return emp.name;}
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp)||!emp.ipad)continue;if(this.availHours(emp,wk,dy,startH,endH,checkDate)&&!used.includes(emp.name))return emp.name;}return'X';
-      },
-      findIPadSlotRotate(employees,wk,dy,startH,endH,used,avoid,checkDate) {
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp)||avoid.includes(emp.name))continue;if(!emp.ipad||!this.isiPadOnly(emp))continue;if(this.availHours(emp,wk,dy,startH,endH,checkDate)&&!used.includes(emp.name))return emp.name;}
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||this.isVaultOnly(emp)||avoid.includes(emp.name)||!emp.ipad)continue;if(this.availHours(emp,wk,dy,startH,endH,checkDate)&&!used.includes(emp.name))return emp.name;}return this.findIPadSlot(employees,wk,dy,startH,endH,used,checkDate);
-      },
-      findVaultPerson(employees,wk,dy,block,used,checkDate,isSunday) {
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate))continue;if(emp.vault&&this.isVaultOnly(emp)&&this.avail(emp,wk,dy,block,checkDate,isSunday)&&!used.includes(emp.name))return emp.name;}
-        for(const emp of employees){if(this.isOnPTO(emp,checkDate)||!emp.vault)continue;if(this.avail(emp,wk,dy,block,checkDate,isSunday)&&!used.includes(emp.name))return emp.name;}return'X';
-      },
-      formatTime(hour){const h=Math.floor(hour),m=Math.round((hour-h)*60),suffix=h>=12?' PM':' AM',displayH=h>12?h-12:(h===0?12:h);return m===0?`${displayH}:00${suffix}`:`${displayH}:${m.toString().padStart(2,'0')}${suffix}`;},
-      isBreakBlocked(breakTime,lunchTimes){for(const lt of lunchTimes)if(breakTime>=lt&&breakTime<lt+0.5)return true;return false;},
-                    {/* Master Schedule Table */}
+                    
+                    {schedules.length > 0 && schedules[selectedDay] && (
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-600">Editing: {schedules[selectedDay].fullTitle}</span>
+                          {hasUnsavedChanges && <button onClick={saveChanges} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save Changes</button>}
+                        </div>
+                        <ScheduleDisplay schedule={schedules[selectedDay]} empShapes={empShapes} onCleaningClick={setShowCleaningModal} employees={sortedEmployees} onScheduleUpdate={handleScheduleUpdate} isEditable={true} />
+                      </div>
+                    )}
+                    
                     {employees.length > 0 && (
                       <div className="bg-white rounded-lg card-shadow overflow-hidden">
                         <div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
                           <h3 className="font-bold text-sm">Master Schedule ({employees.length} Employees)</h3>
-                          {selectedSchedule && <span className="text-emerald-300 text-xs">🟢 = Scheduled for {selectedSchedule.fullTitle}</span>}
+                          {schedules.length > 0 && schedules[selectedDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled for {schedules[selectedDay].fullTitle}</span>}
                         </div>
                         <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 z-10">
                               <tr className="bg-gray-100">
-                                <th className="px-2 py-1 text-left font-semibold sticky left-0 bg-gray-100 z-20 min-w-[140px]">Name</th>
-                                <th className="px-1 py-1 text-center w-8">V</th><th className="px-1 py-1 text-center w-8">R</th><th className="px-1 py-1 text-center w-8">L</th><th className="px-1 py-1 text-center w-8">I</th><th className="px-1 py-1 text-center w-8">Reg</th>
+                                <th className="px-2 py-1 text-left font-semibold sticky left-0 bg-gray-100 z-20 min-w-[120px]">Name</th>
+                                <th className="px-1 py-1 text-center w-8">V</th>
+                                <th className="px-1 py-1 text-center w-8">R</th>
+                                <th className="px-1 py-1 text-center w-8">L</th>
+                                <th className="px-1 py-1 text-center w-8">I</th>
+                                <th className="px-1 py-1 text-center w-8">Reg</th>
                                 <th className="px-1 py-1 text-center min-w-[50px]">PTO</th>
-                                {[1,2,3,4,5,6,7].map(d => (<th key={`w1-${d}`} className="px-1 py-1 text-center bg-blue-50 min-w-[90px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div>{week1Start && <div className="text-[9px] text-gray-500">{getDateForDay(1, d)}</div>}</th>))}
-                                {[1,2,3,4,5,6,7].map(d => (<th key={`w2-${d}`} className="px-1 py-1 text-center bg-green-50 min-w-[90px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div>{week2Start && <div className="text-[9px] text-gray-500">{getDateForDay(2, d)}</div>}</th>))}
+                                {week1Start && [1,2,3,4,5,6,7].map(d => (
+                                  <th key={'w1-'+d} className="px-1 py-1 text-center bg-blue-50 min-w-[85px]">
+                                    <div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div>
+                                    <div className="text-[9px] text-gray-500">{getDateForDay(1, d)}</div>
+                                  </th>
+                                ))}
+                                {week2Start && [1,2,3,4,5,6,7].map(d => (
+                                  <th key={'w2-'+d} className="px-1 py-1 text-center bg-green-50 min-w-[85px]">
+                                    <div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div>
+                                    <div className="text-[9px] text-gray-500">{getDateForDay(2, d)}</div>
+                                  </th>
+                                ))}
                                 <th className="px-1 py-1 min-w-[40px]"></th>
                               </tr>
                             </thead>
                             <tbody>
                               {sortedEmployees.map((emp, idx) => {
+                                const currentSchedule = schedules[selectedDay];
                                 let isScheduledToday = false;
-                                if (selectedSchedule) {
-                                  const allNames = [...selectedSchedule.lod.map(l => l.name), ...selectedSchedule.reception.flatMap(r => [r.r1, r.r2]), ...selectedSchedule.ipad.map(i => i.display), ...selectedSchedule.medCheckout.flatMap(m => [m.mc1, m.mc2, m.med3au1]), ...selectedSchedule.auCheckout.flatMap(a => [a.au2, a.au3, a.au4]), ...selectedSchedule.vault.flatMap(v => [v.au, v.med]), ...selectedSchedule.cleaning.map(c => c.name), ...selectedSchedule.lunches.map(l => l.name), ...selectedSchedule.breaks.filter(b => b.name).map(b => b.name)].map(n => n?.toUpperCase());
+                                if (currentSchedule) {
+                                  const allNames = [
+                                    ...currentSchedule.lod.map(l => l.name),
+                                    ...currentSchedule.reception.flatMap(r => [r.r1, r.r2]),
+                                    ...currentSchedule.ipad.map(i => i.display),
+                                    ...currentSchedule.medCheckout.flatMap(m => [m.mc1, m.mc2, m.med3au1]),
+                                    ...currentSchedule.auCheckout.flatMap(a => [a.au2, a.au3, a.au4]),
+                                    ...currentSchedule.vault.flatMap(v => [v.au, v.med]),
+                                    ...currentSchedule.cleaning.map(c => c.name),
+                                    ...currentSchedule.lunches.map(l => l.name),
+                                    ...currentSchedule.breaks.filter(b => b.name).map(b => b.name)
+                                  ].map(n => n ? n.toUpperCase() : '');
                                   isScheduledToday = allNames.includes(emp.name.toUpperCase());
                                 }
+                                const shape = empShapes[emp.name.toUpperCase()];
                                 const realIdx = employees.findIndex(e => e.name === emp.name);
-                                const marker = getEmployeeMarker(empIndices[emp.name.toUpperCase()]);
-                                
                                 return (
-                                  <tr key={idx} className={`border-t ${isScheduledToday ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
-                                    <td className={`px-2 py-1 font-medium sticky left-0 ${isScheduledToday ? 'bg-emerald-100' : 'bg-white'}`}>
-                                      <span className="emp-marker" style={{ color: marker.color }}>{marker.shape}</span>
+                                  <tr key={idx} className={'border-t ' + (isScheduledToday ? 'bg-emerald-50' : 'hover:bg-gray-50')}>
+                                    <td className={'px-2 py-1 font-medium sticky left-0 ' + (isScheduledToday ? 'bg-emerald-100' : 'bg-white')}>
+                                      {shape && <EmpShape color={shape.color} shape={shape.shape} />}
                                       {emp.name}
                                     </td>
                                     <td className="px-1 py-1 text-center">{emp.vault && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
@@ -372,8 +1486,8 @@
                                     <td className="px-1 py-1 text-center">{emp.ipad && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
                                     <td className="px-1 py-1 text-center">{emp.registers && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
                                     <td className="px-1 py-1 text-center text-[10px]">{emp.ptoText || '-'}</td>
-                                    {[1,2,3,4,5,6,7].map(d => <td key={`w1-${d}`} className="px-1 py-1 text-center text-[10px] bg-blue-50/30">{emp.week1?.[d] || '-'}</td>)}
-                                    {[1,2,3,4,5,6,7].map(d => <td key={`w2-${d}`} className="px-1 py-1 text-center text-[10px] bg-green-50/30">{emp.week2?.[d] || '-'}</td>)}
+                                    {week1Start && [1,2,3,4,5,6,7].map(d => <td key={'w1-'+d} className="px-1 py-1 text-center text-[10px] bg-blue-50/30">{emp.week1 && emp.week1[d] ? emp.week1[d] : '-'}</td>)}
+                                    {week2Start && [1,2,3,4,5,6,7].map(d => <td key={'w2-'+d} className="px-1 py-1 text-center text-[10px] bg-green-50/30">{emp.week2 && emp.week2[d] ? emp.week2[d] : '-'}</td>)}
                                     <td className="px-1 py-1"><button onClick={() => setEditingEmployee(realIdx)} className="text-blue-600 hover:underline text-[10px]">Edit</button></td>
                                   </tr>
                                 );
@@ -388,19 +1502,21 @@
               </div>
             )}
             
-            {/* Staffing Summary Tab */}
             {tab === 'summary' && isLoggedIn && (
               <div className="fade-in">
-                {schedulesArray.length > 0 ? (
-                  <StaffingSummary schedules={schedulesArray} allSchedules={allSchedules} onDaySelect={idx => setSelectedDateKey(new Date(schedulesArray[idx].date).toISOString().split('T')[0])} />
+                {schedules.length > 0 ? (
+                  <StaffingSummary schedules={schedules} allSchedules={allSchedules} onDaySelect={setSelectedDay} />
                 ) : (
-                  <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first to see the summary.</p></div>
+                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
+                    <p className="text-gray-500">Generate schedules first to see the summary.</p>
+                  </div>
                 )}
               </div>
             )}
             
-            {/* Cleaning Logs Tab */}
-            {tab === 'cleaning' && isLoggedIn && <CleaningLogsCalendar cleaningLogs={cleaningLogs} onViewLog={setViewCleaningLog} />}
+            {tab === 'cleaning' && isLoggedIn && (
+              <CleaningLogsCalendar cleaningLogs={cleaningLogs} onViewLog={setViewingLog} />
+            )}
           </main>
         </div>
       );
@@ -410,277 +1526,3 @@
   </script>
 </body>
 </html>
-      buildDay(employees,wk,dy,dayDate,isSunday,cleanRotation) {
-        const dayNames=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
-        const dayTitle=dayNames[dayDate.getDay()],dateStr=`${dayDate.getMonth()+1}/${dayDate.getDate()}`;
-        let t1S,t1E,t2S,t2E,t3S,t3E,cleanTime;
-        if(isSunday){t1S='10:00 AM';t1E='12:00 PM';t2S='12:00 PM';t2E='3:00 PM';t3S='3:00 PM';t3E='6:15 PM';cleanTime='9:30 (9:45) AM - 10:00 AM';}
-        else{t1S='9:00 AM';t1E='12:00 PM';t2S='12:00 PM';t2E='4:15 PM';t3S='4:00 PM';t3E='8:15 PM';cleanTime='8:30 (8:45) AM - 9:00 AM';}
-        const earlyList=employees.filter(emp=>this.arrivesEarly(emp,wk,dy,dayDate,isSunday)&&!this.isVaultOnly(emp));
-        const tasks=['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
-        const cleaning=tasks.map((task,i)=>{if(earlyList.length>0){const idx=(cleanRotation+i)%earlyList.length;return{task,name:earlyList[idx].name};}return{task,name:'X'};});
-        let u1=[],u2=[],u3=[];
-        const lod1=this.findRole(employees,wk,dy,1,'LOD',u1,dayDate,isSunday);u1.push(lod1);
-        const lod2=this.findRole(employees,wk,dy,2,'LOD',u2,dayDate,isSunday);u2.push(lod2);
-        const lod3=this.findRole(employees,wk,dy,3,'LOD',u3,dayDate,isSunday);u3.push(lod3);
-        const r1=this.findRole(employees,wk,dy,1,'REC',[...u1],dayDate,isSunday,true);u1.push(r1);
-        const r2=this.findRole(employees,wk,dy,1,'REC',[...u1],dayDate,isSunday,true);u1.push(r2);
-        const r1b2=this.findRoleRotate(employees,wk,dy,2,'REC',[...u2],[r1,lod2],dayDate,isSunday);u2.push(r1b2);
-        const r2b2=this.findRoleRotate(employees,wk,dy,2,'REC',[...u2],[r2,lod2],dayDate,isSunday);u2.push(r2b2);
-        const r1b3=this.findRoleRotate(employees,wk,dy,3,'REC',[...u3],[r1,r1b2,lod3],dayDate,isSunday);u3.push(r1b3);
-        const r2b3=this.findRoleRotate(employees,wk,dy,3,'REC',[...u3],[r2,r2b2,lod3],dayDate,isSunday);u3.push(r2b3);
-        let ip1,ip2a,ip2b,ip3a,ip3b,ipDisplay1,ipDisplay2,ipDisplay3,ipTime1,ipTime2,ipTime3;
-        if(isSunday){ip1=this.findIPadSlot(employees,wk,dy,10,12,u1,dayDate);u1.push(ip1);ip2a=this.findIPadSlotRotate(employees,wk,dy,12,15,u2,[ip1],dayDate);u2.push(ip2a);ip3a=this.findIPadSlotRotate(employees,wk,dy,15,18.25,u3,[ip1,ip2a],dayDate);u3.push(ip3a);ipDisplay1=ip1;ipDisplay2=ip2a;ipDisplay3=ip3a;ipTime1='10:00 AM - 12:00 PM';ipTime2='12:00 PM - 3:00 PM';ipTime3='3:00 PM - 6:15 PM';}
-        else{ip1=this.findIPadSlot(employees,wk,dy,9,12,u1,dayDate);u1.push(ip1);ip2a=this.findIPadSlotRotate(employees,wk,dy,12,14,u2,[ip1],dayDate);u2.push(ip2a);ip2b=this.findIPadSlotRotate(employees,wk,dy,14,16,u2,[ip1],dayDate);u2.push(ip2b);ip3a=this.findIPadSlotRotate(employees,wk,dy,16,18,u3,[ip1,ip2a,ip2b],dayDate);u3.push(ip3a);ip3b=this.findIPadSlotRotate(employees,wk,dy,18,20,u3,[ip1,ip2a,ip2b],dayDate);u3.push(ip3b);ipDisplay1=ip1;ipTime1='9:00 AM - 12:00 PM';ipDisplay2=(ip2a===ip2b&&ip2a!=='X')?ip2a:(ip2a!=='X'&&ip2b!=='X')?`${ip2a} 12-2 / ${ip2b} 2-4`:ip2a!=='X'?`${ip2a} 12-2`:ip2b!=='X'?`${ip2b} 2-4`:'X';ipTime2='12:00 PM - 4:00 PM';ipDisplay3=(ip3a===ip3b&&ip3a!=='X')?ip3a:(ip3a!=='X'&&ip3b!=='X')?`${ip3a} 4-6 / ${ip3b} 6-8`:ip3a!=='X'?`${ip3a} 4-6`:ip3b!=='X'?`${ip3b} 6-8`:'X';ipTime3='4:00 PM - 8:00 PM';}
-        let uReg1=[r1,r2,ip1],uReg2=[r1b2,r2b2,ip2a,ip2b].filter(Boolean),uReg3=[r1b3,r2b3,ip3a,ip3b].filter(Boolean);
-        const rg3b1=lod1!=='X'?lod1:this.findRole(employees,wk,dy,1,'REG',uReg1,dayDate,isSunday);uReg1.push(rg3b1);
-        const a1=this.findRole(employees,wk,dy,1,'REG',uReg1,dayDate,isSunday);uReg1.push(a1);const a2=this.findRole(employees,wk,dy,1,'REG',uReg1,dayDate,isSunday);uReg1.push(a2);const a3=this.findRole(employees,wk,dy,1,'REG',uReg1,dayDate,isSunday);uReg1.push(a3);const rg1=this.findRole(employees,wk,dy,1,'REG',uReg1,dayDate,isSunday);uReg1.push(rg1);const rg2=this.findRole(employees,wk,dy,1,'REG',uReg1,dayDate,isSunday);uReg1.push(rg2);
-        const rg3b2=lod2!=='X'?lod2:this.findRoleRotate(employees,wk,dy,2,'REG',uReg2,[rg3b1],dayDate,isSunday);uReg2.push(rg3b2);const a1b2=this.findRoleRotate(employees,wk,dy,2,'REG',uReg2,[a1],dayDate,isSunday);uReg2.push(a1b2);const a2b2=this.findRoleRotate(employees,wk,dy,2,'REG',uReg2,[a2],dayDate,isSunday);uReg2.push(a2b2);const a3b2=this.findRoleRotate(employees,wk,dy,2,'REG',uReg2,[a3],dayDate,isSunday);uReg2.push(a3b2);const rg1b2=this.findRoleRotate(employees,wk,dy,2,'REG',uReg2,[rg1],dayDate,isSunday);uReg2.push(rg1b2);const rg2b2=this.findRoleRotate(employees,wk,dy,2,'REG',uReg2,[rg2],dayDate,isSunday);uReg2.push(rg2b2);
-        const rg3b3=lod3!=='X'?lod3:this.findRoleRotate(employees,wk,dy,3,'REG',uReg3,[rg3b1,rg3b2],dayDate,isSunday);uReg3.push(rg3b3);const a1b3=this.findRoleRotate(employees,wk,dy,3,'REG',uReg3,[a1,a1b2],dayDate,isSunday);uReg3.push(a1b3);const a2b3=this.findRoleRotate(employees,wk,dy,3,'REG',uReg3,[a2,a2b2],dayDate,isSunday);uReg3.push(a2b3);const a3b3=this.findRoleRotate(employees,wk,dy,3,'REG',uReg3,[a3,a3b2],dayDate,isSunday);uReg3.push(a3b3);const rg1b3=this.findRoleRotate(employees,wk,dy,3,'REG',uReg3,[rg1,rg1b2],dayDate,isSunday);uReg3.push(rg1b3);const rg2b3=this.findRoleRotate(employees,wk,dy,3,'REG',uReg3,[rg2,rg2b2],dayDate,isSunday);uReg3.push(rg2b3);
-        let vUsed1=[...uReg1,lod1];const vAU1=this.findVaultPerson(employees,wk,dy,1,vUsed1,dayDate,isSunday);vUsed1.push(vAU1);const vMed1=this.findVaultPerson(employees,wk,dy,1,vUsed1,dayDate,isSunday);
-        let vUsed2=[...uReg2,lod2];const vAU2=this.findVaultPerson(employees,wk,dy,2,vUsed2,dayDate,isSunday);vUsed2.push(vAU2);const vMed2=this.findVaultPerson(employees,wk,dy,2,vUsed2,dayDate,isSunday);
-        let vUsed3=[...uReg3,lod3];const vAU3=this.findVaultPerson(employees,wk,dy,3,vUsed3,dayDate,isSunday);vUsed3.push(vAU3);const vMed3=this.findVaultPerson(employees,wk,dy,3,vUsed3,dayDate,isSunday);
-        const lunchEmployees=employees.filter(emp=>!this.isVaultOnly(emp)&&!this.isOnPTO(emp,dayDate)&&this.worksTwoShifts(emp,wk,dy)).map(emp=>({name:emp.name,startTime:this.getEmpStartTime(emp,wk,dy)})).sort((a,b)=>a.startTime-b.startTime);
-        const lunches=[],lunchTimes=[];let lunchTime=12;for(const emp of lunchEmployees){if(lunchTime<=16.5){lunches.push({name:emp.name,time:this.formatTime(lunchTime),cover:''});lunchTimes.push(lunchTime);lunchTime+=0.5;}}
-        const breakEmployees=employees.filter(emp=>!this.isVaultOnly(emp)&&!this.isOnPTO(emp,dayDate)&&this.worksSingleShift(emp,wk,dy));
-        const breaks=[];const breakSlots=[14,14.25,14.5,14.75,15,15.25,15.5,15.75,16,16.25,16.5,16.75,17,17.25,17.5,17.75];let breakIdx=0;
-        for(const emp of breakEmployees){while(breakIdx<breakSlots.length&&this.isBreakBlocked(breakSlots[breakIdx],lunchTimes))breakIdx++;if(breakIdx<breakSlots.length){breaks.push({name:emp.name,time:this.formatTime(breakSlots[breakIdx]),cover:''});breakIdx++;}}
-        const defaultBreakTimes=['2:00 PM','2:15 PM','2:30 PM','2:45 PM','3:00 PM','3:15 PM','3:30 PM','3:45 PM','4:00 PM','4:15 PM','4:30 PM','4:45 PM','5:00 PM','5:15 PM','5:30 PM','5:45 PM'];
-        while(breaks.length<8){breaks.push({name:'',time:defaultBreakTimes[breaks.length]||'5:45 PM',cover:''});}
-        const countFilled=n=>n&&n!=='X'?1:0;
-        const stats={vaultB1:countFilled(vAU1)+countFilled(vMed1),vaultB2:countFilled(vAU2)+countFilled(vMed2),vaultB3:countFilled(vAU3)+countFilled(vMed3),recB1:countFilled(r1)+countFilled(r2),recB2:countFilled(r1b2)+countFilled(r2b2),recB3:countFilled(r1b3)+countFilled(r2b3),regB1:countFilled(rg3b1)+countFilled(a1)+countFilled(a2)+countFilled(a3)+countFilled(rg1)+countFilled(rg2),regB2:countFilled(rg3b2)+countFilled(a1b2)+countFilled(a2b2)+countFilled(a3b2)+countFilled(rg1b2)+countFilled(rg2b2),regB3:countFilled(rg3b3)+countFilled(a1b3)+countFilled(a2b3)+countFilled(a3b3)+countFilled(rg1b3)+countFilled(rg2b3),ipadB1:countFilled(ip1),ipadB2:isSunday?countFilled(ip2a):Math.min(1,countFilled(ip2a)+countFilled(ip2b)),ipadB3:isSunday?countFilled(ip3a):Math.min(1,countFilled(ip3a)+countFilled(ip3b))};
-        return{dayTitle,dateStr,fullTitle:`${dayTitle} ${dateStr}`,cleanTime,cleaning,times:{t1S,t1E,t2S,t2E,t3S,t3E},lod:[{name:lod1,time:`${t1S} - ${t1E}`},{name:lod2,time:`${t2S} - ${t2E}`},{name:lod3,time:`${t3S} - ${t3E}`}],reception:[{r1,r2,time:`${t1S} - ${t1E}`},{r1:r1b2,r2:r2b2,time:`${t2S} - ${t2E}`},{r1:r1b3,r2:r2b3,time:`${t3S} - ${t3E}`}],ipad:[{display:ipDisplay1,time:ipTime1},{display:ipDisplay2,time:ipTime2},{display:ipDisplay3,time:ipTime3}],medCheckout:[{mc1:rg1,mc2:rg2,med3au1:rg3b1,time:`${t1S} - ${t1E}`},{mc1:rg1b2,mc2:rg2b2,med3au1:rg3b2,time:`${t2S} - ${t2E}`},{mc1:rg1b3,mc2:rg2b3,med3au1:rg3b3,time:`${t3S} - ${t3E}`}],auCheckout:[{au2:a1,au3:a2,au4:a3,time:`${t1S} - ${t1E}`},{au2:a1b2,au3:a2b2,au4:a3b2,time:`${t2S} - ${t2E}`},{au2:a1b3,au3:a2b3,au4:a3b3,time:`${t3S} - ${t3E}`}],vault:[{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:`${t1S} - ${t1E}`},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:`${t2S} - ${t2E}`},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:`${t3S} - ${t3E}`}],vaultOpen:isSunday?'9:30 AM - 10:00 AM':'8:00 AM - 9:00 AM',lunches,breaks,stats,isSunday,weekNum:wk,dayNum:dy,date:dayDate.toISOString(),generatedAt:new Date().toISOString()};
-      },
-      generateSingleDayStandalone(employees,targetDate,cleanRotation=0) {
-        const target=new Date(targetDate);const dayOfWeek=target.getDay();const isSunday=dayOfWeek===0;
-        return this.buildDay(employees,1,dayOfWeek===0?7:dayOfWeek,target,isSunday,cleanRotation);
-      },
-      generateSingleDay(employees,targetDate,week1Start,week2Start,cleanRotation=0) {
-        const w1=new Date(week1Start),w2=new Date(week2Start),target=new Date(targetDate);let weekNum=0,dayNum=0;
-        for(let d=0;d<7;d++){const checkDate=new Date(w1);checkDate.setDate(checkDate.getDate()+d);if(checkDate.toDateString()===target.toDateString()){weekNum=1;dayNum=d+1;break;}}
-        if(weekNum===0){for(let d=0;d<7;d++){const checkDate=new Date(w2);checkDate.setDate(checkDate.getDate()+d);if(checkDate.toDateString()===target.toDateString()){weekNum=2;dayNum=d+1;break;}}}
-        if(weekNum===0)return null;return this.buildDay(employees,weekNum,dayNum,target,dayNum===7,cleanRotation);
-      },
-      generateAllSchedules(employees,week1Start,week2Start) {
-        const schedules=[];let cleanRotation=0;
-        for(let w=1;w<=2;w++){const weekStart=w===1?new Date(week1Start):new Date(week2Start);for(let d=1;d<=7;d++){const dayDate=new Date(weekStart);dayDate.setDate(dayDate.getDate()+(d-1));schedules.push(this.buildDay(employees,w,d,dayDate,d===7,cleanRotation));cleanRotation++;}}
-        return schedules;
-      }
-    };
-    const CleaningModal=({task,onClose,onSubmit,existingLog})=>{
-      const[checked,setChecked]=useState(existingLog?.tasks||{});const[initials,setInitials]=useState(existingLog?.initials||'');const tasks=CLEANING_TASKS[task]||[];const isViewOnly=!!existingLog;
-      const allChecked=tasks.every((_,i)=>checked[i]);
-      const selectAll=()=>{const newChecked={};tasks.forEach((_,i)=>newChecked[i]=true);setChecked(newChecked);};
-      const handleSubmit=()=>{if(!initials.trim()){alert('Please enter your initials');return;}if(!allChecked){alert('Please complete all tasks');return;}onSubmit({task,initials:initials.trim().toUpperCase(),tasks:checked,completedAt:new Date().toISOString()});onClose();};
-      return(<div className="fixed inset-0 modal-overlay flex items-center justify-center z-50"><div className="bg-white rounded-xl p-6 w-full max-w-lg card-shadow fade-in max-h-[80vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">{task} Cleaning Tasks {isViewOnly&&<span className="text-sm font-normal text-gray-500">- Completed by {existingLog.initials}</span>}</h2>
-        {!isViewOnly&&<button onClick={selectAll} className="mb-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200">✓ Select All</button>}
-        <div className="space-y-2 mb-4">{tasks.map((t,i)=>(<label key={i} className={`flex items-start gap-3 p-2 rounded ${isViewOnly?'':'hover:bg-gray-50 cursor-pointer'}`}><input type="checkbox" checked={checked[i]||false} onChange={e=>!isViewOnly&&setChecked({...checked,[i]:e.target.checked})} disabled={isViewOnly} className="mt-1 w-5 h-5"/><span className="text-sm">{t}</span></label>))}</div>
-        {!isViewOnly&&(<div className="mb-4"><label className="block text-sm font-medium mb-1">Your Initials</label><input type="text" value={initials} onChange={e=>setInitials(e.target.value.slice(0,4))} className="w-full px-4 py-2 border rounded-lg uppercase" placeholder="e.g., JD" maxLength={4}/></div>)}
-        <div className="flex gap-2">{!isViewOnly&&<button onClick={handleSubmit} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Submit</button>}<button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">{isViewOnly?'Close':'Cancel'}</button></div>
-      </div></div>);
-    };
-    
-    const NameEditDropdown=({value,employees,empShapes,onSelect,onClose})=>{
-      const options=['X',...employees.map(e=>e.name).sort()];
-      return(<div className="absolute top-full left-0 z-50 bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[150px]">
-        {options.map((name,i)=>(<div key={i} onClick={()=>{onSelect(name);onClose();}} className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center gap-2 ${value===name?'bg-emerald-50':''}`}>
-          {name!=='X'&&empShapes[name.toUpperCase()]&&<EmpShape color={empShapes[name.toUpperCase()].color} shape={empShapes[name.toUpperCase()].shape}/>}
-          <span className={name==='X'?'text-gray-500':''}>{name}</span>
-        </div>))}
-      </div>);
-    };
-    
-    const EditableNameCell=({name,employees,empShapes,onUpdate,canEdit=true})=>{
-      const[isOpen,setIsOpen]=useState(false);const shape=name&&name!=='X'&&name!=='RPH'?empShapes[name.toUpperCase()]:null;
-      return(<div className="relative">
-        <div onClick={()=>canEdit&&setIsOpen(!isOpen)} className={`schedule-cell font-bold text-sm ${!name||name==='X'?'bg-gray-400':'bg-white'} ${canEdit?'cursor-pointer hover:bg-gray-50':''}`}>
-          {shape&&<EmpShape color={shape.color} shape={shape.shape}/>}{(name||'X').toUpperCase()}
-        </div>
-        {isOpen&&<NameEditDropdown value={name} employees={employees} empShapes={empShapes} onSelect={onUpdate} onClose={()=>setIsOpen(false)}/>}
-      </div>);
-    };
-    const TimeCell=({time})=><div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
-    const HeaderCell=({children,color='black'})=>{const colors={black:'bg-black text-white',green:'bg-[#67d50d] text-black',blue:'bg-[#bdd7ee] text-black',yellow:'bg-[#ffe699] text-black'};return<div className={`schedule-cell font-bold text-base ${colors[color]}`}>{children}</div>;};
-    
-    const ScheduleDisplay=({schedule,empShapes={},onCleaningClick,employees=[],onScheduleUpdate,isEditable=false})=>{
-      if(!schedule)return null;
-      const getShape=name=>name&&name!=='X'&&name!=='RPH'?empShapes[name.toUpperCase()]:null;
-      const NameCell=({name})=>{const shape=getShape(name);return(<div className={`schedule-cell font-bold text-sm ${!name||name==='X'?'bg-gray-400':'bg-white'}`}>{shape&&<EmpShape color={shape.color} shape={shape.shape}/>}{(name||'X').toUpperCase()}</div>);};
-      
-      const updateField=(path,value)=>{if(!onScheduleUpdate)return;const newSched={...schedule};const parts=path.split('.');let obj=newSched;for(let i=0;i<parts.length-1;i++){if(Array.isArray(obj[parts[i]]))obj[parts[i]]=[...obj[parts[i]]];else obj[parts[i]]={...obj[parts[i]]};obj=obj[parts[i]];}obj[parts[parts.length-1]]=value;newSched.manuallyEdited=true;newSched.editedAt=new Date().toISOString();onScheduleUpdate(newSched);};
-      
-      return(<div className="schedule-container bg-white p-4 rounded-lg card-shadow fade-in">
-        <div className="text-center mb-3"><h2 className="font-black text-3xl">{schedule.fullTitle}</h2><p className="text-gray-500 text-sm bg-gray-100 py-1 rounded">{schedule.cleanTime}</p></div>
-        <div className="grid grid-cols-5 gap-1 mb-3">{schedule.cleaning.map((c,i)=>(<button key={i} onClick={()=>onCleaningClick?.(c.task)} className="schedule-cell text-red-600 font-bold text-xs py-1 hover:bg-red-50 cursor-pointer transition-colors">{getShape(c.name)&&<EmpShape color={getShape(c.name).color} shape={getShape(c.name).shape}/>}{c.name.toUpperCase()} - {c.task}</button>))}</div>
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <div className="mb-3"><HeaderCell color="black">LEADER OF THE DAY</HeaderCell><div className="grid grid-cols-2 gap-0">{schedule.lod.map((l,i)=>(<React.Fragment key={i}>{isEditable?<EditableNameCell name={l.name} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`lod.${i}.name`,v)}/>:<NameCell name={l.name}/>}<TimeCell time={l.time}/></React.Fragment>))}</div></div>
-            <div className="mb-3"><div className="schedule-cell font-bold text-lg bg-[#67d50d] text-black">FRONT END RECEPTION</div><div className="grid grid-cols-6 gap-0"><div className="col-span-2"><HeaderCell color="green">RECEPTION 1</HeaderCell></div><div className="col-span-2"><HeaderCell color="green">RECEPTION 2</HeaderCell></div><div className="col-span-2"><HeaderCell color="green">iPAD</HeaderCell></div>
-            {schedule.reception.map((r,i)=>(<React.Fragment key={i}>{isEditable?<EditableNameCell name={r.r1} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`reception.${i}.r1`,v)}/>:<NameCell name={r.r1}/>}<TimeCell time={r.time}/>{isEditable?<EditableNameCell name={r.r2} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`reception.${i}.r2`,v)}/>:<NameCell name={r.r2}/>}<TimeCell time={r.time}/><div className={`schedule-cell font-bold text-xs ${schedule.ipad[i].display==='X'?'bg-gray-400':'bg-white'}`}>{schedule.ipad[i].display.toUpperCase()}</div><TimeCell time={schedule.ipad[i].time}/></React.Fragment>))}</div></div>
-            <div className="mb-3"><div className="schedule-cell font-bold text-lg bg-[#bdd7ee] text-black">BACK END DISPENSARY</div><div className="grid grid-cols-6 gap-0"><div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 1</HeaderCell></div><div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 2</HeaderCell></div><div className="col-span-2"><HeaderCell color="blue">MED 3 / AU 1</HeaderCell></div>
-            {schedule.medCheckout.map((m,i)=>(<React.Fragment key={i}>{isEditable?<EditableNameCell name={m.mc1} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`medCheckout.${i}.mc1`,v)}/>:<NameCell name={m.mc1}/>}<TimeCell time={m.time}/>{isEditable?<EditableNameCell name={m.mc2} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`medCheckout.${i}.mc2`,v)}/>:<NameCell name={m.mc2}/>}<TimeCell time={m.time}/>{isEditable?<EditableNameCell name={m.med3au1} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`medCheckout.${i}.med3au1`,v)}/>:<NameCell name={m.med3au1}/>}<TimeCell time={m.time}/></React.Fragment>))}</div>
-            <div className="grid grid-cols-6 gap-0 mt-2"><div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 2</HeaderCell></div><div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 3</HeaderCell></div><div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 4</HeaderCell></div>
-            {schedule.auCheckout.map((a,i)=>(<React.Fragment key={i}>{isEditable?<EditableNameCell name={a.au2} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`auCheckout.${i}.au2`,v)}/>:<NameCell name={a.au2}/>}<TimeCell time={a.time}/>{isEditable?<EditableNameCell name={a.au3} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`auCheckout.${i}.au3`,v)}/>:<NameCell name={a.au3}/>}<TimeCell time={a.time}/>{isEditable?<EditableNameCell name={a.au4} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`auCheckout.${i}.au4`,v)}/>:<NameCell name={a.au4}/>}<TimeCell time={a.time}/></React.Fragment>))}</div></div>
-            <div className="grid grid-cols-4 gap-0"><div className="col-span-2"><HeaderCell color="yellow">AU LEFT VAULT</HeaderCell></div><div className="col-span-2"><HeaderCell color="yellow">MEDICAL RIGHT VAULT</HeaderCell></div><NameCell name="RPH"/><TimeCell time={schedule.vaultOpen}/><NameCell name="RPH"/><TimeCell time={schedule.vaultOpen}/>{schedule.vault.map((v,i)=>(<React.Fragment key={i}>{isEditable?<EditableNameCell name={v.au} employees={employees} empShapes={empShapes} onUpdate={val=>updateField(`vault.${i}.au`,val)}/>:<NameCell name={v.au}/>}<TimeCell time={v.time}/>{isEditable?<EditableNameCell name={v.med} employees={employees} empShapes={empShapes} onUpdate={val=>updateField(`vault.${i}.med`,val)}/>:<NameCell name={v.med}/>}<TimeCell time={v.time}/></React.Fragment>))}</div>
-          </div>
-          <div className="w-80">
-            <div className="mb-3"><HeaderCell color="black">LUNCH BREAK</HeaderCell><div className="grid grid-cols-3 gap-0"><div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div><div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div><div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
-            {schedule.lunches.map((l,i)=>(<React.Fragment key={i}><div className="schedule-cell font-bold text-xs py-1">{getShape(l.name)&&<EmpShape color={getShape(l.name).color} shape={getShape(l.name).shape}/>}{l.name.toUpperCase()}</div><div className="schedule-cell text-xs py-1">{l.time}</div>{isEditable?<EditableNameCell name={l.cover||''} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`lunches.${i}.cover`,v)} canEdit={true}/>:<div className="schedule-cell text-xs py-1">{l.cover||''}</div>}</React.Fragment>))}</div></div>
-            <div className="mb-3"><HeaderCell color="black">15-MIN BREAK</HeaderCell><div className="grid grid-cols-3 gap-0"><div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div><div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div><div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
-            {schedule.breaks.slice(0,8).map((b,i)=>(<React.Fragment key={i}><div className="schedule-cell font-bold text-xs py-1">{b.name&&getShape(b.name)&&<EmpShape color={getShape(b.name).color} shape={getShape(b.name).shape}/>}{b.name?b.name.toUpperCase():''}</div><div className="schedule-cell text-xs py-1">{b.time}</div>{isEditable?<EditableNameCell name={b.cover||''} employees={employees} empShapes={empShapes} onUpdate={v=>updateField(`breaks.${i}.cover`,v)} canEdit={true}/>:<div className="schedule-cell text-xs py-1">{b.cover||''}</div>}</React.Fragment>))}</div></div>
-            <div><HeaderCell color="black">DEPOSITS</HeaderCell><div className="grid grid-cols-2 gap-0"><div className="schedule-cell bg-blue-100 font-bold text-xs py-1">TIME</div><div className="schedule-cell bg-blue-100 font-bold text-xs py-1">PERSON</div><div className="schedule-cell text-xs py-1">9:00 AM - 12:00 PM</div><div className="schedule-cell text-xs py-1">LOD</div></div></div>
-          </div>
-        </div>
-        {isEditable&&schedule.manuallyEdited&&<div className="mt-2 text-xs text-amber-600">⚠️ Manually edited at {formatToEST(schedule.editedAt)}</div>}
-      </div>);
-    };
-    const StaffingSummary=({schedules,allSchedules,onDaySelect})=>{
-      const[selectedIdx,setSelectedIdx]=useState(null);const[viewMonth,setViewMonth]=useState(new Date().getMonth());const[viewYear,setViewYear]=useState(new Date().getFullYear());
-      const getIdeal=isSunday=>isSunday?{vault:[1,1,1],rec:[2,2,2],reg:[3,3,3]}:{vault:[2,2,2],rec:[2,2,2],reg:[2,3,3]};
-      const getBlockTimes=(isSunday,block)=>{if(isSunday)return block===1?'10A-12P':block===2?'12P-3P':'3P-6:15P';return block===1?'9A-12P':block===2?'12P-4:15P':'4P-8:15P';};
-      const getIssues=s=>{const ideal=getIdeal(s.isSunday);const issues=[];
-        if(s.stats.vaultB1<ideal.vault[0])issues.push(`Vault B1: need ${ideal.vault[0]}, have ${s.stats.vaultB1}`);if(s.stats.vaultB2<ideal.vault[1])issues.push(`Vault B2: need ${ideal.vault[1]}, have ${s.stats.vaultB2}`);if(s.stats.vaultB3<ideal.vault[2])issues.push(`Vault B3: need ${ideal.vault[2]}, have ${s.stats.vaultB3}`);
-        if(s.stats.recB1<ideal.rec[0])issues.push(`Reception B1: need ${ideal.rec[0]}, have ${s.stats.recB1}`);if(s.stats.recB2<ideal.rec[1])issues.push(`Reception B2: need ${ideal.rec[1]}, have ${s.stats.recB2}`);if(s.stats.recB3<ideal.rec[2])issues.push(`Reception B3: need ${ideal.rec[2]}, have ${s.stats.recB3}`);
-        if(s.stats.regB1<ideal.reg[0])issues.push(`Registers B1: need ${ideal.reg[0]}, have ${s.stats.regB1}`);if(s.stats.regB2<ideal.reg[1])issues.push(`Registers B2: need ${ideal.reg[1]}, have ${s.stats.regB2}`);if(s.stats.regB3<ideal.reg[2])issues.push(`Registers B3: need ${ideal.reg[2]}, have ${s.stats.regB3}`);
-        return issues;};
-      const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();const firstDayOfMonth=new Date(viewYear,viewMonth,1).getDay();
-      const days=[];for(let i=0;i<firstDayOfMonth;i++)days.push(null);for(let i=1;i<=daysInMonth;i++)days.push(i);
-      const getSchedForDay=day=>{if(!day)return null;const dateStr=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;return Object.values(allSchedules||{}).find(s=>new Date(s.date).toISOString().split('T')[0]===dateStr);};
-      const selected=selectedIdx!==null?schedules[selectedIdx]:null;const issues=selected?getIssues(selected):[];
-      return(<div className="fade-in">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl mb-6"><h2 className="text-2xl font-bold mb-4">Staffing Requirements</h2><div className="grid grid-cols-2 gap-6"><div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Monday - Saturday</h3><div className="text-sm space-y-1"><p>• Vault: 2 people (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 2 (9-12), 3 (12-4), 3 (4-8)</p><p>• iPad: 1 person (all shifts)</p></div></div><div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Sunday</h3><div className="text-sm space-y-1"><p>• Vault: 1 person (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 3 people (all shifts)</p><p>• iPad: 1 person (all shifts)</p></div></div></div></div>
-        <div className="bg-white rounded-lg card-shadow p-6 mb-6">
-          <div className="flex items-center justify-between mb-4"><button onClick={()=>{if(viewMonth===0){setViewMonth(11);setViewYear(viewYear-1);}else setViewMonth(viewMonth-1);}} className="p-2 hover:bg-gray-100 rounded text-xl">←</button><h3 className="font-bold text-xl">{monthNames[viewMonth]} {viewYear}</h3><button onClick={()=>{if(viewMonth===11){setViewMonth(0);setViewYear(viewYear+1);}else setViewMonth(viewMonth+1);}} className="p-2 hover:bg-gray-100 rounded text-xl">→</button></div>
-          <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d}>{d}</div>)}</div>
-          <div className="grid grid-cols-7 gap-2">{days.map((day,i)=>{const sched=getSchedForDay(day);const iss=sched?getIssues(sched):[];const hasIssues=iss.length>0;const today=new Date();const isToday=day===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear();
-            return(<div key={i} onClick={()=>{if(sched){const idx=schedules.findIndex(s=>new Date(s.date).toISOString().split('T')[0]===new Date(sched.date).toISOString().split('T')[0]);if(idx>=0){setSelectedIdx(idx);onDaySelect?.(idx);}}}}
-              className={`p-2 min-h-[70px] rounded-lg border cursor-pointer transition-all ${!day?'bg-gray-50 border-transparent':'hover:bg-gray-50'} ${sched?(hasIssues?'bg-red-50 border-red-300':'bg-emerald-50 border-emerald-300'):'border-gray-200'} ${isToday?'ring-2 ring-blue-500':''}`}>
-              {day&&(<><div className={`font-bold ${isToday?'text-blue-600':''}`}>{day}</div>{sched&&<div className={`text-xs mt-1 ${hasIssues?'text-red-600':'text-emerald-600'}`}>{hasIssues?`⚠️ ${iss.length} issue${iss.length>1?'s':''}`:'✓ OK'}</div>}</>)}</div>);})}</div>
-        </div>
-        {selected&&(<div className="bg-white rounded-xl p-6 card-shadow"><h3 className="text-xl font-bold mb-4">{selected.fullTitle}</h3>{issues.length===0?(<div className="bg-emerald-100 text-emerald-800 p-4 rounded-lg">✓ All positions adequately staffed!</div>):(<div className="bg-red-100 text-red-800 p-4 rounded-lg"><p className="font-bold mb-2">⚠️ Staffing Shortages:</p><ul className="list-disc list-inside text-sm">{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></div>)}
-        <div className="mt-4 grid grid-cols-4 gap-4">{['Vault','Reception','Registers','iPad'].map(area=>(<div key={area} className="bg-gray-50 p-3 rounded-lg"><div className="font-bold text-sm mb-2">{area}</div><div className="text-xs space-y-1">
-          <div className="flex justify-between"><span>Block 1 ({getBlockTimes(selected.isSunday,1)}):</span><span className="font-bold">{area==='Vault'?selected.stats.vaultB1:area==='Reception'?selected.stats.recB1:area==='Registers'?selected.stats.regB1:selected.stats.ipadB1}</span></div>
-          <div className="flex justify-between"><span>Block 2 ({getBlockTimes(selected.isSunday,2)}):</span><span className="font-bold">{area==='Vault'?selected.stats.vaultB2:area==='Reception'?selected.stats.recB2:area==='Registers'?selected.stats.regB2:selected.stats.ipadB2}</span></div>
-          <div className="flex justify-between"><span>Block 3 ({getBlockTimes(selected.isSunday,3)}):</span><span className="font-bold">{area==='Vault'?selected.stats.vaultB3:area==='Reception'?selected.stats.recB3:area==='Registers'?selected.stats.regB3:selected.stats.ipadB3}</span></div>
-        </div></div>))}</div></div>)}
-      </div>);
-    };
-    const CleaningLogsCalendar=({cleaningLogs,onViewLog})=>{
-      const today=new Date();const[viewMonth,setViewMonth]=useState(today.getMonth());const[viewYear,setViewYear]=useState(today.getFullYear());const[selectedDate,setSelectedDate]=useState(null);
-      const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();const firstDayOfMonth=new Date(viewYear,viewMonth,1).getDay();
-      const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const days=[];for(let i=0;i<firstDayOfMonth;i++)days.push(null);for(let i=1;i<=daysInMonth;i++)days.push(i);
-      const getLogsForDate=day=>{if(!day)return[];const dateStr=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;return cleaningLogs[dateStr]||[];};
-      const getCompletedAreas=logs=>{const areas=new Set(logs.map(l=>l.task));return areas.size;};
-      const getMissingAreas=logs=>{const completed=new Set(logs.map(l=>l.task));return CLEANING_AREAS.filter(a=>!completed.has(a));};
-      const selectedLogs=selectedDate?getLogsForDate(selectedDate):[];const missingAreas=selectedDate?getMissingAreas(selectedLogs):[];
-      return(<div className="fade-in">
-        <div className="bg-white rounded-lg card-shadow p-6 mb-6"><div className="flex items-center justify-between mb-4"><button onClick={()=>{if(viewMonth===0){setViewMonth(11);setViewYear(viewYear-1);}else setViewMonth(viewMonth-1);}} className="p-2 hover:bg-gray-100 rounded text-xl">←</button><h3 className="font-bold text-xl">{monthNames[viewMonth]} {viewYear}</h3><button onClick={()=>{if(viewMonth===11){setViewMonth(0);setViewYear(viewYear+1);}else setViewMonth(viewMonth+1);}} className="p-2 hover:bg-gray-100 rounded text-xl">→</button></div>
-        <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d}>{d}</div>)}</div>
-        <div className="grid grid-cols-7 gap-2">{days.map((day,i)=>{const logs=getLogsForDate(day);const completed=getCompletedAreas(logs);const allDone=completed===5;const partial=completed>0&&completed<5;const isToday=day===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear();
-          return(<div key={i} onClick={()=>day&&setSelectedDate(day)} className={`p-2 min-h-[70px] rounded-lg border cursor-pointer transition-all ${!day?'bg-gray-50 border-transparent':'hover:bg-gray-50'} ${allDone?'bg-emerald-50 border-emerald-300':partial?'bg-amber-50 border-amber-300':'border-gray-200'} ${selectedDate===day?'ring-2 ring-blue-500':''} ${isToday?'border-blue-500 border-2':''}`}>
-            {day&&(<><div className={`font-bold ${isToday?'text-blue-600':''}`}>{day}</div>{completed>0&&<div className={`text-xs mt-1 ${allDone?'text-emerald-600':'text-amber-600'}`}>{completed}/5 Areas</div>}{completed===0&&isToday&&<div className="text-xs mt-1 text-red-500">⚠️ None</div>}</>)}</div>);})}</div></div>
-        {selectedDate&&(<div className="bg-white rounded-lg card-shadow p-6"><h3 className="font-bold text-lg mb-4">Cleaning Log - {monthNames[viewMonth]} {selectedDate}, {viewYear}</h3>
-          {selectedLogs.length===0?(<p className="text-gray-500">No cleaning tasks logged for this day.</p>):(
-            <div className="space-y-3">{selectedLogs.map((log,i)=>(<div key={i} onClick={()=>onViewLog?.(log)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"><div><span className="font-bold">{log.task}</span><span className="text-gray-500 ml-2">by {log.initials}</span></div><span className="text-sm text-gray-500">{formatToEST(log.completedAt)}</span></div>))}</div>)}
-          {missingAreas.length>0&&(<div className="mt-4 p-3 bg-red-50 rounded-lg"><p className="font-bold text-red-700 text-sm mb-1">⚠️ Missing Areas:</p><p className="text-red-600 text-sm">{missingAreas.join(', ')}</p></div>)}
-        </div>)}
-      </div>);
-    };
-    const EmployeeForm=({employee,onSave,onCancel})=>{
-      const[form,setForm]=useState(employee||{name:'',vault:false,reception:false,lod:false,ipad:false,registers:false,ptoText:'',notes:'',week1:{1:'',2:'',3:'',4:'',5:'',6:'',7:''},week2:{1:'',2:'',3:'',4:'',5:'',6:'',7:''}});
-      const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      return(<div className="bg-white p-4 rounded-lg card-shadow"><h3 className="text-lg font-bold mb-3">{employee?'Edit Employee':'Add Employee'}</h3>
-        <div className="grid grid-cols-2 gap-3 mb-3"><div><label className="block text-xs font-medium mb-1">Name</label><input type="text" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Employee name"/></div><div><label className="block text-xs font-medium mb-1">PTO</label><input type="text" value={form.ptoText} onChange={e=>setForm({...form,ptoText:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 3/1-3/5"/></div></div>
-        <div className="flex flex-wrap gap-4 mb-3">{['vault','reception','lod','ipad','registers'].map(role=>(<label key={role} className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form[role]} onChange={e=>setForm({...form,[role]:e.target.checked})} className="w-4 h-4"/><span className="text-sm capitalize">{role}</span></label>))}</div>
-        <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 1</label><div className="grid grid-cols-7 gap-1">{dayNames.map((day,i)=>(<div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{day}</div><select value={form.week1[i+1]||''} onChange={e=>setForm({...form,week1:{...form.week1,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i===6?SUNDAY_TIME_SLOTS:TIME_SLOTS).map((slot,si)=>(<option key={si} value={slot.value}>{slot.label}</option>))}</select></div>))}</div></div>
-        <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 2</label><div className="grid grid-cols-7 gap-1">{dayNames.map((day,i)=>(<div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{day}</div><select value={form.week2[i+1]||''} onChange={e=>setForm({...form,week2:{...form.week2,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i===6?SUNDAY_TIME_SLOTS:TIME_SLOTS).map((slot,si)=>(<option key={si} value={slot.value}>{slot.label}</option>))}</select></div>))}</div></div>
-        <div className="flex gap-2"><button onClick={()=>onSave(form)} className="btn-primary px-4 py-2 text-white rounded-lg text-sm font-medium">Save</button><button onClick={onCancel} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Cancel</button></div>
-      </div>);
-    };
-    const LoginModal=({onLogin,onClose})=>{const[username,setUsername]=useState('');const[password,setPassword]=useState('');const[error,setError]=useState('');const handleLogin=()=>{if(username==='supervisor'&&password==='admin123')onLogin();else setError('Invalid username or password');};return(<div className="fixed inset-0 modal-overlay flex items-center justify-center z-50"><div className="bg-white rounded-xl p-8 w-full max-w-md card-shadow fade-in"><h2 className="text-2xl font-bold mb-6 text-center">Supervisor Login</h2>{error&&<div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}<div className="mb-4"><label className="block text-sm font-medium mb-1">Username</label><input type="text" value={username} onChange={e=>setUsername(e.target.value)} className="w-full px-4 py-3 border rounded-lg" placeholder="Enter username"/></div><div className="mb-6"><label className="block text-sm font-medium mb-1">Password</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full px-4 py-3 border rounded-lg" placeholder="Enter password" onKeyPress={e=>e.key==='Enter'&&handleLogin()}/></div><div className="flex gap-3"><button onClick={handleLogin} className="flex-1 btn-primary px-4 py-3 text-white rounded-lg font-bold">Login</button><button onClick={onClose} className="px-4 py-3 bg-gray-200 rounded-lg font-medium">Cancel</button></div></div></div>);};
-    const MonthlyCalendar=({generatedDays,onDayClick,allSchedules})=>{
-      const today=new Date();const[viewMonth,setViewMonth]=useState(today.getMonth());const[viewYear,setViewYear]=useState(today.getFullYear());
-      const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();const firstDayOfMonth=new Date(viewYear,viewMonth,1).getDay();const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const days=[];for(let i=0;i<firstDayOfMonth;i++)days.push(null);for(let i=1;i<=daysInMonth;i++)days.push(i);
-      const isDateGenerated=day=>{if(!day)return null;const dateStr=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;return generatedDays[dateStr];};
-      return(<div className="bg-white rounded-lg card-shadow p-4"><div className="flex items-center justify-between mb-3"><button onClick={()=>{if(viewMonth===0){setViewMonth(11);setViewYear(viewYear-1);}else setViewMonth(viewMonth-1);}} className="p-1 hover:bg-gray-100 rounded text-lg">←</button><h3 className="font-bold">{monthNames[viewMonth]} {viewYear}</h3><button onClick={()=>{if(viewMonth===11){setViewMonth(0);setViewYear(viewYear+1);}else setViewMonth(viewMonth+1);}} className="p-1 hover:bg-gray-100 rounded text-lg">→</button></div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">{['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d}>{d}</div>)}</div>
-        <div className="grid grid-cols-7 gap-1">{days.map((day,i)=>{const generated=isDateGenerated(day);const isToday=day===today.getDate()&&viewMonth===today.getMonth()&&viewYear===today.getFullYear();
-          return(<div key={i} onClick={()=>day&&onDayClick(new Date(viewYear,viewMonth,day))} className={`p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 ${!day?'bg-gray-50 border-transparent':''} ${generated?'bg-emerald-100 border-emerald-400':'border-gray-200'} ${isToday?'ring-2 ring-blue-500':''}`}>{day&&(<><div className={`font-bold ${isToday?'text-blue-600':''}`}>{day}</div>{generated&&<div className="text-[7px] text-emerald-700 leading-tight mt-0.5">✓ {formatToEST(generated)}</div>}</>)}</div>);})}</div>
-      </div>);
-    };
-    const App=()=>{
-      const[tab,setTab]=useState('schedule');const[employees,setEmployees]=useState([]);const[schedules,setSchedules]=useState([]);const[allSchedules,setAllSchedules]=useState({});const[generatedDays,setGeneratedDays]=useState({});const[cleaningLogs,setCleaningLogs]=useState({});const[week1Start,setWeek1Start]=useState('');const[week2Start,setWeek2Start]=useState('');const[singleDayDate,setSingleDayDate]=useState('');const[selectedDay,setSelectedDay]=useState(0);const[editingEmployee,setEditingEmployee]=useState(null);const[showAddForm,setShowAddForm]=useState(false);const[isLoggedIn,setIsLoggedIn]=useState(false);const[showLoginModal,setShowLoginModal]=useState(false);const[showCleaningModal,setShowCleaningModal]=useState(null);const[viewingLog,setViewingLog]=useState(null);const[hasUnsavedChanges,setHasUnsavedChanges]=useState(false);
-      
-      // Auto-flip at 8:15 PM EST
-      useEffect(()=>{const checkTime=()=>{const hour=getESTHour();if(hour>=20.25&&hour<20.5){const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);const tomorrowKey=tomorrow.toISOString().split('T')[0];const tomorrowSched=Object.values(allSchedules).find(s=>new Date(s.date).toISOString().split('T')[0]===tomorrowKey);if(tomorrowSched){const idx=schedules.findIndex(s=>new Date(s.date).toISOString().split('T')[0]===tomorrowKey);if(idx>=0)setSelectedDay(idx);}}};const interval=setInterval(checkTime,60000);checkTime();return()=>clearInterval(interval);},[allSchedules,schedules]);
-      
-      const empShapes=useMemo(()=>{const shapes={};[...employees].sort((a,b)=>a.name.localeCompare(b.name)).forEach((emp,i)=>{shapes[emp.name.toUpperCase()]={color:EMPLOYEE_COLORS[i%EMPLOYEE_COLORS.length],shape:SHAPES[Math.floor(i/EMPLOYEE_COLORS.length)%SHAPES.length]};});return shapes;},[employees]);
-      const sortedEmployees=useMemo(()=>[...employees].sort((a,b)=>a.name.localeCompare(b.name)),[employees]);
-      
-      useEffect(()=>{const saved=localStorage.getItem('pharmacy-scheduler-v3');if(saved){const data=JSON.parse(saved);setEmployees(data.employees||[]);setWeek1Start(data.week1Start||'');setWeek2Start(data.week2Start||'');setSchedules(data.schedules||[]);setAllSchedules(data.allSchedules||{});setGeneratedDays(data.generatedDays||{});setCleaningLogs(data.cleaningLogs||{});}},[]);
-      useEffect(()=>{localStorage.setItem('pharmacy-scheduler-v3',JSON.stringify({employees,week1Start,week2Start,schedules,allSchedules,generatedDays,cleaningLogs}));},[employees,week1Start,week2Start,schedules,allSchedules,generatedDays,cleaningLogs]);
-      
-      const todaySchedule=useMemo(()=>{const hour=getESTHour();const targetDate=new Date();if(hour>=20.25)targetDate.setDate(targetDate.getDate()+1);const dateKey=targetDate.toISOString().split('T')[0];return Object.values(allSchedules).find(s=>new Date(s.date).toISOString().split('T')[0]===dateKey)||null;},[allSchedules]);
-      
-      const generateAllSchedules=()=>{if(!week1Start||!week2Start||employees.length===0)return;const scheds=ScheduleEngine.generateAllSchedules(sortedEmployees,week1Start,week2Start);setSchedules(scheds);const newGenerated={...generatedDays};const newAll={...allSchedules};scheds.forEach(s=>{const key=new Date(s.date).toISOString().split('T')[0];newGenerated[key]=new Date().toISOString();newAll[key]=s;});setGeneratedDays(newGenerated);setAllSchedules(newAll);setSelectedDay(0);};
-      
-      const generateSingleDay=targetDate=>{if(employees.length===0)return;let schedule;if(week1Start&&week2Start){schedule=ScheduleEngine.generateSingleDay(sortedEmployees,targetDate,week1Start,week2Start);}if(!schedule)schedule=ScheduleEngine.generateSingleDayStandalone(sortedEmployees,targetDate);if(!schedule)return;const dateKey=new Date(targetDate).toISOString().split('T')[0];const existingIndex=schedules.findIndex(s=>new Date(s.date).toISOString().split('T')[0]===dateKey);const newSchedules=[...schedules];if(existingIndex>=0)newSchedules[existingIndex]=schedule;else{newSchedules.push(schedule);newSchedules.sort((a,b)=>new Date(a.date)-new Date(b.date));}setSchedules(newSchedules);setGeneratedDays({...generatedDays,[dateKey]:new Date().toISOString()});setAllSchedules({...allSchedules,[dateKey]:schedule});const newIndex=newSchedules.findIndex(s=>new Date(s.date).toISOString().split('T')[0]===dateKey);setSelectedDay(newIndex>=0?newIndex:0);};
-      
-      const handleScheduleUpdate=(newSched)=>{const dateKey=new Date(newSched.date).toISOString().split('T')[0];const idx=schedules.findIndex(s=>new Date(s.date).toISOString().split('T')[0]===dateKey);if(idx>=0){const newScheds=[...schedules];newScheds[idx]=newSched;setSchedules(newScheds);}setAllSchedules({...allSchedules,[dateKey]:newSched});setHasUnsavedChanges(true);};
-      
-      const saveChanges=()=>{localStorage.setItem('pharmacy-scheduler-v3',JSON.stringify({employees,week1Start,week2Start,schedules,allSchedules,generatedDays,cleaningLogs}));setHasUnsavedChanges(false);alert('Changes saved!');};
-      
-      const handleFileUpload=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=evt=>{try{const data=new Uint8Array(evt.target.result);const workbook=XLSX.read(data,{type:'array'});const sheet=workbook.Sheets[workbook.SheetNames[0]];const json=XLSX.utils.sheet_to_json(sheet,{header:1});const newEmployees=[];for(let i=2;i<json.length;i++){const row=json[i];if(!row[0])continue;const isCheck=v=>v==='✓'||v==='X'||v==='x'||v===true||v==='TRUE';newEmployees.push({name:row[0]||'',vault:isCheck(row[1]),reception:isCheck(row[2]),lod:isCheck(row[3]),ipad:isCheck(row[4]),registers:isCheck(row[5]),ptoText:row[6]||'',notes:row[7]||'',week1:{1:row[8]||'',2:row[9]||'',3:row[10]||'',4:row[11]||'',5:row[12]||'',6:row[13]||'',7:row[14]||''},week2:{1:row[15]||'',2:row[16]||'',3:row[17]||'',4:row[18]||'',5:row[19]||'',6:row[20]||'',7:row[21]||''}});}setEmployees(newEmployees);}catch(err){console.error(err);}};reader.readAsArrayBuffer(file);};
-      
-      const handleSaveEmployee=emp=>{if(editingEmployee!==null){const updated=[...employees];updated[editingEmployee]=emp;setEmployees(updated);setEditingEmployee(null);}else{setEmployees([...employees,emp]);setShowAddForm(false);}};
-      const handleCalendarDayClick=date=>{const dateKey=date.toISOString().split('T')[0];if(allSchedules[dateKey]){const idx=schedules.findIndex(s=>new Date(s.date).toISOString().split('T')[0]===dateKey);if(idx>=0)setSelectedDay(idx);else{setSchedules([...schedules,allSchedules[dateKey]].sort((a,b)=>new Date(a.date)-new Date(b.date)));setSelectedDay(schedules.length);}}else generateSingleDay(date);};
-      const handleCleaningSubmit=log=>{const today=new Date().toISOString().split('T')[0];const existing=cleaningLogs[today]||[];setCleaningLogs({...cleaningLogs,[today]:[...existing,log]});};
-      const getDateForDay=(wk,dy)=>{const start=wk===1?new Date(week1Start):new Date(week2Start);start.setDate(start.getDate()+(dy-1));return`${start.getMonth()+1}/${start.getDate()}`;};
-      return(<div className="min-h-screen pb-20">
-        {showLoginModal&&<LoginModal onLogin={()=>{setIsLoggedIn(true);setShowLoginModal(false);}} onClose={()=>setShowLoginModal(false)}/>}
-        {showCleaningModal&&<CleaningModal task={showCleaningModal} onClose={()=>setShowCleaningModal(null)} onSubmit={handleCleaningSubmit}/>}
-        {viewingLog&&<CleaningModal task={viewingLog.task} existingLog={viewingLog} onClose={()=>setViewingLog(null)} onSubmit={()=>{}}/>}
-        <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40"><div className="max-w-[1800px] mx-auto px-4 py-4"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center"><span className="text-white text-xl">📋</span></div><h1 className="text-xl font-bold text-gray-900">Pharmacy Scheduler</h1></div>
-        <div className="flex items-center gap-4"><div className="flex gap-2"><button onClick={()=>setTab('schedule')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab==='schedule'?'tab-active':'bg-gray-100 hover:bg-gray-200'}`}>Daily Schedule</button>{isLoggedIn&&(<><button onClick={()=>setTab('employees')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab==='employees'?'tab-active':'bg-gray-100 hover:bg-gray-200'}`}>Employee Master Schedule</button><button onClick={()=>setTab('summary')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab==='summary'?'tab-active':'bg-gray-100 hover:bg-gray-200'}`}>Staffing Summary</button><button onClick={()=>setTab('cleaning')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${tab==='cleaning'?'tab-active':'bg-gray-100 hover:bg-gray-200'}`}>Cleaning Logs</button></>)}</div>
-        {!isLoggedIn?(<button onClick={()=>setShowLoginModal(true)} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🔐 Supervisor Login</button>):(<button onClick={()=>{setIsLoggedIn(false);setTab('schedule');}} className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700">Logout</button>)}</div></div></div></header>
-        <main className="max-w-[1800px] mx-auto px-4 py-6">
-          {tab==='schedule'&&(<div className="fade-in">{todaySchedule?(<><div className="no-print flex items-center justify-between mb-4"><h2 className="text-xl font-bold">{getESTHour()>=20.25?"Tomorrow's":"Today's"} Schedule</h2><button onClick={()=>window.print()} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900">🖨️ Print</button></div><ScheduleDisplay schedule={todaySchedule} empShapes={empShapes} onCleaningClick={setShowCleaningModal}/></>):(<div className="text-center py-12 bg-white rounded-lg card-shadow"><span className="text-5xl mb-4 block">📅</span><p className="text-gray-500 mb-4">No schedule available for today.</p>{isLoggedIn?<button onClick={()=>setTab('employees')} className="btn-primary px-6 py-2 text-white rounded-lg font-medium">Go to Employee Master Schedule →</button>:<p className="text-sm text-gray-400">Please contact a supervisor to generate schedules.</p>}</div>)}</div>)}
-          {tab==='employees'&&isLoggedIn&&(<div className="fade-in"><div className="grid grid-cols-12 gap-4">
-            <div className="col-span-3"><div className="bg-white p-4 rounded-lg card-shadow mb-4"><h3 className="font-bold mb-3">Schedule Period</h3><div className="space-y-2"><div><label className="block text-xs font-medium mb-1">Week 1 Start</label><input type="date" value={week1Start} onChange={e=>{setWeek1Start(e.target.value);const d=new Date(e.target.value);d.setDate(d.getDate()+7);setWeek2Start(d.toISOString().split('T')[0]);}} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div><div><label className="block text-xs font-medium mb-1">Week 2 Start</label><input type="date" value={week2Start} onChange={e=>setWeek2Start(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div></div>{employees.length>0&&week1Start&&week2Start&&(<button onClick={generateAllSchedules} className="mt-3 btn-primary px-3 py-2 text-white rounded-lg font-bold text-sm w-full">🗓️ Generate All 14 Days</button>)}
-            <div className="mt-4 pt-4 border-t"><h4 className="font-bold text-sm mb-2">Generate Single Day</h4><input type="date" value={singleDayDate} onChange={e=>setSingleDayDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2"/><button onClick={()=>singleDayDate&&generateSingleDay(new Date(singleDayDate))} disabled={!singleDayDate||employees.length===0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button></div></div>
-            <MonthlyCalendar generatedDays={generatedDays} onDayClick={handleCalendarDayClick} allSchedules={allSchedules}/>
-            <div className="mt-4 bg-white p-4 rounded-lg card-shadow"><h3 className="font-bold mb-2">Import</h3><label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all"><span className="text-xl">📁</span><p className="text-xs font-medium text-gray-700">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden"/></div></label><button onClick={()=>setShowAddForm(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button></div></div>
-            <div className="col-span-9">{schedules.length>0&&(<div className="flex flex-wrap gap-1 mb-3">{schedules.map((s,i)=>(<button key={i} onClick={()=>setSelectedDay(i)} className={`px-2 py-1 rounded text-xs font-medium transition-all ${selectedDay===i?'bg-emerald-600 text-white':'bg-white hover:bg-gray-100 border'}`}>{s.isSunday?'☀️':''} {s.dateStr}</button>))}</div>)}
-            {(showAddForm||editingEmployee!==null)&&(<div className="mb-3"><EmployeeForm employee={editingEmployee!==null?employees[editingEmployee]:null} onSave={handleSaveEmployee} onCancel={()=>{setShowAddForm(false);setEditingEmployee(null);}}/></div>)}
-            {schedules.length>0&&schedules[selectedDay]&&(<div className="mb-4">
-              <div className="flex items-center justify-between mb-2"><span className="text-sm font-medium text-gray-600">Editing: {schedules[selectedDay].fullTitle}</span>{hasUnsavedChanges&&<button onClick={saveChanges} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save Changes</button>}</div>
-              <ScheduleDisplay schedule={schedules[selectedDay]} empShapes={empShapes} onCleaningClick={setShowCleaningModal} employees={sortedEmployees} onScheduleUpdate={handleScheduleUpdate} isEditable={true}/>
-            </div>)}
-            {employees.length>0&&(<div className="bg-white rounded-lg card-shadow overflow-hidden"><div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center"><h3 className="font-bold text-sm">Master Schedule ({employees.length} Employees)</h3>{schedules.length>0&&<span className="text-emerald-300 text-xs">🟢 = Scheduled for {schedules[selectedDay]?.fullTitle}</span>}</div>
-            <div className="overflow-x-auto max-h-[350px] overflow-y-auto"><table className="w-full text-xs"><thead className="sticky top-0 z-10"><tr className="bg-gray-100"><th className="px-2 py-1 text-left font-semibold sticky left-0 bg-gray-100 z-20 min-w-[120px]">Name</th><th className="px-1 py-1 text-center w-8">V</th><th className="px-1 py-1 text-center w-8">R</th><th className="px-1 py-1 text-center w-8">L</th><th className="px-1 py-1 text-center w-8">I</th><th className="px-1 py-1 text-center w-8">Reg</th><th className="px-1 py-1 text-center min-w-[50px]">PTO</th>
-            {week1Start&&[1,2,3,4,5,6,7].map(d=>(<th key={`w1-${d}`} className="px-1 py-1 text-center bg-blue-50 min-w-[85px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div><div className="text-[9px] text-gray-500">{getDateForDay(1,d)}</div></th>))}
-            {week2Start&&[1,2,3,4,5,6,7].map(d=>(<th key={`w2-${d}`} className="px-1 py-1 text-center bg-green-50 min-w-[85px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div><div className="text-[9px] text-gray-500">{getDateForDay(2,d)}</div></th>))}
-            <th className="px-1 py-1 min-w-[40px]"></th></tr></thead>
-            <tbody>{sortedEmployees.map((emp,idx)=>{const currentSchedule=schedules[selectedDay];let isScheduledToday=false;if(currentSchedule){const allNames=[...currentSchedule.lod.map(l=>l.name),...currentSchedule.reception.flatMap(r=>[r.r1,r.r2]),...currentSchedule.ipad.map(i=>i.display),...currentSchedule.medCheckout.flatMap(m=>[m.mc1,m.mc2,m.med3au1]),...currentSchedule.auCheckout.flatMap(a=>[a.au2,a.au3,a.au4]),...currentSchedule.vault.flatMap(v=>[v.au,v.med]),...currentSchedule.cleaning.map(c=>c.name),...currentSchedule.lunches.map(l=>l.name),...currentSchedule.breaks.filter(b=>b.name).map(b=>b.name)].map(n=>n?.toUpperCase());isScheduledToday=allNames.includes(emp.name.toUpperCase());}const shape=empShapes[emp.name.toUpperCase()];const realIdx=employees.findIndex(e=>e.name===emp.name);
-            return(<tr key={idx} className={`border-t ${isScheduledToday?'bg-emerald-50':'hover:bg-gray-50'}`}><td className={`px-2 py-1 font-medium sticky left-0 ${isScheduledToday?'bg-emerald-100':'bg-white'}`}>{shape&&<EmpShape color={shape.color} shape={shape.shape}/>}{emp.name}</td><td className="px-1 py-1 text-center">{emp.vault&&<div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td><td className="px-1 py-1 text-center">{emp.reception&&<div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td><td className="px-1 py-1 text-center">{emp.lod&&<div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td><td className="px-1 py-1 text-center">{emp.ipad&&<div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td><td className="px-1 py-1 text-center">{emp.registers&&<div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td><td className="px-1 py-1 text-center text-[10px]">{emp.ptoText||'-'}</td>
-            {week1Start&&[1,2,3,4,5,6,7].map(d=><td key={`w1-${d}`} className="px-1 py-1 text-center text-[10px] bg-blue-50/30">{emp.week1?.[d]||'-'}</td>)}
-            {week2Start&&[1,2,3,4,5,6,7].map(d=><td key={`w2-${d}`} className="px-1 py-1 text-center text-[10px] bg-green-50/30">{emp.week2?.[d]||'-'}</td>)}
-            <td className="px-1 py-1"><button onClick={()=>setEditingEmployee(realIdx)} className="text-blue-600 hover:underline text-[10px]">Edit</button></td></tr>);})}</tbody></table></div></div>)}</div>
-          </div></div>)}
-          {tab==='summary'&&isLoggedIn&&(<div className="fade-in">{schedules.length>0?<StaffingSummary schedules={schedules} allSchedules={allSchedules} onDaySelect={setSelectedDay}/>:(<div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first to see the summary.</p></div>)}</div>)}
-          {tab==='cleaning'&&isLoggedIn&&<CleaningLogsCalendar cleaningLogs={cleaningLogs} onViewLog={setViewingLog}/>}
-        </main>
-      </div>);
-    };
-    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-  </script>
-</body>
-</html>
-
-
-
-
