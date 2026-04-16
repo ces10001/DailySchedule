@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Outfit', sans-serif; }
-    .schedule-cell { border: 1px solid #000; padding: 4px 8px; text-align: center; font-weight: 600; }
+    .schedule-cell { border: 1px solid #000; padding: 3px 6px; text-align: center; font-weight: 600; }
     .card-shadow { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); }
     .btn-primary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
     .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
@@ -21,6 +21,8 @@
     .fade-in { animation: fadeIn 0.3s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @media print { .no-print { display: none !important; } }
+    .compact-schedule .schedule-cell { padding: 2px 4px; font-size: 11px; }
+    .compact-schedule h2 { font-size: 1.5rem !important; }
   </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
@@ -417,10 +419,12 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData }) => {
     const parts = value.split(' / ');
     const first = parts[0] || '';
     const second = parts[1] || '';
+    // Extract first word as name, rest as time - use case-insensitive replace
     const firstName = first.split(' ')[0].toUpperCase();
     const secondName = second.split(' ')[0].toUpperCase();
-    const firstTime = first.replace(firstName, '').trim();
-    const secondTime = second.replace(secondName, '').trim();
+    // Remove the name (case-insensitive) to get just the time portion
+    const firstTime = first.replace(new RegExp('^' + first.split(' ')[0] + '\\s*', 'i'), '').trim();
+    const secondTime = second.replace(new RegExp('^' + second.split(' ')[0] + '\\s*', 'i'), '').trim();
     const sh1 = shapes?.[firstName];
     const sh2 = shapes?.[secondName];
     
@@ -502,20 +506,20 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
   };
   
   return (
-    <div className="bg-white p-4 rounded-lg card-shadow fade-in">
-      <div className="text-center mb-3">
-        <h2 className="font-black text-3xl">{sched.fullTitle}</h2>
-        <p className="text-gray-500 text-sm bg-gray-100 py-1 rounded">{sched.cleanTime}</p>
+    <div className={'bg-white p-3 rounded-lg card-shadow fade-in ' + (!editable ? 'compact-schedule' : '')}>
+      <div className="text-center mb-2">
+        <h2 className="font-black text-2xl">{sched.fullTitle}</h2>
+        <p className="text-gray-500 text-xs bg-gray-100 py-1 rounded">{sched.cleanTime}</p>
       </div>
-      <div className="grid grid-cols-5 gap-1 mb-3">{sched.cleaning.map((c,i) => <CleanRow key={i} c={c} i={i}/>)}</div>
-      <div className="flex gap-4">
+      <div className="grid grid-cols-5 gap-1 mb-2">{sched.cleaning.map((c,i) => <CleanRow key={i} c={c} i={i}/>)}</div>
+      <div className="flex gap-3">
         <div className="flex-1">
-          <div className="mb-3">
+          <div className="mb-2">
             <Header color="black">LEADER OF THE DAY</Header>
             <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)}/><TimeCell time={l.time}/></React.Fragment>)}</div>
           </div>
-          <div className="mb-3">
-            <div className="schedule-cell font-bold text-lg bg-[#67d50d]">FRONT END RECEPTION</div>
+          <div className="mb-2">
+            <div className="schedule-cell font-bold text-base bg-[#67d50d]">FRONT END RECEPTION</div>
             <div className="grid grid-cols-6">
               <div className="col-span-2"><Header color="green">RECEPTION 1</Header></div>
               <div className="col-span-2"><Header color="green">RECEPTION 2</Header></div>
@@ -528,8 +532,8 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               </React.Fragment>)}
             </div>
           </div>
-          <div className="mb-3">
-            <div className="schedule-cell font-bold text-lg bg-[#bdd7ee]">BACK END DISPENSARY</div>
+          <div className="mb-2">
+            <div className="schedule-cell font-bold text-base bg-[#bdd7ee]">BACK END DISPENSARY</div>
             <div className="grid grid-cols-6">
               <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 1</Header></div>
               <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 2</Header></div>
@@ -540,7 +544,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
                 <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)}/><TimeCell time={m.time}/>
               </React.Fragment>)}
             </div>
-            <div className="grid grid-cols-6 mt-2">
+            <div className="grid grid-cols-6 mt-1">
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 2</Header></div>
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 3</Header></div>
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
@@ -563,29 +567,29 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
             </React.Fragment>)}
           </div>
         </div>
-        <div className="w-80">
-          <div className="mb-3">
+        <div className="w-72">
+          <div className="mb-2">
             <Header color="black">LUNCH BREAK</Header>
             <div className="grid grid-cols-3">
-              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
-              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
-              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">NAME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">TIME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">COVER</div>
               {sched.lunches.map((l,i) => <React.Fragment key={i}>
                 <NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.name',v)}/>
-                <div className="schedule-cell text-xs py-1">{l.time}</div>
+                <div className="schedule-cell text-xs py-0.5">{l.time}</div>
                 <NameCell name={l.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.cover',v)}/>
               </React.Fragment>)}
             </div>
           </div>
-          <div className="mb-3">
+          <div className="mb-2">
             <Header color="black">15-MIN BREAK</Header>
             <div className="grid grid-cols-3">
-              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
-              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
-              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">NAME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">TIME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">COVER</div>
               {sched.breaks.map((b,i) => <React.Fragment key={i}>
-                <div className="schedule-cell font-bold text-xs py-1">{b.name?.toUpperCase()||''}</div>
-                <div className="schedule-cell text-xs py-1">{b.time}</div>
+                <div className="schedule-cell font-bold text-xs py-0.5">{b.name?.toUpperCase()||''}</div>
+                <div className="schedule-cell text-xs py-0.5">{b.time}</div>
                 <NameCell name={b.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('breaks.'+i+'.cover',v)}/>
               </React.Fragment>)}
             </div>
@@ -593,10 +597,10 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
           <div>
             <Header color="black">DEPOSITS</Header>
             <div className="grid grid-cols-2">
-              <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">TIME</div>
-              <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">PERSON</div>
-              <div className="schedule-cell text-xs py-1">9:00 AM - 12:00 PM</div>
-              <div className="schedule-cell text-xs py-1">LOD</div>
+              <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">TIME</div>
+              <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">PERSON</div>
+              <div className="schedule-cell text-xs py-0.5">9:00 AM - 12:00 PM</div>
+              <div className="schedule-cell text-xs py-0.5">LOD</div>
             </div>
           </div>
         </div>
@@ -665,7 +669,7 @@ const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
 };
 
 // ============== CLEANING LOGS ==============
-const CleaningLogs = ({ logs, onView }) => {
+const CleaningLogs = ({ logs, onView, allScheds }) => {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
@@ -674,8 +678,17 @@ const CleaningLogs = ({ logs, onView }) => {
   const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
   const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
   const getLogs = d => d ? logs[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || [] : [];
+  const getSched = d => d ? allScheds?.[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
   const selLogs = selDay ? getLogs(selDay) : [];
+  const selSched = selDay ? getSched(selDay) : null;
   const missing = selDay ? CLEANING_AREAS.filter(a => !selLogs.some(l=>l.task===a)) : [];
+  
+  // Get assigned cleaner for a task from the schedule
+  const getAssigned = (task) => {
+    if (!selSched || !selSched.cleaning) return null;
+    const c = selSched.cleaning.find(x => x.task === task);
+    return c?.name && c.name !== 'X' ? c.name : null;
+  };
   
   return (
     <div className="fade-in">
@@ -694,8 +707,14 @@ const CleaningLogs = ({ logs, onView }) => {
       </div>
       {selDay && <div className="bg-white rounded-lg card-shadow p-6">
         <h3 className="font-bold text-lg mb-4">Cleaning Log - {months[month]} {selDay}, {year}</h3>
-        {selLogs.length === 0 ? <p className="text-gray-500">No tasks logged.</p> : <div className="space-y-3">{selLogs.map((l,i)=><div key={i} onClick={()=>onView?.(l)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"><div><span className="font-bold">{l.task}</span><span className="text-gray-500 ml-2">by {l.initials}</span></div><span className="text-sm text-gray-500">{formatEST(l.completedAt)}</span></div>)}</div>}
-        {missing.length > 0 && <div className="mt-4 p-3 bg-red-50 rounded-lg"><p className="font-bold text-red-700 text-sm mb-1">⚠️ Missing:</p><p className="text-red-600 text-sm">{missing.join(', ')}</p></div>}
+        {selLogs.length === 0 ? <p className="text-gray-500">No tasks logged.</p> : <div className="space-y-3">{selLogs.map((l,i)=>{
+          const assigned = getAssigned(l.task);
+          return <div key={i} onClick={()=>onView?.(l)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"><div><span className="font-bold">{l.task}</span>{assigned && <span className="text-gray-400 text-sm ml-1">({assigned})</span>}<span className="text-gray-500 ml-2">by {l.initials}</span></div><span className="text-sm text-gray-500">{formatEST(l.completedAt)}</span></div>;
+        })}</div>}
+        {missing.length > 0 && <div className="mt-4 p-3 bg-red-50 rounded-lg"><p className="font-bold text-red-700 text-sm mb-1">⚠️ Missing:</p><div className="text-red-600 text-sm space-y-1">{missing.map((m,i) => {
+          const assigned = getAssigned(m);
+          return <div key={i}>{m}{assigned && <span className="text-red-400 ml-1">({assigned})</span>}</div>;
+        })}</div></div>}
       </div>}
     </div>
   );
@@ -960,13 +979,13 @@ const App = () => {
         </div>
       </header>
       
-      <main className="max-w-[1800px] mx-auto px-4 py-6">
+      <main className={'max-w-[1800px] mx-auto ' + (tab === 'schedule' ? 'px-2 py-3' : 'px-4 py-6')}>
         {tab === 'schedule' && (
           <div className="fade-in">
             {todaySched ? <>
-              <div className="no-print flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
-                <button onClick={()=>window.print()} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900">🖨️ Print</button>
+              <div className="no-print flex items-center justify-between mb-2">
+                <h2 className="text-lg font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
+                <button onClick={()=>window.print()} className="px-3 py-1.5 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🖨️ Print</button>
               </div>
               <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
             </> : <div className="text-center py-12 bg-white rounded-lg card-shadow">
@@ -1062,7 +1081,7 @@ const App = () => {
         
         {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
         
-        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog}/>}
+        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds}/>}
       </main>
     </div>
   );
