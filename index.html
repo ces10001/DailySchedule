@@ -52,8 +52,9 @@ const formatEST = (iso) => new Date(iso).toLocaleString('en-US',{timeZone:'Ameri
 const getESTHour = () => parseInt(new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false}));
 const formatTime = (h) => { const hr = Math.floor(h), m = Math.round((h-hr)*60), sfx = hr >= 12 ? ' PM' : ' AM', dh = hr > 12 ? hr-12 : (hr === 0 ? 12 : hr); return m === 0 ? dh+':00'+sfx : dh+':'+String(m).padStart(2,'0')+sfx; };
 const toDateKey = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const todayKey = () => toDateKey(new Date());
 
-// ============== SHAPE COMPONENT (FIXED - cycles shapes every employee) ==============
+// ============== SHAPE COMPONENT ==============
 const EmpShape = ({ color, shape }) => {
   const s = 16;
   switch(shape) {
@@ -116,7 +117,6 @@ const Engine = {
   },
   startTime(emp, wk, dy) { const { s } = this.parse(this.sched(emp, wk, dy)); return s >= 0 ? s : 99; },
   endTime(emp, wk, dy) { const { e } = this.parse(this.sched(emp, wk, dy)); return e >= 0 ? e : 0; },
-  hours(emp, wk, dy) { const s = this.startTime(emp, wk, dy), e = this.endTime(emp, wk, dy); return (s < 99 && e > 0) ? e - s : 0; },
   vaultOnly: e => e.vault && !e.reception && !e.lod && !e.ipad && !e.registers,
   recOnly: e => e.reception && !e.lod && !e.ipad && !e.registers,
   ipadOnly: e => e.ipad && !e.reception && !e.lod && !e.registers,
@@ -196,8 +196,10 @@ const Engine = {
     const r1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r1,r1b2,lod3], date, sun); u3.push(r1b3);
     const r2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r2,r2b2,lod3], date, sun); u3.push(r2b3);
     
-    // iPad
+    // iPad - store split info separately for register swap
     let ip1, ip2a, ip2b, ip3a, ip3b, ipD1, ipD2, ipD3, ipT1, ipT2, ipT3;
+    let ipadSplit2 = null, ipadSplit3 = null;
+    
     if (sun) {
       ip1 = this.findIPad(emps, wk, dy, 10, 12, u1, date); u1.push(ip1);
       ip2a = this.findIPadRotate(emps, wk, dy, 12, 15, u2, [ip1], date); u2.push(ip2a);
@@ -211,9 +213,35 @@ const Engine = {
       ip3a = this.findIPadRotate(emps, wk, dy, 16, 18, u3, [ip1,ip2a,ip2b], date); u3.push(ip3a);
       ip3b = this.findIPadRotate(emps, wk, dy, 18, 20, u3, [ip1,ip2a,ip2b], date); u3.push(ip3b);
       ipD1=ip1; ipT1='9:00 AM - 12:00 PM';
-      ipD2 = ip2a===ip2b&&ip2a!=='X' ? ip2a : ip2a!=='X'&&ip2b!=='X' ? ip2a+' 12-2 / '+ip2b+' 2-4' : ip2a!=='X' ? ip2a+' 12-2' : ip2b!=='X' ? ip2b+' 2-4' : 'X';
+      
+      // Block 2 iPad split detection
+      if (ip2a !== ip2b && ip2a !== 'X' && ip2b !== 'X') {
+        ipD2 = ip2a+' 12-2 / '+ip2b+' 2-4';
+        ipadSplit2 = { first: ip2a, second: ip2b };
+      } else if (ip2a === ip2b && ip2a !== 'X') {
+        ipD2 = ip2a;
+      } else if (ip2a !== 'X') {
+        ipD2 = ip2a+' 12-2';
+      } else if (ip2b !== 'X') {
+        ipD2 = ip2b+' 2-4';
+      } else {
+        ipD2 = 'X';
+      }
       ipT2='12:00 PM - 4:00 PM';
-      ipD3 = ip3a===ip3b&&ip3a!=='X' ? ip3a : ip3a!=='X'&&ip3b!=='X' ? ip3a+' 4-6 / '+ip3b+' 6-8' : ip3a!=='X' ? ip3a+' 4-6' : ip3b!=='X' ? ip3b+' 6-8' : 'X';
+      
+      // Block 3 iPad split detection
+      if (ip3a !== ip3b && ip3a !== 'X' && ip3b !== 'X') {
+        ipD3 = ip3a+' 4-6 / '+ip3b+' 6-8';
+        ipadSplit3 = { first: ip3a, second: ip3b };
+      } else if (ip3a === ip3b && ip3a !== 'X') {
+        ipD3 = ip3a;
+      } else if (ip3a !== 'X') {
+        ipD3 = ip3a+' 4-6';
+      } else if (ip3b !== 'X') {
+        ipD3 = ip3b+' 6-8';
+      } else {
+        ipD3 = 'X';
+      }
       ipT3='4:00 PM - 8:00 PM';
     }
     
@@ -227,14 +255,34 @@ const Engine = {
     const rg2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
     
     const rg3b2 = lod2!=='X' ? lod2 : this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg3b1], date, sun); uR2.push(rg3b2);
-    const a1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
+    
+    // AU CHECKOUT 2 Block 2 - iPad split swap: iPad 12-2 person → register 2-4, iPad 2-4 person → register 12-2
+    let a1b2, a1b2Split = null;
+    if (ipadSplit2) {
+      a1b2 = ipadSplit2.second + ' 12-2 / ' + ipadSplit2.first + ' 2-4';
+      a1b2Split = { first: ipadSplit2.second, second: ipadSplit2.first };
+      uR2.push(ipadSplit2.first); uR2.push(ipadSplit2.second);
+    } else {
+      a1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
+    }
+    
     const a2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a2], date, sun); uR2.push(a2b2);
     const a3b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a3], date, sun); uR2.push(a3b2);
     const rg1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun); uR2.push(rg1b2);
     const rg2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun);
     
     const rg3b3 = lod3!=='X' ? lod3 : this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg3b1,rg3b2], date, sun); uR3.push(rg3b3);
-    const a1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
+    
+    // AU CHECKOUT 2 Block 3 - iPad split swap
+    let a1b3, a1b3Split = null;
+    if (ipadSplit3) {
+      a1b3 = ipadSplit3.second + ' 4-6 / ' + ipadSplit3.first + ' 6-8';
+      a1b3Split = { first: ipadSplit3.second, second: ipadSplit3.first };
+      uR3.push(ipadSplit3.first); uR3.push(ipadSplit3.second);
+    } else {
+      a1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
+    }
+    
     const a2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a2,a2b2], date, sun); uR3.push(a2b3);
     const a3b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a3,a3b2], date, sun); uR3.push(a3b3);
     const rg1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun); uR3.push(rg1b3);
@@ -245,22 +293,22 @@ const Engine = {
     let vU2=[...uR2,lod2]; const vAU2 = this.findVault(emps, wk, dy, 2, vU2, date, sun); vU2.push(vAU2); const vMed2 = this.findVault(emps, wk, dy, 2, vU2, date, sun);
     let vU3=[...uR3,lod3]; const vAU3 = this.findVault(emps, wk, dy, 3, vU3, date, sun); vU3.push(vAU3); const vMed3 = this.findVault(emps, wk, dy, 3, vU3, date, sun);
     
-    // Lunches - early shifts first, then late shifts, fill empty slots to 4:00 PM
+    // Lunches
     const earlyL = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isEarly(e, wk, dy));
     const lateL = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isLate(e, wk, dy));
     const lunches = []; let lt = 12;
     for (const e of earlyL) if (lt <= 14) { lunches.push({ name: e.name, time: formatTime(lt), cover: '' }); lt += 0.5; }
     for (const e of lateL) if (lt <= 16) { lunches.push({ name: e.name, time: formatTime(lt), cover: '' }); lt += 0.5; }
-    // Fill empty slots through 4:00 PM (16:00)
     while (lt <= 16) { lunches.push({ name: '', time: formatTime(lt), cover: '' }); lt += 0.5; }
     
-    // 15-min breaks: 5:00-6:00 PM for evening shift employees
+    // 15-min breaks
     const brkEmps = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isEvening(e, wk, dy));
     const breaks = []; const brkSlots = [17, 17.25, 17.5, 17.75];
     brkEmps.forEach((e, i) => { if (i < 4) breaks.push({ name: e.name, time: formatTime(brkSlots[i]), cover: '' }); });
     while (breaks.length < 4) breaks.push({ name: '', time: formatTime(brkSlots[breaks.length]), cover: '' });
     
-    const cf = n => n && n !== 'X' ? 1 : 0;
+    // cf counts people: X=0, regular=1, split=2
+    const cf = n => !n || n === 'X' ? 0 : n.includes('/') ? 2 : 1;
     const stats = { vB1: cf(vAU1)+cf(vMed1), vB2: cf(vAU2)+cf(vMed2), vB3: cf(vAU3)+cf(vMed3), rB1: cf(r1)+cf(r2), rB2: cf(r1b2)+cf(r2b2), rB3: cf(r1b3)+cf(r2b3), rgB1: cf(rg3b1)+cf(a1)+cf(a2)+cf(a3)+cf(rg1)+cf(rg2), rgB2: cf(rg3b2)+cf(a1b2)+cf(a2b2)+cf(a3b2)+cf(rg1b2)+cf(rg2b2), rgB3: cf(rg3b3)+cf(a1b3)+cf(a2b3)+cf(a3b3)+cf(rg1b3)+cf(rg2b3) };
     
     return {
@@ -268,9 +316,13 @@ const Engine = {
       times: { t1S, t1E, t2S, t2E, t3S, t3E },
       lod: [{name:lod1,time:t1S+' - '+t1E},{name:lod2,time:t2S+' - '+t2E},{name:lod3,time:t3S+' - '+t3E}],
       reception: [{r1,r2,time:t1S+' - '+t1E},{r1:r1b2,r2:r2b2,time:t2S+' - '+t2E},{r1:r1b3,r2:r2b3,time:t3S+' - '+t3E}],
-      ipad: [{display:ipD1,time:ipT1},{display:ipD2,time:ipT2},{display:ipD3,time:ipT3}],
+      ipad: [{display:ipD1,time:ipT1,split:null},{display:ipD2,time:ipT2,split:ipadSplit2},{display:ipD3,time:ipT3,split:ipadSplit3}],
       medCheckout: [{mc1:rg1,mc2:rg2,med3au1:rg3b1,time:t1S+' - '+t1E},{mc1:rg1b2,mc2:rg2b2,med3au1:rg3b2,time:t2S+' - '+t2E},{mc1:rg1b3,mc2:rg2b3,med3au1:rg3b3,time:t3S+' - '+t3E}],
-      auCheckout: [{au2:a1,au3:a2,au4:a3,time:t1S+' - '+t1E},{au2:a1b2,au3:a2b2,au4:a3b2,time:t2S+' - '+t2E},{au2:a1b3,au3:a2b3,au4:a3b3,time:t3S+' - '+t3E}],
+      auCheckout: [
+        {au2:a1,au3:a2,au4:a3,time:t1S+' - '+t1E,au2Split:null},
+        {au2:a1b2,au3:a2b2,au4:a3b2,time:t2S+' - '+t2E,au2Split:a1b2Split},
+        {au2:a1b3,au3:a2b3,au4:a3b3,time:t3S+' - '+t3E,au2Split:a1b3Split}
+      ],
       vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:t1S+' - '+t1E},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:t2S+' - '+t2E},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:t3S+' - '+t3E}],
       vaultOpen: sun ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
       lunches, breaks, stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
@@ -299,6 +351,7 @@ const CleaningModal = ({ task, onClose, onSubmit, log }) => {
   const [initials, setInitials] = useState(log?.initials || '');
   const tasks = CLEANING_TASKS[task] || [];
   const view = !!log, allDone = tasks.every((_, i) => checked[i]);
+  const canSubmit = allDone && initials.trim().length > 0;
   const submit = () => {
     if (!initials.trim()) return alert('Enter initials');
     if (!allDone) return alert('Complete all tasks');
@@ -312,7 +365,13 @@ const CleaningModal = ({ task, onClose, onSubmit, log }) => {
         {!view && <button onClick={() => { const c={}; tasks.forEach((_,i)=>c[i]=true); setChecked(c); }} className="mb-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">✓ Select All</button>}
         <div className="space-y-2 mb-4">{tasks.map((t,i) => <label key={i} className="flex items-start gap-3 p-2 rounded hover:bg-gray-50"><input type="checkbox" checked={checked[i]||false} onChange={e=>!view&&setChecked({...checked,[i]:e.target.checked})} disabled={view} className="mt-1 w-5 h-5"/><span className="text-sm">{t}</span></label>)}</div>
         {!view && <div className="mb-4"><label className="block text-sm font-medium mb-1">Initials</label><input value={initials} onChange={e=>setInitials(e.target.value.slice(0,4))} className="w-full px-4 py-2 border rounded-lg uppercase" maxLength={4}/></div>}
-        <div className="flex gap-2">{!view && <button onClick={submit} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Submit</button>}<button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">{view?'Close':'Cancel'}</button></div>
+        <div className="flex gap-2">
+          {!view && (canSubmit 
+            ? <button onClick={submit} className="flex-1 px-4 py-2 bg-emerald-500 text-black rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"><span className="text-xl">✓</span> Complete</button>
+            : <button disabled className="flex-1 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg font-bold cursor-not-allowed">Submit (check all tasks + initials)</button>
+          )}
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">{view?'Close':'Cancel'}</button>
+        </div>
       </div>
     </div>
   );
@@ -337,16 +396,59 @@ const NameCell = ({ name, shapes, editable, emps, onUpdate }) => {
   );
 };
 
-const IPadCell = ({ value, shapes, editable, onUpdate }) => {
+// Split cell for iPad and AU2 splits - vertical layout with both shapes
+const SplitCell = ({ value, shapes, editable, onUpdate, splitData }) => {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value||'');
   const save = () => { onUpdate(text); setEditing(false); };
+  const isSplit = value && value.includes(' / ');
+  
+  if (editing) {
+    return (
+      <div className="schedule-cell bg-white p-0">
+        <input value={text} onChange={e=>setText(e.target.value)} onBlur={save} 
+          onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setText(value);setEditing(false);}}} 
+          autoFocus className="w-full h-full px-2 py-1 text-xs font-bold text-center border-0 outline-none"/>
+      </div>
+    );
+  }
+  
+  if (isSplit) {
+    const parts = value.split(' / ');
+    const first = parts[0] || '';
+    const second = parts[1] || '';
+    const firstName = first.split(' ')[0].toUpperCase();
+    const secondName = second.split(' ')[0].toUpperCase();
+    const firstTime = first.replace(firstName, '').trim();
+    const secondTime = second.replace(secondName, '').trim();
+    const sh1 = shapes?.[firstName];
+    const sh2 = shapes?.[secondName];
+    
+    return (
+      <div onClick={()=>editable&&setEditing(true)} 
+        className={'schedule-cell bg-white font-bold text-xs py-2 min-w-[180px] '+(editable?'cursor-pointer hover:bg-gray-50':'')}>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-center gap-1">
+            {sh1 && <EmpShape color={sh1.color} shape={sh1.shape}/>}
+            <span>{firstName}</span>
+            <span className="text-gray-500 text-[10px] ml-1">{firstTime}</span>
+          </div>
+          <div className="flex items-center justify-center gap-1">
+            {sh2 && <EmpShape color={sh2.color} shape={sh2.shape}/>}
+            <span>{secondName}</span>
+            <span className="text-gray-500 text-[10px] ml-1">{secondTime}</span>
+          </div>
+        </div>
+        {editable && <span className="text-gray-400 text-[10px] block mt-1">✏️ edit</span>}
+      </div>
+    );
+  }
+  
   const firstName = value && value!=='X' ? value.split(' ')[0].toUpperCase() : null;
   const sh = firstName && shapes?.[firstName];
-  if (editing) return <div className="schedule-cell bg-white p-0"><input value={text} onChange={e=>setText(e.target.value)} onBlur={save} onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setText(value);setEditing(false);}}} autoFocus className="w-full h-full px-2 py-1 text-xs font-bold text-center border-0 outline-none"/></div>;
   const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white');
   if (!editable) return <div className={base}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(value||'X').toUpperCase()}</div>;
-  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}<span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px]">✏️</span></div>;
+  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}<span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px] ml-1">✏️</span></div>;
 };
 
 const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
@@ -356,7 +458,7 @@ const Header = ({ children, color }) => {
 };
 
 // ============== SCHEDULE DISPLAY ==============
-const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes }) => {
+const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs }) => {
   if (!sched) return null;
   const sh = showShapes ? shapes : null;
   const upd = (path, val) => {
@@ -368,16 +470,32 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
     onUpdate(s);
   };
   
+  const todaysLogs = cleanLogs?.[todayKey()] || [];
+  const isTaskComplete = (task) => {
+    const log = todaysLogs.find(l => l.task === task);
+    if (!log) return false;
+    const taskList = CLEANING_TASKS[task] || [];
+    return taskList.every((_, i) => log.tasks?.[i]);
+  };
+  
   const CleanRow = ({ c, i }) => {
     const [open, setOpen] = useState(false);
     const csh = sh && c.name && c.name!=='X' && sh[c.name.toUpperCase()];
+    const complete = isTaskComplete(c.task);
+    
     return (
       <div className="schedule-cell text-red-600 font-bold text-xs py-1 flex items-center justify-between relative">
         <div className="flex items-center flex-1 cursor-pointer" onClick={()=>editable&&setOpen(!open)}>
           {csh && <EmpShape color={csh.color} shape={csh.shape}/>}
           <span>{c.name.toUpperCase()} - {c.task}</span>
         </div>
-        <button onClick={()=>onSign?.(c.task)} className="ml-2 px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700">Sign</button>
+        {complete ? (
+          <div className="ml-2 w-8 h-6 bg-emerald-500 rounded flex items-center justify-center">
+            <span className="text-black font-bold text-sm">✓</span>
+          </div>
+        ) : (
+          <button onClick={()=>onSign?.(c.task)} className="ml-2 px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700">Sign</button>
+        )}
         {open && <Dropdown value={c.name} options={['X',...emps.map(e=>e.name).sort()]} onSelect={v=>upd('cleaning.'+i+'.name',v)} onClose={()=>setOpen(false)}/>}
       </div>
     );
@@ -392,12 +510,10 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
       <div className="grid grid-cols-5 gap-1 mb-3">{sched.cleaning.map((c,i) => <CleanRow key={i} c={c} i={i}/>)}</div>
       <div className="flex gap-4">
         <div className="flex-1">
-          {/* LOD */}
           <div className="mb-3">
             <Header color="black">LEADER OF THE DAY</Header>
             <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)}/><TimeCell time={l.time}/></React.Fragment>)}</div>
           </div>
-          {/* Reception */}
           <div className="mb-3">
             <div className="schedule-cell font-bold text-lg bg-[#67d50d]">FRONT END RECEPTION</div>
             <div className="grid grid-cols-6">
@@ -407,11 +523,11 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               {sched.reception.map((r,i) => <React.Fragment key={i}>
                 <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)}/><TimeCell time={r.time}/>
                 <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)}/><TimeCell time={r.time}/>
-                <IPadCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)}/><TimeCell time={sched.ipad[i].time}/>
+                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split}/>
+                <TimeCell time={sched.ipad[i].time}/>
               </React.Fragment>)}
             </div>
           </div>
-          {/* Dispensary */}
           <div className="mb-3">
             <div className="schedule-cell font-bold text-lg bg-[#bdd7ee]">BACK END DISPENSARY</div>
             <div className="grid grid-cols-6">
@@ -429,13 +545,13 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 3</Header></div>
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
               {sched.auCheckout.map((a,i) => <React.Fragment key={i}>
-                <NameCell name={a.au2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)}/><TimeCell time={a.time}/>
+                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split}/>
+                <TimeCell time={a.time}/>
                 <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)}/><TimeCell time={a.time}/>
                 <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)}/><TimeCell time={a.time}/>
               </React.Fragment>)}
             </div>
           </div>
-          {/* Vault */}
           <div className="grid grid-cols-4">
             <div className="col-span-2"><Header color="yellow">AU LEFT VAULT</Header></div>
             <div className="col-span-2"><Header color="yellow">MEDICAL RIGHT VAULT</Header></div>
@@ -447,7 +563,6 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
             </React.Fragment>)}
           </div>
         </div>
-        {/* Right side */}
         <div className="w-80">
           <div className="mb-3">
             <Header color="black">LUNCH BREAK</Header>
@@ -491,7 +606,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
   );
 };
 
-// ============== STAFFING SUMMARY (No iPad) ==============
+// ============== STAFFING SUMMARY ==============
 const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
   const [sel, setSel] = useState(null);
   const [month, setMonth] = useState(new Date().getMonth());
@@ -586,11 +701,9 @@ const CleaningLogs = ({ logs, onView }) => {
   );
 };
 
-// ============== COVERAGE NEEDED ALERT (Organized) ==============
-const CoverageAlert = ({ sched, emps }) => {
+// ============== COVERAGE ALERT ==============
+const CoverageAlert = ({ sched }) => {
   if (!sched) return null;
-  
-  // Find X positions by category
   const lodX = sched.lod.map((l,i) => l.name==='X' ? 'Block '+(i+1) : null).filter(Boolean);
   const recX = [];
   sched.reception.forEach((r,i) => { if(r.r1==='X') recX.push('Rec1 B'+(i+1)); if(r.r2==='X') recX.push('Rec2 B'+(i+1)); });
@@ -598,23 +711,17 @@ const CoverageAlert = ({ sched, emps }) => {
   sched.medCheckout.forEach((m,i) => { if(m.mc1==='X') regX.push('MC1 B'+(i+1)); if(m.mc2==='X') regX.push('MC2 B'+(i+1)); if(m.med3au1==='X') regX.push('M3/A1 B'+(i+1)); });
   sched.auCheckout.forEach((a,i) => { if(a.au2==='X') regX.push('AU2 B'+(i+1)); if(a.au3==='X') regX.push('AU3 B'+(i+1)); if(a.au4==='X') regX.push('AU4 B'+(i+1)); });
   
-  // Calculate shift needs
   const shiftNeeds = [];
   if (lodX.length > 0 || recX.some(x=>x.includes('B1')) || regX.some(x=>x.includes('B1'))) shiftNeeds.push('8:45-12');
   if (lodX.some(x=>x.includes('2')) || recX.some(x=>x.includes('B2')) || regX.some(x=>x.includes('B2'))) shiftNeeds.push('12-4:15');
   if (lodX.some(x=>x.includes('3')) || recX.some(x=>x.includes('B3')) || regX.some(x=>x.includes('B3'))) shiftNeeds.push('4-8:15');
   
-  const hasIssues = lodX.length > 0 || recX.length > 0 || regX.length > 0;
-  if (!hasIssues) return null;
+  if (lodX.length === 0 && recX.length === 0 && regX.length === 0) return null;
   
   return (
     <div className="bg-red-100 border-2 border-red-500 rounded-lg p-4 mt-4">
       <p className="font-bold text-red-800 text-sm mb-3">⚠️ COVERAGE NEEDED</p>
-      {shiftNeeds.length > 0 && (
-        <div className="bg-red-200 rounded p-2 mb-3">
-          <p className="font-bold text-red-900 text-sm">Down: {shiftNeeds.join('. ')}</p>
-        </div>
-      )}
+      {shiftNeeds.length > 0 && <div className="bg-red-200 rounded p-2 mb-3"><p className="font-bold text-red-900 text-sm">Down: {shiftNeeds.join('. ')}</p></div>}
       <div className="space-y-2 text-xs">
         {lodX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">LOD:</span><span className="text-red-700">{lodX.join(', ')}</span></div>}
         {recX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">Reception:</span><span className="text-red-700">{recX.join(', ')}</span></div>}
@@ -706,7 +813,6 @@ const App = () => {
   const [viewLog, setViewLog] = useState(null);
   const [dirty, setDirty] = useState(false);
   
-  // FIXED: Shape assignment - cycles shapes every 6 employees for variety
   const shapes = useMemo(() => {
     const s = {}, sorted = [...emps].sort((a,b) => a.name.localeCompare(b.name));
     sorted.forEach((e, i) => {
@@ -720,7 +826,6 @@ const App = () => {
   
   const sorted = useMemo(() => [...emps].sort((a,b) => a.name.localeCompare(b.name)), [emps]);
   
-  // Load/save
   useEffect(() => {
     const d = localStorage.getItem('pharmacy-scheduler-v3');
     if (d) { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{}); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); }
@@ -730,7 +835,6 @@ const App = () => {
     localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs }));
   }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs]);
   
-  // Auto-flip
   useEffect(() => {
     const check = () => {
       if (getESTHour() >= 20) {
@@ -820,7 +924,7 @@ const App = () => {
   };
   
   const cleanSubmit = (log) => {
-    const key = new Date().toISOString().split('T')[0];
+    const key = todayKey();
     setCleanLogs({...cleanLogs, [key]: [...(cleanLogs[key]||[]), log]});
   };
   
@@ -864,7 +968,7 @@ const App = () => {
                 <h2 className="text-xl font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
                 <button onClick={()=>window.print()} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900">🖨️ Print</button>
               </div>
-              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} editable={false} showShapes={false}/>
+              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
             </> : <div className="text-center py-12 bg-white rounded-lg card-shadow">
               <span className="text-5xl mb-4 block">📅</span>
               <p className="text-gray-500 mb-4">No schedule for today.</p>
@@ -895,7 +999,7 @@ const App = () => {
                 <label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50"><span className="text-xl">📁</span><p className="text-xs font-medium">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={upload} className="hidden"/></div></label>
                 <button onClick={()=>setShowAdd(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
               </div>
-              {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]} emps={sorted}/>}
+              {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]}/>}
             </div>
             
             <div className="col-span-9">
@@ -908,7 +1012,7 @@ const App = () => {
                   <span className="text-sm font-medium text-gray-600">Editing: {scheds[selDay].fullTitle}</span>
                   {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
                 </div>
-                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true}/>
+                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs}/>
               </div>}
               
               {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
@@ -932,7 +1036,7 @@ const App = () => {
                       let onSched = false;
                       if (cur) {
                         const all = [...cur.lod.map(l=>l.name),...cur.reception.flatMap(r=>[r.r1,r.r2]),...cur.ipad.map(i=>i.display),...cur.medCheckout.flatMap(m=>[m.mc1,m.mc2,m.med3au1]),...cur.auCheckout.flatMap(a=>[a.au2,a.au3,a.au4]),...cur.vault.flatMap(v=>[v.au,v.med]),...cur.cleaning.map(c=>c.name),...cur.lunches.map(l=>l.name),...cur.breaks.filter(b=>b.name).map(b=>b.name)].map(n=>n?n.toUpperCase():'');
-                        onSched = all.includes(emp.name.toUpperCase());
+                        onSched = all.includes(emp.name.toUpperCase()) || all.some(n => n && n.includes(emp.name.toUpperCase()));
                       }
                       const sh = shapes[emp.name.toUpperCase()];
                       const realIdx = emps.findIndex(e=>e.name===emp.name);
