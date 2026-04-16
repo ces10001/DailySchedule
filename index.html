@@ -9,1014 +9,962 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Outfit', sans-serif; }
-    @media print { .no-print { display: none !important; } body { background: white !important; } }
     .schedule-cell { border: 1px solid #000; padding: 4px 8px; text-align: center; font-weight: 600; }
-    .gradient-mesh { background: radial-gradient(at 40% 20%, rgba(16, 185, 129, 0.15) 0px, transparent 50%), radial-gradient(at 80% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
-    .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); }
-    .btn-primary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); transition: all 0.2s ease; }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
-    .fade-in { animation: fadeIn 0.3s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .card-shadow { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); }
+    .btn-primary { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
     .tab-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
     .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @media print { .no-print { display: none !important; } }
   </style>
 </head>
-<body class="gradient-mesh min-h-screen">
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
-    
-    const EMPLOYEE_COLORS = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#F43F5E','#0EA5E9','#A855F7','#22C55E','#EAB308','#E11D48','#7C3AED','#0D9488','#DC2626','#2563EB','#16A34A'];
-    const SHAPES = ['circle','square','diamond','triangle','star','hexagon'];
-    const CLEANING_AREAS = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
-    const CLEANING_TASKS = {
-      RECEPTION: ['Wipe down front counter','Clean glass doors','Sweep and mop floor','Empty trash','Organize displays','Sanitize touchscreens'],
-      DISPENSARY: ['Wipe down counters','Clean screens/keyboards','Organize bins','Restock supplies','Clean printers','Sanitize stations'],
-      VACUUM: ['Vacuum carpeted areas','Vacuum behind counters','Vacuum break room','Empty vacuum','Check for clogs'],
-      BATHROOMS: ['Sanitize toilets','Clean sinks/mirrors','Refill supplies','Empty trash','Mop floors'],
-      KITCHEN: ['Wash dishes','Wipe counters','Clean microwave','Clean fridge','Empty trash','Mop floor']
-    };
-    const TIME_SLOTS = [{value:'',label:'OFF'},{value:'8:30 AM - 12:00 PM',label:'8:30 AM - 12:00 PM'},{value:'8:45 AM - 12:00 PM',label:'8:45 AM - 12:00 PM'},{value:'8:30 AM - 4:15 PM',label:'8:30 AM - 4:15 PM'},{value:'8:45 AM - 4:15 PM',label:'8:45 AM - 4:15 PM'},{value:'12:00 PM - 8:15 PM',label:'12:00 PM - 8:15 PM'},{value:'12:00 PM - 4:15 PM',label:'12:00 PM - 4:15 PM'},{value:'4:00 PM - 8:15 PM',label:'4:00 PM - 8:15 PM'},{value:'8:30 AM - 8:15 PM',label:'8:30 AM - 8:15 PM'},{value:'8:45 AM - 8:15 PM',label:'8:45 AM - 8:15 PM'}];
-    const SUNDAY_TIME_SLOTS = [{value:'',label:'OFF'},{value:'9:30 AM - 6:15 PM',label:'9:30 AM - 6:15 PM'},{value:'9:45 AM - 6:15 PM',label:'9:45 AM - 6:15 PM'}];
-    
-    const formatToEST = (iso) => new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit',hour12:true});
-    const getESTHour = () => { const d = new Date(); return parseInt(d.toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false})); };
-    
-    // Bold shapes - 16px with black border
-    const EmpShape = ({ color, shape }) => {
-      const size = 16;
-      if (shape === 'circle') return <span style={{width:size,height:size,backgroundColor:color,borderRadius:'50%',display:'inline-block',marginRight:6,border:'2px solid #000'}}></span>;
-      if (shape === 'square') return <span style={{width:size,height:size,backgroundColor:color,borderRadius:2,display:'inline-block',marginRight:6,border:'2px solid #000'}}></span>;
-      if (shape === 'diamond') return <span style={{width:size,height:size,backgroundColor:color,transform:'rotate(45deg)',borderRadius:2,display:'inline-block',marginRight:6,border:'2px solid #000'}}></span>;
-      if (shape === 'triangle') return <svg width={size+2} height={size} style={{display:'inline-block',marginRight:6}}><polygon points={`${(size+2)/2},1 ${size+1},${size-1} 1,${size-1}`} fill={color} stroke="#000" strokeWidth="2"/></svg>;
-      if (shape === 'star') return <svg width={size+2} height={size+2} style={{display:'inline-block',marginRight:6}}><polygon points="9,1 11,7 17,7 12,11 14,17 9,13 4,17 6,11 1,7 7,7" fill={color} stroke="#000" strokeWidth="1.5"/></svg>;
-      if (shape === 'hexagon') return <svg width={size+2} height={size} style={{display:'inline-block',marginRight:6}}><polygon points="9,1 16,5 16,13 9,17 2,13 2,5" fill={color} stroke="#000" strokeWidth="2"/></svg>;
-      return <span style={{width:size,height:size,backgroundColor:color,borderRadius:'50%',display:'inline-block',marginRight:6,border:'2px solid #000'}}></span>;
-    };
+<body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
 
-    const ScheduleEngine = {
-      parseSegment(seg) {
-        let startHour = -1, endHour = -1; seg = (seg || '').trim();
-        if (!seg || !seg.includes('-')) return { startHour, endHour };
-        const parts = seg.split('-'); if (parts.length < 2) return { startHour, endHour };
-        let startStr = parts[0].trim(), endStr = parts[parts.length - 1].trim();
-        const startAM = startStr.toUpperCase().includes('AM'), startPM = startStr.toUpperCase().includes('PM');
-        const endAM = endStr.toUpperCase().includes('AM'), endPM = endStr.toUpperCase().includes('PM');
-        startStr = startStr.replace(/AM|PM/gi, '').trim(); endStr = endStr.replace(/AM|PM/gi, '').trim();
-        if (!startStr || !endStr) return { startHour, endHour };
-        const sp = startStr.split(':'); let h = parseFloat(sp[0]) || 0, m = parseFloat(sp[1]) || 0; startHour = h + m / 60;
-        const ep = endStr.split(':'); h = parseFloat(ep[0]) || 0; m = parseFloat(ep[1]) || 0; endHour = h + m / 60;
-        if (startPM && startHour < 12) startHour += 12; if (startAM && startHour === 12) startHour = 0;
-        if (endPM && endHour < 12) endHour += 12; if (endAM && endHour === 12) endHour = 0;
-        if (endPM && !startAM && !startPM && startHour < 12) startHour += 12;
-        if ((startAM || startPM) && !endAM && !endPM && endHour <= 12 && endHour < startHour) endHour += 12;
-        return { startHour, endHour };
-      },
-      isOnPTO(emp, checkDate) {
-        const ptoVal = (emp.ptoText || '').trim(); if (!ptoVal) return false;
-        if (ptoVal === '✓' || ptoVal.toUpperCase() === 'TRUE' || ptoVal === 'X' || ptoVal === 'x') return true;
-        const ranges = ptoVal.split(',');
-        for (let rng of ranges) { rng = rng.trim();
-          if (rng.includes('-')) { const pts = rng.split('-'); const sd = new Date(pts[0].trim() + '/' + checkDate.getFullYear()); const ed = new Date(pts[1].trim() + '/' + checkDate.getFullYear()); if (checkDate >= sd && checkDate <= ed) return true; }
-          else { const single = new Date(rng + '/' + checkDate.getFullYear()); if (checkDate.toDateString() === single.toDateString()) return true; }
-        } return false;
-      },
-      getSched(emp, wk, dy) { return wk === 1 ? (emp.week1 && emp.week1[dy]) || '' : (emp.week2 && emp.week2[dy]) || ''; },
-      avail(emp, wk, dy, block, checkDate, isSunday) {
-        if (this.isOnPTO(emp, checkDate)) return false;
-        const sched = this.getSched(emp, wk, dy); if (!sched || sched.toUpperCase() === 'OFF') return false;
-        let bS, bE;
-        if (isSunday) { if (block === 1) { bS = 10; bE = 12; } else if (block === 2) { bS = 12; bE = 15; } else { bS = 15; bE = 18.25; } }
-        else { if (block === 1) { bS = 9; bE = 12; } else if (block === 2) { bS = 12; bE = 16.25; } else { bS = 16; bE = 20.25; } }
-        const { startHour, endHour } = this.parseSegment(sched); if (startHour < 0 || endHour < 0) return false;
-        return startHour <= bS && endHour >= bE;
-      },
-      availHours(emp, wk, dy, startH, endH, checkDate) {
-        if (this.isOnPTO(emp, checkDate)) return false;
-        const sched = this.getSched(emp, wk, dy); if (!sched || sched.toUpperCase() === 'OFF') return false;
-        const { startHour, endHour } = this.parseSegment(sched); if (startHour < 0 || endHour < 0) return false;
-        return startHour <= startH && endHour >= endH;
-      },
-      arrivesEarly(emp, wk, dy, checkDate, isSunday) {
-        if (this.isOnPTO(emp, checkDate)) return false;
-        const sched = this.getSched(emp, wk, dy); if (!sched || sched.toUpperCase() === 'OFF') return false;
-        const threshold = isSunday ? 9.75 : 8.75;
-        const { startHour } = this.parseSegment(sched); return startHour >= 0 && startHour <= threshold;
-      },
-      getEmpStartTime(emp, wk, dy) { const sched = this.getSched(emp, wk, dy); if (!sched || sched.toUpperCase() === 'OFF') return 99; const { startHour } = this.parseSegment(sched); return startHour >= 0 ? startHour : 99; },
-      getEmpEndTime(emp, wk, dy) { const sched = this.getSched(emp, wk, dy); if (!sched || sched.toUpperCase() === 'OFF') return 0; const { endHour } = this.parseSegment(sched); return endHour >= 0 ? endHour : 0; },
-      getEmpHours(emp, wk, dy) { const s = this.getEmpStartTime(emp, wk, dy), e = this.getEmpEndTime(emp, wk, dy); if (s === 99 || e === 0) return 0; return e - s; },
-      isVaultOnly: (e) => e.vault && !e.reception && !e.lod && !e.ipad && !e.registers,
-      isReceptionOnly: (e) => e.reception && !e.lod && !e.ipad && !e.registers,
-      isiPadOnly: (e) => e.ipad && !e.reception && !e.lod && !e.registers,
-      isRegistersOnly: (e) => e.registers && !e.reception && !e.lod && !e.ipad,
-      // Updated shift detection
-      isEarlyShift(emp, wk, dy) { // 8:30-4:15 or 8:45-4:15 - gets early lunch
-        const start = this.getEmpStartTime(emp, wk, dy), end = this.getEmpEndTime(emp, wk, dy);
-        return start >= 8 && start <= 9 && end >= 16 && end <= 16.5;
-      },
-      isLateShift(emp, wk, dy) { // 12-8:15 - gets late lunch
-        const start = this.getEmpStartTime(emp, wk, dy), end = this.getEmpEndTime(emp, wk, dy);
-        return start >= 12 && start <= 12.25 && end >= 20;
-      },
-      isEveningShift(emp, wk, dy) { // 4-8:15 - gets 15 min break
-        const start = this.getEmpStartTime(emp, wk, dy), end = this.getEmpEndTime(emp, wk, dy);
-        return start >= 16 && start <= 16.25 && end >= 20;
-      },
-      needsLunch(emp, wk, dy) { return this.isEarlyShift(emp, wk, dy) || this.isLateShift(emp, wk, dy) || this.getEmpHours(emp, wk, dy) >= 7; },
-      needs15MinBreak(emp, wk, dy) { return this.isEveningShift(emp, wk, dy); },
-      findRole(employees, wk, dy, block, role, used, checkDate, isSunday, excludeLOD) {
-        for (const emp of employees) {
-          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
-          if (excludeLOD && emp.lod) continue;
-          let roleMatch = false, singleRoleMatch = false;
-          if (role === 'REC') { roleMatch = emp.reception; singleRoleMatch = this.isReceptionOnly(emp); }
-          else if (role === 'IPAD') { roleMatch = emp.ipad; singleRoleMatch = this.isiPadOnly(emp); }
-          else if (role === 'REG') { roleMatch = emp.registers; singleRoleMatch = this.isRegistersOnly(emp); }
-          else if (role === 'LOD') { roleMatch = emp.lod; singleRoleMatch = true; }
-          if (!roleMatch || !singleRoleMatch) continue;
-          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
+// ============== CONSTANTS ==============
+const COLORS = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#F43F5E','#0EA5E9','#A855F7','#22C55E','#EAB308','#E11D48','#7C3AED','#0D9488','#DC2626','#2563EB','#16A34A'];
+const SHAPES = ['circle','square','diamond','triangle','star','hexagon'];
+const CLEANING_AREAS = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
+const CLEANING_TASKS = {
+  RECEPTION: ['Wipe down front counter','Clean glass doors','Sweep and mop floor','Empty trash','Organize displays','Sanitize touchscreens'],
+  DISPENSARY: ['Wipe down counters','Clean screens/keyboards','Organize bins','Restock supplies','Clean printers','Sanitize stations'],
+  VACUUM: ['Vacuum carpeted areas','Vacuum behind counters','Vacuum break room','Empty vacuum','Check for clogs'],
+  BATHROOMS: ['Sanitize toilets','Clean sinks/mirrors','Refill supplies','Empty trash','Mop floors'],
+  KITCHEN: ['Wash dishes','Wipe counters','Clean microwave','Clean fridge','Empty trash','Mop floor']
+};
+const TIME_SLOTS = [
+  {v:'',l:'OFF'},{v:'8:30 AM - 12:00 PM',l:'8:30 AM - 12:00 PM'},{v:'8:45 AM - 12:00 PM',l:'8:45 AM - 12:00 PM'},
+  {v:'8:30 AM - 4:15 PM',l:'8:30 AM - 4:15 PM'},{v:'8:45 AM - 4:15 PM',l:'8:45 AM - 4:15 PM'},
+  {v:'12:00 PM - 8:15 PM',l:'12:00 PM - 8:15 PM'},{v:'12:00 PM - 4:15 PM',l:'12:00 PM - 4:15 PM'},
+  {v:'4:00 PM - 8:15 PM',l:'4:00 PM - 8:15 PM'},{v:'8:30 AM - 8:15 PM',l:'8:30 AM - 8:15 PM'},{v:'8:45 AM - 8:15 PM',l:'8:45 AM - 8:15 PM'}
+];
+const SUNDAY_SLOTS = [{v:'',l:'OFF'},{v:'9:30 AM - 6:15 PM',l:'9:30 AM - 6:15 PM'},{v:'9:45 AM - 6:15 PM',l:'9:45 AM - 6:15 PM'}];
+
+// ============== UTILITIES ==============
+const formatEST = (iso) => new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit',hour12:true});
+const getESTHour = () => parseInt(new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false}));
+const formatTime = (h) => { const hr = Math.floor(h), m = Math.round((h-hr)*60), sfx = hr >= 12 ? ' PM' : ' AM', dh = hr > 12 ? hr-12 : (hr === 0 ? 12 : hr); return m === 0 ? dh+':00'+sfx : dh+':'+String(m).padStart(2,'0')+sfx; };
+const toDateKey = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+
+// ============== SHAPE COMPONENT (FIXED - cycles shapes every employee) ==============
+const EmpShape = ({ color, shape }) => {
+  const s = 16;
+  switch(shape) {
+    case 'square': return <span style={{width:s,height:s,backgroundColor:color,borderRadius:2,display:'inline-block',marginRight:6,border:'2px solid #000',verticalAlign:'middle'}} />;
+    case 'diamond': return <span style={{width:s*0.8,height:s*0.8,backgroundColor:color,transform:'rotate(45deg)',display:'inline-block',marginRight:8,marginLeft:2,border:'2px solid #000',verticalAlign:'middle'}} />;
+    case 'triangle': return <svg width={s} height={s} style={{display:'inline-block',marginRight:6,verticalAlign:'middle'}}><polygon points={`${s/2},2 ${s-2},${s-2} 2,${s-2}`} fill={color} stroke="#000" strokeWidth="2"/></svg>;
+    case 'star': return <svg width={s} height={s} style={{display:'inline-block',marginRight:6,verticalAlign:'middle'}}><polygon points="8,1 10,6 15,6 11,9 13,14 8,11 3,14 5,9 1,6 6,6" fill={color} stroke="#000" strokeWidth="1.5"/></svg>;
+    case 'hexagon': return <svg width={s} height={s} style={{display:'inline-block',marginRight:6,verticalAlign:'middle'}}><polygon points="8,1 14,4 14,12 8,15 2,12 2,4" fill={color} stroke="#000" strokeWidth="2"/></svg>;
+    default: return <span style={{width:s,height:s,backgroundColor:color,borderRadius:'50%',display:'inline-block',marginRight:6,border:'2px solid #000',verticalAlign:'middle'}} />;
+  }
+};
+
+// ============== SCHEDULING ENGINE ==============
+const Engine = {
+  parse(seg) {
+    if (!seg || !seg.includes('-')) return { s: -1, e: -1 };
+    const pts = seg.split('-'), startStr = pts[0].trim(), endStr = pts[pts.length-1].trim();
+    const sAM = /AM/i.test(startStr), sPM = /PM/i.test(startStr), eAM = /AM/i.test(endStr), ePM = /PM/i.test(endStr);
+    const sp = startStr.replace(/AM|PM/gi,'').trim().split(':'), ep = endStr.replace(/AM|PM/gi,'').trim().split(':');
+    let s = (parseFloat(sp[0])||0) + (parseFloat(sp[1])||0)/60;
+    let e = (parseFloat(ep[0])||0) + (parseFloat(ep[1])||0)/60;
+    if (sPM && s < 12) s += 12; if (sAM && s === 12) s = 0;
+    if (ePM && e < 12) e += 12; if (eAM && e === 12) e = 0;
+    if (ePM && !sAM && !sPM && s < 12) s += 12;
+    return { s, e };
+  },
+  onPTO(emp, date) {
+    const pto = (emp.ptoText||'').trim();
+    if (!pto) return false;
+    if (['✓','TRUE','X','x'].includes(pto)) return true;
+    for (let rng of pto.split(',')) {
+      rng = rng.trim();
+      if (rng.includes('-')) {
+        const [a,b] = rng.split('-');
+        const sd = new Date(a.trim()+'/'+date.getFullYear()), ed = new Date(b.trim()+'/'+date.getFullYear());
+        if (date >= sd && date <= ed) return true;
+      } else {
+        if (date.toDateString() === new Date(rng+'/'+date.getFullYear()).toDateString()) return true;
+      }
+    }
+    return false;
+  },
+  sched(emp, wk, dy) { return wk === 1 ? emp.week1?.[dy]||'' : emp.week2?.[dy]||''; },
+  avail(emp, wk, dy, blk, date, sun) {
+    if (this.onPTO(emp, date)) return false;
+    const sc = this.sched(emp, wk, dy);
+    if (!sc || sc.toUpperCase() === 'OFF') return false;
+    let bS, bE;
+    if (sun) { bS = blk===1?10:blk===2?12:15; bE = blk===1?12:blk===2?15:18.25; }
+    else { bS = blk===1?9:blk===2?12:16; bE = blk===1?12:blk===2?16.25:20.25; }
+    const { s, e } = this.parse(sc);
+    return s >= 0 && s <= bS && e >= bE;
+  },
+  availH(emp, wk, dy, sH, eH, date) {
+    if (this.onPTO(emp, date)) return false;
+    const sc = this.sched(emp, wk, dy);
+    if (!sc || sc.toUpperCase() === 'OFF') return false;
+    const { s, e } = this.parse(sc);
+    return s >= 0 && s <= sH && e >= eH;
+  },
+  startTime(emp, wk, dy) { const { s } = this.parse(this.sched(emp, wk, dy)); return s >= 0 ? s : 99; },
+  endTime(emp, wk, dy) { const { e } = this.parse(this.sched(emp, wk, dy)); return e >= 0 ? e : 0; },
+  hours(emp, wk, dy) { const s = this.startTime(emp, wk, dy), e = this.endTime(emp, wk, dy); return (s < 99 && e > 0) ? e - s : 0; },
+  vaultOnly: e => e.vault && !e.reception && !e.lod && !e.ipad && !e.registers,
+  recOnly: e => e.reception && !e.lod && !e.ipad && !e.registers,
+  ipadOnly: e => e.ipad && !e.reception && !e.lod && !e.registers,
+  regOnly: e => e.registers && !e.reception && !e.lod && !e.ipad,
+  isEarly(emp, wk, dy) { const s = this.startTime(emp, wk, dy), e = this.endTime(emp, wk, dy); return s >= 8 && s <= 9 && e >= 16 && e <= 16.5; },
+  isLate(emp, wk, dy) { const s = this.startTime(emp, wk, dy), e = this.endTime(emp, wk, dy); return s >= 12 && s <= 12.25 && e >= 20; },
+  isEvening(emp, wk, dy) { const s = this.startTime(emp, wk, dy), e = this.endTime(emp, wk, dy); return s >= 16 && s <= 16.25 && e >= 20; },
+  arrivesEarly(emp, wk, dy, date, sun) {
+    if (this.onPTO(emp, date)) return false;
+    const sc = this.sched(emp, wk, dy);
+    if (!sc || sc.toUpperCase() === 'OFF') return false;
+    const { s } = this.parse(sc);
+    return s >= 0 && s <= (sun ? 9.75 : 8.75);
+  },
+  findRole(emps, wk, dy, blk, role, used, date, sun, exLOD) {
+    const check = (e, single) => {
+      if (this.onPTO(e, date) || this.vaultOnly(e)) return false;
+      if (exLOD && e.lod) return false;
+      let match = false, sMatch = false;
+      if (role === 'REC') { match = e.reception; sMatch = this.recOnly(e); }
+      else if (role === 'IPAD') { match = e.ipad; sMatch = this.ipadOnly(e); }
+      else if (role === 'REG') { match = e.registers; sMatch = this.regOnly(e); }
+      else if (role === 'LOD') { match = e.lod; sMatch = true; }
+      return single ? (match && sMatch) : match;
+    };
+    for (const e of emps) if (check(e, true) && this.avail(e, wk, dy, blk, date, sun) && !used.includes(e.name)) return e.name;
+    for (const e of emps) if (check(e, false) && this.avail(e, wk, dy, blk, date, sun) && !used.includes(e.name)) return e.name;
+    return 'X';
+  },
+  findRoleRotate(emps, wk, dy, blk, role, used, avoid, date, sun) {
+    const check = (e, single) => {
+      if (this.onPTO(e, date) || this.vaultOnly(e) || avoid.includes(e.name)) return false;
+      let match = false, sMatch = false;
+      if (role === 'REC') { match = e.reception; sMatch = this.recOnly(e); }
+      else if (role === 'REG') { match = e.registers; sMatch = this.regOnly(e); }
+      return single ? (match && sMatch) : match;
+    };
+    for (const e of emps) if (check(e, true) && this.avail(e, wk, dy, blk, date, sun) && !used.includes(e.name)) return e.name;
+    for (const e of emps) if (check(e, false) && this.avail(e, wk, dy, blk, date, sun) && !used.includes(e.name)) return e.name;
+    return this.findRole(emps, wk, dy, blk, role, used, date, sun, false);
+  },
+  findIPad(emps, wk, dy, sH, eH, used, date) {
+    for (const e of emps) if (!this.onPTO(e, date) && !this.vaultOnly(e) && e.ipad && this.ipadOnly(e) && this.availH(e, wk, dy, sH, eH, date) && !used.includes(e.name)) return e.name;
+    for (const e of emps) if (!this.onPTO(e, date) && !this.vaultOnly(e) && e.ipad && this.availH(e, wk, dy, sH, eH, date) && !used.includes(e.name)) return e.name;
+    return 'X';
+  },
+  findIPadRotate(emps, wk, dy, sH, eH, used, avoid, date) {
+    for (const e of emps) if (!this.onPTO(e, date) && !this.vaultOnly(e) && !avoid.includes(e.name) && e.ipad && this.ipadOnly(e) && this.availH(e, wk, dy, sH, eH, date) && !used.includes(e.name)) return e.name;
+    for (const e of emps) if (!this.onPTO(e, date) && !this.vaultOnly(e) && !avoid.includes(e.name) && e.ipad && this.availH(e, wk, dy, sH, eH, date) && !used.includes(e.name)) return e.name;
+    return this.findIPad(emps, wk, dy, sH, eH, used, date);
+  },
+  findVault(emps, wk, dy, blk, used, date, sun) {
+    for (const e of emps) if (!this.onPTO(e, date) && e.vault && this.vaultOnly(e) && this.avail(e, wk, dy, blk, date, sun) && !used.includes(e.name)) return e.name;
+    for (const e of emps) if (!this.onPTO(e, date) && e.vault && this.avail(e, wk, dy, blk, date, sun) && !used.includes(e.name)) return e.name;
+    return 'X';
+  },
+  buildDay(emps, wk, dy, date, sun, rot) {
+    const days = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+    const title = days[date.getDay()], dateStr = (date.getMonth()+1)+'/'+date.getDate();
+    const t1S = sun?'10:00 AM':'9:00 AM', t1E = '12:00 PM', t2S = '12:00 PM', t2E = sun?'3:00 PM':'4:15 PM', t3S = sun?'3:00 PM':'4:00 PM', t3E = sun?'6:15 PM':'8:15 PM';
+    const cleanTime = sun ? '9:30 (9:45) AM - 10:00 AM' : '8:30 (8:45) AM - 9:00 AM';
+    
+    // Cleaning assignments
+    const early = emps.filter(e => this.arrivesEarly(e, wk, dy, date, sun) && !this.vaultOnly(e));
+    const cleaning = CLEANING_AREAS.map((task, i) => ({ task, name: early.length ? early[(rot+i)%early.length].name : 'X' }));
+    
+    // Position assignments
+    let u1=[], u2=[], u3=[];
+    const lod1 = this.findRole(emps, wk, dy, 1, 'LOD', u1, date, sun, false); u1.push(lod1);
+    const lod2 = this.findRole(emps, wk, dy, 2, 'LOD', u2, date, sun, false); u2.push(lod2);
+    const lod3 = this.findRole(emps, wk, dy, 3, 'LOD', u3, date, sun, false); u3.push(lod3);
+    
+    const r1 = this.findRole(emps, wk, dy, 1, 'REC', [...u1], date, sun, true); u1.push(r1);
+    const r2 = this.findRole(emps, wk, dy, 1, 'REC', [...u1], date, sun, true); u1.push(r2);
+    const r1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REC', [...u2], [r1,lod2], date, sun); u2.push(r1b2);
+    const r2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REC', [...u2], [r2,lod2], date, sun); u2.push(r2b2);
+    const r1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r1,r1b2,lod3], date, sun); u3.push(r1b3);
+    const r2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r2,r2b2,lod3], date, sun); u3.push(r2b3);
+    
+    // iPad
+    let ip1, ip2a, ip2b, ip3a, ip3b, ipD1, ipD2, ipD3, ipT1, ipT2, ipT3;
+    if (sun) {
+      ip1 = this.findIPad(emps, wk, dy, 10, 12, u1, date); u1.push(ip1);
+      ip2a = this.findIPadRotate(emps, wk, dy, 12, 15, u2, [ip1], date); u2.push(ip2a);
+      ip3a = this.findIPadRotate(emps, wk, dy, 15, 18.25, u3, [ip1,ip2a], date); u3.push(ip3a);
+      ipD1=ip1; ipD2=ip2a; ipD3=ip3a;
+      ipT1='10:00 AM - 12:00 PM'; ipT2='12:00 PM - 3:00 PM'; ipT3='3:00 PM - 6:15 PM';
+    } else {
+      ip1 = this.findIPad(emps, wk, dy, 9, 12, u1, date); u1.push(ip1);
+      ip2a = this.findIPadRotate(emps, wk, dy, 12, 14, u2, [ip1], date); u2.push(ip2a);
+      ip2b = this.findIPadRotate(emps, wk, dy, 14, 16, u2, [ip1], date); u2.push(ip2b);
+      ip3a = this.findIPadRotate(emps, wk, dy, 16, 18, u3, [ip1,ip2a,ip2b], date); u3.push(ip3a);
+      ip3b = this.findIPadRotate(emps, wk, dy, 18, 20, u3, [ip1,ip2a,ip2b], date); u3.push(ip3b);
+      ipD1=ip1; ipT1='9:00 AM - 12:00 PM';
+      ipD2 = ip2a===ip2b&&ip2a!=='X' ? ip2a : ip2a!=='X'&&ip2b!=='X' ? ip2a+' 12-2 / '+ip2b+' 2-4' : ip2a!=='X' ? ip2a+' 12-2' : ip2b!=='X' ? ip2b+' 2-4' : 'X';
+      ipT2='12:00 PM - 4:00 PM';
+      ipD3 = ip3a===ip3b&&ip3a!=='X' ? ip3a : ip3a!=='X'&&ip3b!=='X' ? ip3a+' 4-6 / '+ip3b+' 6-8' : ip3a!=='X' ? ip3a+' 4-6' : ip3b!=='X' ? ip3b+' 6-8' : 'X';
+      ipT3='4:00 PM - 8:00 PM';
+    }
+    
+    // Registers
+    let uR1=[r1,r2,ip1], uR2=[r1b2,r2b2,ip2a,ip2b].filter(Boolean), uR3=[r1b3,r2b3,ip3a,ip3b].filter(Boolean);
+    const rg3b1 = lod1!=='X' ? lod1 : this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg3b1);
+    const a1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a1);
+    const a2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a2);
+    const a3 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a3);
+    const rg1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg1);
+    const rg2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
+    
+    const rg3b2 = lod2!=='X' ? lod2 : this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg3b1], date, sun); uR2.push(rg3b2);
+    const a1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
+    const a2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a2], date, sun); uR2.push(a2b2);
+    const a3b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a3], date, sun); uR2.push(a3b2);
+    const rg1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun); uR2.push(rg1b2);
+    const rg2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun);
+    
+    const rg3b3 = lod3!=='X' ? lod3 : this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg3b1,rg3b2], date, sun); uR3.push(rg3b3);
+    const a1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
+    const a2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a2,a2b2], date, sun); uR3.push(a2b3);
+    const a3b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a3,a3b2], date, sun); uR3.push(a3b3);
+    const rg1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun); uR3.push(rg1b3);
+    const rg2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg2,rg2b2], date, sun);
+    
+    // Vault
+    let vU1=[...uR1,lod1]; const vAU1 = this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = this.findVault(emps, wk, dy, 1, vU1, date, sun);
+    let vU2=[...uR2,lod2]; const vAU2 = this.findVault(emps, wk, dy, 2, vU2, date, sun); vU2.push(vAU2); const vMed2 = this.findVault(emps, wk, dy, 2, vU2, date, sun);
+    let vU3=[...uR3,lod3]; const vAU3 = this.findVault(emps, wk, dy, 3, vU3, date, sun); vU3.push(vAU3); const vMed3 = this.findVault(emps, wk, dy, 3, vU3, date, sun);
+    
+    // Lunches - early shifts first, then late shifts, fill empty slots to 4:00 PM
+    const earlyL = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isEarly(e, wk, dy));
+    const lateL = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isLate(e, wk, dy));
+    const lunches = []; let lt = 12;
+    for (const e of earlyL) if (lt <= 14) { lunches.push({ name: e.name, time: formatTime(lt), cover: '' }); lt += 0.5; }
+    for (const e of lateL) if (lt <= 16) { lunches.push({ name: e.name, time: formatTime(lt), cover: '' }); lt += 0.5; }
+    // Fill empty slots through 4:00 PM (16:00)
+    while (lt <= 16) { lunches.push({ name: '', time: formatTime(lt), cover: '' }); lt += 0.5; }
+    
+    // 15-min breaks: 5:00-6:00 PM for evening shift employees
+    const brkEmps = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isEvening(e, wk, dy));
+    const breaks = []; const brkSlots = [17, 17.25, 17.5, 17.75];
+    brkEmps.forEach((e, i) => { if (i < 4) breaks.push({ name: e.name, time: formatTime(brkSlots[i]), cover: '' }); });
+    while (breaks.length < 4) breaks.push({ name: '', time: formatTime(brkSlots[breaks.length]), cover: '' });
+    
+    const cf = n => n && n !== 'X' ? 1 : 0;
+    const stats = { vB1: cf(vAU1)+cf(vMed1), vB2: cf(vAU2)+cf(vMed2), vB3: cf(vAU3)+cf(vMed3), rB1: cf(r1)+cf(r2), rB2: cf(r1b2)+cf(r2b2), rB3: cf(r1b3)+cf(r2b3), rgB1: cf(rg3b1)+cf(a1)+cf(a2)+cf(a3)+cf(rg1)+cf(rg2), rgB2: cf(rg3b2)+cf(a1b2)+cf(a2b2)+cf(a3b2)+cf(rg1b2)+cf(rg2b2), rgB3: cf(rg3b3)+cf(a1b3)+cf(a2b3)+cf(a3b3)+cf(rg1b3)+cf(rg2b3) };
+    
+    return {
+      dayTitle: title, dateStr, fullTitle: title+' '+dateStr, cleanTime, cleaning,
+      times: { t1S, t1E, t2S, t2E, t3S, t3E },
+      lod: [{name:lod1,time:t1S+' - '+t1E},{name:lod2,time:t2S+' - '+t2E},{name:lod3,time:t3S+' - '+t3E}],
+      reception: [{r1,r2,time:t1S+' - '+t1E},{r1:r1b2,r2:r2b2,time:t2S+' - '+t2E},{r1:r1b3,r2:r2b3,time:t3S+' - '+t3E}],
+      ipad: [{display:ipD1,time:ipT1},{display:ipD2,time:ipT2},{display:ipD3,time:ipT3}],
+      medCheckout: [{mc1:rg1,mc2:rg2,med3au1:rg3b1,time:t1S+' - '+t1E},{mc1:rg1b2,mc2:rg2b2,med3au1:rg3b2,time:t2S+' - '+t2E},{mc1:rg1b3,mc2:rg2b3,med3au1:rg3b3,time:t3S+' - '+t3E}],
+      auCheckout: [{au2:a1,au3:a2,au4:a3,time:t1S+' - '+t1E},{au2:a1b2,au3:a2b2,au4:a3b2,time:t2S+' - '+t2E},{au2:a1b3,au3:a2b3,au4:a3b3,time:t3S+' - '+t3E}],
+      vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:t1S+' - '+t1E},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:t2S+' - '+t2E},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:t3S+' - '+t3E}],
+      vaultOpen: sun ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
+      lunches, breaks, stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
+    };
+  },
+  genStandalone(emps, date, rot) { const d = new Date(date); return this.buildDay(emps, 1, d.getDay()===0?7:d.getDay(), d, d.getDay()===0, rot||0); },
+  genSingle(emps, date, w1, w2, rot) {
+    const target = new Date(date); let wk=0, dy=0;
+    for (let d=0; d<7; d++) { const c = new Date(w1); c.setDate(c.getDate()+d); if (c.toDateString()===target.toDateString()) { wk=1; dy=d+1; break; } }
+    if (!wk) for (let d=0; d<7; d++) { const c = new Date(w2); c.setDate(c.getDate()+d); if (c.toDateString()===target.toDateString()) { wk=2; dy=d+1; break; } }
+    return wk ? this.buildDay(emps, wk, dy, target, dy===7, rot||0) : null;
+  },
+  genAll(emps, w1, w2) {
+    const out = []; let rot = 0;
+    for (let w=1; w<=2; w++) {
+      const start = new Date(w===1?w1:w2);
+      for (let d=1; d<=7; d++) { const dd = new Date(start); dd.setDate(dd.getDate()+(d-1)); out.push(this.buildDay(emps, w, d, dd, d===7, rot++)); }
+    }
+    return out;
+  }
+};
+
+// ============== UI COMPONENTS ==============
+const CleaningModal = ({ task, onClose, onSubmit, log }) => {
+  const [checked, setChecked] = useState(log?.tasks || {});
+  const [initials, setInitials] = useState(log?.initials || '');
+  const tasks = CLEANING_TASKS[task] || [];
+  const view = !!log, allDone = tasks.every((_, i) => checked[i]);
+  const submit = () => {
+    if (!initials.trim()) return alert('Enter initials');
+    if (!allDone) return alert('Complete all tasks');
+    onSubmit({ task, initials: initials.trim().toUpperCase(), tasks: checked, completedAt: new Date().toISOString() });
+    onClose();
+  };
+  return (
+    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 w-full max-w-lg card-shadow fade-in max-h-[80vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">{task} {view && <span className="text-sm font-normal text-gray-500">- by {log.initials}</span>}</h2>
+        {!view && <button onClick={() => { const c={}; tasks.forEach((_,i)=>c[i]=true); setChecked(c); }} className="mb-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">✓ Select All</button>}
+        <div className="space-y-2 mb-4">{tasks.map((t,i) => <label key={i} className="flex items-start gap-3 p-2 rounded hover:bg-gray-50"><input type="checkbox" checked={checked[i]||false} onChange={e=>!view&&setChecked({...checked,[i]:e.target.checked})} disabled={view} className="mt-1 w-5 h-5"/><span className="text-sm">{t}</span></label>)}</div>
+        {!view && <div className="mb-4"><label className="block text-sm font-medium mb-1">Initials</label><input value={initials} onChange={e=>setInitials(e.target.value.slice(0,4))} className="w-full px-4 py-2 border rounded-lg uppercase" maxLength={4}/></div>}
+        <div className="flex gap-2">{!view && <button onClick={submit} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Submit</button>}<button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">{view?'Close':'Cancel'}</button></div>
+      </div>
+    </div>
+  );
+};
+
+const Dropdown = ({ value, options, onSelect, onClose }) => (
+  <div className="absolute top-full left-0 z-50 bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[140px]">
+    {options.map((n,i) => <div key={i} onClick={()=>{onSelect(n);onClose();}} className={'px-3 py-2 cursor-pointer hover:bg-gray-100 '+(value===n?'bg-emerald-50':'')}>{n}</div>)}
+  </div>
+);
+
+const NameCell = ({ name, shapes, editable, emps, onUpdate }) => {
+  const [open, setOpen] = useState(false);
+  const sh = name && name!=='X' && name!=='RPH' && shapes?.[name.toUpperCase()];
+  const base = 'schedule-cell font-bold text-sm flex items-center justify-center ' + (!name||name==='X'?'bg-gray-400':'bg-white');
+  if (!editable) return <div className={base}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>;
+  return (
+    <div className="relative">
+      <div onClick={()=>setOpen(!open)} className={base+' cursor-pointer hover:bg-gray-50'}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>
+      {open && <Dropdown value={name} options={['X',...emps.map(e=>e.name).sort()]} onSelect={onUpdate} onClose={()=>setOpen(false)}/>}
+    </div>
+  );
+};
+
+const IPadCell = ({ value, shapes, editable, onUpdate }) => {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value||'');
+  const save = () => { onUpdate(text); setEditing(false); };
+  const firstName = value && value!=='X' ? value.split(' ')[0].toUpperCase() : null;
+  const sh = firstName && shapes?.[firstName];
+  if (editing) return <div className="schedule-cell bg-white p-0"><input value={text} onChange={e=>setText(e.target.value)} onBlur={save} onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setText(value);setEditing(false);}}} autoFocus className="w-full h-full px-2 py-1 text-xs font-bold text-center border-0 outline-none"/></div>;
+  const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white');
+  if (!editable) return <div className={base}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(value||'X').toUpperCase()}</div>;
+  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}<span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px]">✏️</span></div>;
+};
+
+const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
+const Header = ({ children, color }) => {
+  const cols = { black:'bg-black text-white', green:'bg-[#67d50d] text-black', blue:'bg-[#bdd7ee] text-black', yellow:'bg-[#ffe699] text-black' };
+  return <div className={'schedule-cell font-bold text-base '+(cols[color]||cols.black)}>{children}</div>;
+};
+
+// ============== SCHEDULE DISPLAY ==============
+const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes }) => {
+  if (!sched) return null;
+  const sh = showShapes ? shapes : null;
+  const upd = (path, val) => {
+    if (!onUpdate) return;
+    const s = JSON.parse(JSON.stringify(sched)), pts = path.split('.');
+    let o = s; for (let i=0; i<pts.length-1; i++) o = o[pts[i]];
+    o[pts[pts.length-1]] = val;
+    s.manuallyEdited = true; s.editedAt = new Date().toISOString();
+    onUpdate(s);
+  };
+  
+  const CleanRow = ({ c, i }) => {
+    const [open, setOpen] = useState(false);
+    const csh = sh && c.name && c.name!=='X' && sh[c.name.toUpperCase()];
+    return (
+      <div className="schedule-cell text-red-600 font-bold text-xs py-1 flex items-center justify-between relative">
+        <div className="flex items-center flex-1 cursor-pointer" onClick={()=>editable&&setOpen(!open)}>
+          {csh && <EmpShape color={csh.color} shape={csh.shape}/>}
+          <span>{c.name.toUpperCase()} - {c.task}</span>
+        </div>
+        <button onClick={()=>onSign?.(c.task)} className="ml-2 px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700">Sign</button>
+        {open && <Dropdown value={c.name} options={['X',...emps.map(e=>e.name).sort()]} onSelect={v=>upd('cleaning.'+i+'.name',v)} onClose={()=>setOpen(false)}/>}
+      </div>
+    );
+  };
+  
+  return (
+    <div className="bg-white p-4 rounded-lg card-shadow fade-in">
+      <div className="text-center mb-3">
+        <h2 className="font-black text-3xl">{sched.fullTitle}</h2>
+        <p className="text-gray-500 text-sm bg-gray-100 py-1 rounded">{sched.cleanTime}</p>
+      </div>
+      <div className="grid grid-cols-5 gap-1 mb-3">{sched.cleaning.map((c,i) => <CleanRow key={i} c={c} i={i}/>)}</div>
+      <div className="flex gap-4">
+        <div className="flex-1">
+          {/* LOD */}
+          <div className="mb-3">
+            <Header color="black">LEADER OF THE DAY</Header>
+            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)}/><TimeCell time={l.time}/></React.Fragment>)}</div>
+          </div>
+          {/* Reception */}
+          <div className="mb-3">
+            <div className="schedule-cell font-bold text-lg bg-[#67d50d]">FRONT END RECEPTION</div>
+            <div className="grid grid-cols-6">
+              <div className="col-span-2"><Header color="green">RECEPTION 1</Header></div>
+              <div className="col-span-2"><Header color="green">RECEPTION 2</Header></div>
+              <div className="col-span-2"><Header color="green">iPAD</Header></div>
+              {sched.reception.map((r,i) => <React.Fragment key={i}>
+                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)}/><TimeCell time={r.time}/>
+                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)}/><TimeCell time={r.time}/>
+                <IPadCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)}/><TimeCell time={sched.ipad[i].time}/>
+              </React.Fragment>)}
+            </div>
+          </div>
+          {/* Dispensary */}
+          <div className="mb-3">
+            <div className="schedule-cell font-bold text-lg bg-[#bdd7ee]">BACK END DISPENSARY</div>
+            <div className="grid grid-cols-6">
+              <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 1</Header></div>
+              <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 2</Header></div>
+              <div className="col-span-2"><Header color="blue">MED 3 / AU 1</Header></div>
+              {sched.medCheckout.map((m,i) => <React.Fragment key={i}>
+                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)}/><TimeCell time={m.time}/>
+                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)}/><TimeCell time={m.time}/>
+                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)}/><TimeCell time={m.time}/>
+              </React.Fragment>)}
+            </div>
+            <div className="grid grid-cols-6 mt-2">
+              <div className="col-span-2"><Header color="blue">AU CHECKOUT 2</Header></div>
+              <div className="col-span-2"><Header color="blue">AU CHECKOUT 3</Header></div>
+              <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
+              {sched.auCheckout.map((a,i) => <React.Fragment key={i}>
+                <NameCell name={a.au2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)}/><TimeCell time={a.time}/>
+                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)}/><TimeCell time={a.time}/>
+                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)}/><TimeCell time={a.time}/>
+              </React.Fragment>)}
+            </div>
+          </div>
+          {/* Vault */}
+          <div className="grid grid-cols-4">
+            <div className="col-span-2"><Header color="yellow">AU LEFT VAULT</Header></div>
+            <div className="col-span-2"><Header color="yellow">MEDICAL RIGHT VAULT</Header></div>
+            <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
+            <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
+            {sched.vault.map((v,i) => <React.Fragment key={i}>
+              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)}/><TimeCell time={v.time}/>
+              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)}/><TimeCell time={v.time}/>
+            </React.Fragment>)}
+          </div>
+        </div>
+        {/* Right side */}
+        <div className="w-80">
+          <div className="mb-3">
+            <Header color="black">LUNCH BREAK</Header>
+            <div className="grid grid-cols-3">
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
+              {sched.lunches.map((l,i) => <React.Fragment key={i}>
+                <NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.name',v)}/>
+                <div className="schedule-cell text-xs py-1">{l.time}</div>
+                <NameCell name={l.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.cover',v)}/>
+              </React.Fragment>)}
+            </div>
+          </div>
+          <div className="mb-3">
+            <Header color="black">15-MIN BREAK</Header>
+            <div className="grid grid-cols-3">
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
+              <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
+              {sched.breaks.map((b,i) => <React.Fragment key={i}>
+                <div className="schedule-cell font-bold text-xs py-1">{b.name?.toUpperCase()||''}</div>
+                <div className="schedule-cell text-xs py-1">{b.time}</div>
+                <NameCell name={b.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('breaks.'+i+'.cover',v)}/>
+              </React.Fragment>)}
+            </div>
+          </div>
+          <div>
+            <Header color="black">DEPOSITS</Header>
+            <div className="grid grid-cols-2">
+              <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">TIME</div>
+              <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">PERSON</div>
+              <div className="schedule-cell text-xs py-1">9:00 AM - 12:00 PM</div>
+              <div className="schedule-cell text-xs py-1">LOD</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {editable && sched.manuallyEdited && <div className="mt-2 text-xs text-amber-600">⚠️ Edited {formatEST(sched.editedAt)}</div>}
+    </div>
+  );
+};
+
+// ============== STAFFING SUMMARY (No iPad) ==============
+const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
+  const [sel, setSel] = useState(null);
+  const [month, setMonth] = useState(new Date().getMonth());
+  const [year, setYear] = useState(new Date().getFullYear());
+  const ideal = sun => sun ? {v:[1,1,1],r:[2,2,2],rg:[3,3,3]} : {v:[2,2,2],r:[2,2,2],rg:[2,3,3]};
+  const blkT = (sun, b) => sun ? (b===1?'10A-12P':b===2?'12P-3P':'3P-6:15P') : (b===1?'9A-12P':b===2?'12P-4:15P':'4P-8:15P');
+  const issues = s => {
+    const id = ideal(s.isSunday), out = [];
+    if (s.stats.vB1 < id.v[0]) out.push('Vault B1: need '+id.v[0]+', have '+s.stats.vB1);
+    if (s.stats.vB2 < id.v[1]) out.push('Vault B2: need '+id.v[1]+', have '+s.stats.vB2);
+    if (s.stats.vB3 < id.v[2]) out.push('Vault B3: need '+id.v[2]+', have '+s.stats.vB3);
+    if (s.stats.rB1 < id.r[0]) out.push('Reception B1: need '+id.r[0]+', have '+s.stats.rB1);
+    if (s.stats.rB2 < id.r[1]) out.push('Reception B2: need '+id.r[1]+', have '+s.stats.rB2);
+    if (s.stats.rB3 < id.r[2]) out.push('Reception B3: need '+id.r[2]+', have '+s.stats.rB3);
+    if (s.stats.rgB1 < id.rg[0]) out.push('Registers B1: need '+id.rg[0]+', have '+s.stats.rgB1);
+    if (s.stats.rgB2 < id.rg[1]) out.push('Registers B2: need '+id.rg[1]+', have '+s.stats.rgB2);
+    if (s.stats.rgB3 < id.rg[2]) out.push('Registers B3: need '+id.rg[2]+', have '+s.stats.rgB3);
+    return out;
+  };
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
+  const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
+  const getSch = d => d ? allScheds[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
+  const selSch = sel !== null && scheds[sel];
+  const selIss = selSch ? issues(selSch) : [];
+  
+  return (
+    <div className="fade-in">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl mb-6">
+        <h2 className="text-2xl font-bold mb-4">Staffing Requirements</h2>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Monday - Saturday</h3><div className="text-sm space-y-1"><p>• Vault: 2 people (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 2 (9-12), 3 (12-4), 3 (4-8)</p></div></div>
+          <div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Sunday</h3><div className="text-sm space-y-1"><p>• Vault: 1 person (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 3 people (all shifts)</p></div></div>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg card-shadow p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={()=>{if(month===0){setMonth(11);setYear(year-1);}else setMonth(month-1);}} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
+          <h3 className="font-bold text-xl">{months[month]} {year}</h3>
+          <button onClick={()=>{if(month===11){setMonth(0);setYear(year+1);}else setMonth(month+1);}} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
+        </div>
+        <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d}>{d}</div>)}</div>
+        <div className="grid grid-cols-7 gap-2">{days.map((d,i) => {
+          const s = getSch(d), iss = s ? issues(s) : [], bad = iss.length > 0;
+          const today = new Date(), isT = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+          return <div key={i} onClick={()=>{if(s){const idx=scheds.findIndex(x=>toDateKey(new Date(x.date))===toDateKey(new Date(s.date)));if(idx>=0){setSel(idx);onSelect?.(idx);}}}} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer '+(!d?'bg-gray-50 border-transparent':'hover:bg-gray-50 ')+(s?(bad?'bg-red-50 border-red-300':'bg-emerald-50 border-emerald-300'):'border-gray-200 ')+(isT?'ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{s && <div className={'text-xs mt-1 '+(bad?'text-red-600':'text-emerald-600')}>{bad?'⚠️ '+iss.length+' issue'+(iss.length>1?'s':''):'✓ OK'}</div>}</>}</div>;
+        })}</div>
+      </div>
+      {selSch && <div className="bg-white rounded-xl p-6 card-shadow">
+        <h3 className="text-xl font-bold mb-4">{selSch.fullTitle}</h3>
+        {selIss.length === 0 ? <div className="bg-emerald-100 text-emerald-800 p-4 rounded-lg">✓ All positions staffed!</div> : <div className="bg-red-100 text-red-800 p-4 rounded-lg"><p className="font-bold mb-2">⚠️ Shortages:</p><ul className="list-disc list-inside text-sm">{selIss.map((x,i)=><li key={i}>{x}</li>)}</ul></div>}
+        <div className="mt-4 grid grid-cols-3 gap-4">{['Vault','Reception','Registers'].map(a => <div key={a} className="bg-gray-50 p-3 rounded-lg"><div className="font-bold text-sm mb-2">{a}</div><div className="text-xs space-y-1">{[1,2,3].map(b=><div key={b} className="flex justify-between"><span>Block {b} ({blkT(selSch.isSunday,b)}):</span><span className="font-bold">{a==='Vault'?selSch.stats['vB'+b]:a==='Reception'?selSch.stats['rB'+b]:selSch.stats['rgB'+b]}</span></div>)}</div></div>)}</div>
+      </div>}
+    </div>
+  );
+};
+
+// ============== CLEANING LOGS ==============
+const CleaningLogs = ({ logs, onView }) => {
+  const today = new Date();
+  const [month, setMonth] = useState(today.getMonth());
+  const [year, setYear] = useState(today.getFullYear());
+  const [selDay, setSelDay] = useState(null);
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
+  const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
+  const getLogs = d => d ? logs[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || [] : [];
+  const selLogs = selDay ? getLogs(selDay) : [];
+  const missing = selDay ? CLEANING_AREAS.filter(a => !selLogs.some(l=>l.task===a)) : [];
+  
+  return (
+    <div className="fade-in">
+      <div className="bg-white rounded-lg card-shadow p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={()=>{if(month===0){setMonth(11);setYear(year-1);}else setMonth(month-1);}} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
+          <h3 className="font-bold text-xl">{months[month]} {year}</h3>
+          <button onClick={()=>{if(month===11){setMonth(0);setYear(year+1);}else setMonth(month+1);}} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
+        </div>
+        <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d}>{d}</div>)}</div>
+        <div className="grid grid-cols-7 gap-2">{days.map((d,i) => {
+          const dl = getLogs(d), cnt = new Set(dl.map(l=>l.task)).size, all = cnt===5, part = cnt>0&&cnt<5;
+          const isT = d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
+          return <div key={i} onClick={()=>d&&setSelDay(d)} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer '+(!d?'bg-gray-50 border-transparent':'hover:bg-gray-50 ')+(all?'bg-emerald-50 border-emerald-300':part?'bg-amber-50 border-amber-300':'border-gray-200 ')+(selDay===d?'ring-2 ring-blue-500':'')+(isT?' border-blue-500 border-2':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{cnt>0 && <div className={'text-xs mt-1 '+(all?'text-emerald-600':'text-amber-600')}>{cnt}/5</div>}{cnt===0&&isT && <div className="text-xs mt-1 text-red-500">⚠️</div>}</>}</div>;
+        })}</div>
+      </div>
+      {selDay && <div className="bg-white rounded-lg card-shadow p-6">
+        <h3 className="font-bold text-lg mb-4">Cleaning Log - {months[month]} {selDay}, {year}</h3>
+        {selLogs.length === 0 ? <p className="text-gray-500">No tasks logged.</p> : <div className="space-y-3">{selLogs.map((l,i)=><div key={i} onClick={()=>onView?.(l)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"><div><span className="font-bold">{l.task}</span><span className="text-gray-500 ml-2">by {l.initials}</span></div><span className="text-sm text-gray-500">{formatEST(l.completedAt)}</span></div>)}</div>}
+        {missing.length > 0 && <div className="mt-4 p-3 bg-red-50 rounded-lg"><p className="font-bold text-red-700 text-sm mb-1">⚠️ Missing:</p><p className="text-red-600 text-sm">{missing.join(', ')}</p></div>}
+      </div>}
+    </div>
+  );
+};
+
+// ============== COVERAGE NEEDED ALERT (Organized) ==============
+const CoverageAlert = ({ sched, emps }) => {
+  if (!sched) return null;
+  
+  // Find X positions by category
+  const lodX = sched.lod.map((l,i) => l.name==='X' ? 'Block '+(i+1) : null).filter(Boolean);
+  const recX = [];
+  sched.reception.forEach((r,i) => { if(r.r1==='X') recX.push('Rec1 B'+(i+1)); if(r.r2==='X') recX.push('Rec2 B'+(i+1)); });
+  const regX = [];
+  sched.medCheckout.forEach((m,i) => { if(m.mc1==='X') regX.push('MC1 B'+(i+1)); if(m.mc2==='X') regX.push('MC2 B'+(i+1)); if(m.med3au1==='X') regX.push('M3/A1 B'+(i+1)); });
+  sched.auCheckout.forEach((a,i) => { if(a.au2==='X') regX.push('AU2 B'+(i+1)); if(a.au3==='X') regX.push('AU3 B'+(i+1)); if(a.au4==='X') regX.push('AU4 B'+(i+1)); });
+  
+  // Calculate shift needs
+  const shiftNeeds = [];
+  if (lodX.length > 0 || recX.some(x=>x.includes('B1')) || regX.some(x=>x.includes('B1'))) shiftNeeds.push('8:45-12');
+  if (lodX.some(x=>x.includes('2')) || recX.some(x=>x.includes('B2')) || regX.some(x=>x.includes('B2'))) shiftNeeds.push('12-4:15');
+  if (lodX.some(x=>x.includes('3')) || recX.some(x=>x.includes('B3')) || regX.some(x=>x.includes('B3'))) shiftNeeds.push('4-8:15');
+  
+  const hasIssues = lodX.length > 0 || recX.length > 0 || regX.length > 0;
+  if (!hasIssues) return null;
+  
+  return (
+    <div className="bg-red-100 border-2 border-red-500 rounded-lg p-4 mt-4">
+      <p className="font-bold text-red-800 text-sm mb-3">⚠️ COVERAGE NEEDED</p>
+      {shiftNeeds.length > 0 && (
+        <div className="bg-red-200 rounded p-2 mb-3">
+          <p className="font-bold text-red-900 text-sm">Down: {shiftNeeds.join('. ')}</p>
+        </div>
+      )}
+      <div className="space-y-2 text-xs">
+        {lodX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">LOD:</span><span className="text-red-700">{lodX.join(', ')}</span></div>}
+        {recX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">Reception:</span><span className="text-red-700">{recX.join(', ')}</span></div>}
+        {regX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">Registers:</span><span className="text-red-700">{regX.join(', ')}</span></div>}
+      </div>
+    </div>
+  );
+};
+
+// ============== SMALLER COMPONENTS ==============
+const LoginModal = ({ onLogin, onClose }) => {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState('');
+  const login = () => { if (user==='supervisor'&&pass==='admin123') onLogin(); else setErr('Invalid credentials'); };
+  return (
+    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-8 w-full max-w-md card-shadow fade-in">
+        <h2 className="text-2xl font-bold mb-6 text-center">Supervisor Login</h2>
+        {err && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{err}</div>}
+        <div className="mb-4"><label className="block text-sm font-medium mb-1">Username</label><input value={user} onChange={e=>setUser(e.target.value)} className="w-full px-4 py-3 border rounded-lg"/></div>
+        <div className="mb-6"><label className="block text-sm font-medium mb-1">Password</label><input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==='Enter'&&login()} className="w-full px-4 py-3 border rounded-lg"/></div>
+        <div className="flex gap-3"><button onClick={login} className="flex-1 btn-primary px-4 py-3 text-white rounded-lg font-bold">Login</button><button onClick={onClose} className="px-4 py-3 bg-gray-200 rounded-lg">Cancel</button></div>
+      </div>
+    </div>
+  );
+};
+
+const EmpForm = ({ emp, onSave, onCancel }) => {
+  const [f, setF] = useState(emp || { name:'', vault:false, reception:false, lod:false, ipad:false, registers:false, ptoText:'', notes:'', week1:{1:'',2:'',3:'',4:'',5:'',6:'',7:''}, week2:{1:'',2:'',3:'',4:'',5:'',6:'',7:''} });
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  return (
+    <div className="bg-white p-4 rounded-lg card-shadow">
+      <h3 className="text-lg font-bold mb-3">{emp?'Edit':'Add'} Employee</h3>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div><label className="block text-xs font-medium mb-1">Name</label><input value={f.name} onChange={e=>setF({...f,name:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm"/></div>
+        <div><label className="block text-xs font-medium mb-1">PTO</label><input value={f.ptoText} onChange={e=>setF({...f,ptoText:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 3/1-3/5"/></div>
+      </div>
+      <div className="flex flex-wrap gap-4 mb-3">{['vault','reception','lod','ipad','registers'].map(r=><label key={r} className="flex items-center gap-2"><input type="checkbox" checked={f[r]} onChange={e=>setF({...f,[r]:e.target.checked})} className="w-4 h-4"/><span className="text-sm capitalize">{r}</span></label>)}</div>
+      <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 1</label><div className="grid grid-cols-7 gap-1">{days.map((d,i)=><div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{d}</div><select value={f.week1[i+1]||''} onChange={e=>setF({...f,week1:{...f.week1,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i===6?SUNDAY_SLOTS:TIME_SLOTS).map((s,j)=><option key={j} value={s.v}>{s.l}</option>)}</select></div>)}</div></div>
+      <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 2</label><div className="grid grid-cols-7 gap-1">{days.map((d,i)=><div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{d}</div><select value={f.week2[i+1]||''} onChange={e=>setF({...f,week2:{...f.week2,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i===6?SUNDAY_SLOTS:TIME_SLOTS).map((s,j)=><option key={j} value={s.v}>{s.l}</option>)}</select></div>)}</div></div>
+      <div className="flex gap-2"><button onClick={()=>onSave(f)} className="btn-primary px-4 py-2 text-white rounded-lg text-sm">Save</button><button onClick={onCancel} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Cancel</button></div>
+    </div>
+  );
+};
+
+const Calendar = ({ generated, onClick }) => {
+  const today = new Date();
+  const [month, setMonth] = useState(today.getMonth());
+  const [year, setYear] = useState(today.getFullYear());
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
+  const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
+  const gen = d => d ? generated[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
+  
+  return (
+    <div className="bg-white rounded-lg card-shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={()=>{if(month===0){setMonth(11);setYear(year-1);}else setMonth(month-1);}} className="p-1 hover:bg-gray-100 rounded text-lg">←</button>
+        <h3 className="font-bold">{months[month]} {year}</h3>
+        <button onClick={()=>{if(month===11){setMonth(0);setYear(year+1);}else setMonth(month+1);}} className="p-1 hover:bg-gray-100 rounded text-lg">→</button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">{['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d}>{d}</div>)}</div>
+      <div className="grid grid-cols-7 gap-1">{days.map((d,i) => {
+        const g = gen(d), isT = d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
+        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(g?' bg-emerald-100 border-emerald-400':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{g && <div className="text-[7px] text-emerald-700 mt-0.5">✓</div>}</>}</div>;
+      })}</div>
+    </div>
+  );
+};
+
+// ============== MAIN APP ==============
+const App = () => {
+  const [tab, setTab] = useState('schedule');
+  const [emps, setEmps] = useState([]);
+  const [scheds, setScheds] = useState([]);
+  const [allScheds, setAllScheds] = useState({});
+  const [generated, setGenerated] = useState({});
+  const [cleanLogs, setCleanLogs] = useState({});
+  const [w1, setW1] = useState('');
+  const [w2, setW2] = useState('');
+  const [singleDate, setSingleDate] = useState('');
+  const [selDay, setSelDay] = useState(0);
+  const [editEmp, setEditEmp] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [logged, setLogged] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [cleanModal, setCleanModal] = useState(null);
+  const [viewLog, setViewLog] = useState(null);
+  const [dirty, setDirty] = useState(false);
+  
+  // FIXED: Shape assignment - cycles shapes every 6 employees for variety
+  const shapes = useMemo(() => {
+    const s = {}, sorted = [...emps].sort((a,b) => a.name.localeCompare(b.name));
+    sorted.forEach((e, i) => {
+      s[e.name.toUpperCase()] = {
+        color: COLORS[Math.floor(i / SHAPES.length) % COLORS.length],
+        shape: SHAPES[i % SHAPES.length]
+      };
+    });
+    return s;
+  }, [emps]);
+  
+  const sorted = useMemo(() => [...emps].sort((a,b) => a.name.localeCompare(b.name)), [emps]);
+  
+  // Load/save
+  useEffect(() => {
+    const d = localStorage.getItem('pharmacy-scheduler-v3');
+    if (d) { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{}); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); }
+  }, []);
+  
+  useEffect(() => {
+    localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs }));
+  }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs]);
+  
+  // Auto-flip
+  useEffect(() => {
+    const check = () => {
+      if (getESTHour() >= 20) {
+        const tmr = new Date(); tmr.setDate(tmr.getDate()+1);
+        const key = toDateKey(tmr);
+        if (allScheds[key]) {
+          const idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
+          if (idx >= 0 && idx !== selDay) setSelDay(idx);
         }
-        for (const emp of employees) {
-          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue;
-          if (excludeLOD && emp.lod) continue;
-          let roleMatch = false;
-          if (role === 'REC') roleMatch = emp.reception;
-          else if (role === 'IPAD') roleMatch = emp.ipad;
-          else if (role === 'REG') roleMatch = emp.registers;
-          else if (role === 'LOD') roleMatch = emp.lod;
-          if (!roleMatch) continue;
-          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
-        }
-        return 'X';
-      },
-      findRoleRotate(employees, wk, dy, block, role, used, avoid, checkDate, isSunday) {
-        for (const emp of employees) {
-          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name)) continue;
-          let roleMatch = false, singleRoleMatch = false;
-          if (role === 'REC') { roleMatch = emp.reception; singleRoleMatch = this.isReceptionOnly(emp); }
-          else if (role === 'REG') { roleMatch = emp.registers; singleRoleMatch = this.isRegistersOnly(emp); }
-          if (!roleMatch || !singleRoleMatch) continue;
-          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
-        }
-        for (const emp of employees) {
-          if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name)) continue;
-          const roleMatch = role === 'REC' ? emp.reception : emp.registers;
-          if (!roleMatch) continue;
-          if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name;
-        }
-        return this.findRole(employees, wk, dy, block, role, used, checkDate, isSunday, false);
-      },
-      findIPadSlot(employees, wk, dy, startH, endH, used, checkDate) {
-        for (const emp of employees) { if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp)) continue; if (!emp.ipad || !this.isiPadOnly(emp)) continue; if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name; }
-        for (const emp of employees) { if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || !emp.ipad) continue; if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name; }
-        return 'X';
-      },
-      findIPadSlotRotate(employees, wk, dy, startH, endH, used, avoid, checkDate) {
-        for (const emp of employees) { if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name)) continue; if (!emp.ipad || !this.isiPadOnly(emp)) continue; if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name; }
-        for (const emp of employees) { if (this.isOnPTO(emp, checkDate) || this.isVaultOnly(emp) || avoid.includes(emp.name) || !emp.ipad) continue; if (this.availHours(emp, wk, dy, startH, endH, checkDate) && !used.includes(emp.name)) return emp.name; }
-        return this.findIPadSlot(employees, wk, dy, startH, endH, used, checkDate);
-      },
-      findVaultPerson(employees, wk, dy, block, used, checkDate, isSunday) {
-        for (const emp of employees) { if (this.isOnPTO(emp, checkDate)) continue; if (emp.vault && this.isVaultOnly(emp) && this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name; }
-        for (const emp of employees) { if (this.isOnPTO(emp, checkDate) || !emp.vault) continue; if (this.avail(emp, wk, dy, block, checkDate, isSunday) && !used.includes(emp.name)) return emp.name; }
-        return 'X';
-      },
-      formatTime(hour) { const h = Math.floor(hour), m = Math.round((hour - h) * 60), suffix = h >= 12 ? ' PM' : ' AM', displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h); return m === 0 ? displayH + ':00' + suffix : displayH + ':' + m.toString().padStart(2, '0') + suffix; },
-      buildDay(employees, wk, dy, dayDate, isSunday, cleanRotation) {
-        const dayNames = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
-        const dayTitle = dayNames[dayDate.getDay()];
-        const dateStr = (dayDate.getMonth()+1) + '/' + dayDate.getDate();
-        let t1S, t1E, t2S, t2E, t3S, t3E, cleanTime;
-        if (isSunday) { t1S = '10:00 AM'; t1E = '12:00 PM'; t2S = '12:00 PM'; t2E = '3:00 PM'; t3S = '3:00 PM'; t3E = '6:15 PM'; cleanTime = '9:30 (9:45) AM - 10:00 AM'; }
-        else { t1S = '9:00 AM'; t1E = '12:00 PM'; t2S = '12:00 PM'; t2E = '4:15 PM'; t3S = '4:00 PM'; t3E = '8:15 PM'; cleanTime = '8:30 (8:45) AM - 9:00 AM'; }
-        const earlyList = employees.filter(emp => this.arrivesEarly(emp, wk, dy, dayDate, isSunday) && !this.isVaultOnly(emp));
-        const tasks = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
-        const cleaning = tasks.map((task, i) => { if (earlyList.length > 0) { const idx = (cleanRotation + i) % earlyList.length; return { task, name: earlyList[idx].name }; } return { task, name: 'X' }; });
-        let u1 = [], u2 = [], u3 = [];
-        const lod1 = this.findRole(employees, wk, dy, 1, 'LOD', u1, dayDate, isSunday, false); u1.push(lod1);
-        const lod2 = this.findRole(employees, wk, dy, 2, 'LOD', u2, dayDate, isSunday, false); u2.push(lod2);
-        const lod3 = this.findRole(employees, wk, dy, 3, 'LOD', u3, dayDate, isSunday, false); u3.push(lod3);
-        const r1 = this.findRole(employees, wk, dy, 1, 'REC', u1.slice(), dayDate, isSunday, true); u1.push(r1);
-        const r2 = this.findRole(employees, wk, dy, 1, 'REC', u1.slice(), dayDate, isSunday, true); u1.push(r2);
-        const r1b2 = this.findRoleRotate(employees, wk, dy, 2, 'REC', u2.slice(), [r1, lod2], dayDate, isSunday); u2.push(r1b2);
-        const r2b2 = this.findRoleRotate(employees, wk, dy, 2, 'REC', u2.slice(), [r2, lod2], dayDate, isSunday); u2.push(r2b2);
-        const r1b3 = this.findRoleRotate(employees, wk, dy, 3, 'REC', u3.slice(), [r1, r1b2, lod3], dayDate, isSunday); u3.push(r1b3);
-        const r2b3 = this.findRoleRotate(employees, wk, dy, 3, 'REC', u3.slice(), [r2, r2b2, lod3], dayDate, isSunday); u3.push(r2b3);
-        let ip1, ip2a, ip2b, ip3a, ip3b, ipDisplay1, ipDisplay2, ipDisplay3, ipTime1, ipTime2, ipTime3;
-        if (isSunday) {
-          ip1 = this.findIPadSlot(employees, wk, dy, 10, 12, u1, dayDate); u1.push(ip1);
-          ip2a = this.findIPadSlotRotate(employees, wk, dy, 12, 15, u2, [ip1], dayDate); u2.push(ip2a);
-          ip3a = this.findIPadSlotRotate(employees, wk, dy, 15, 18.25, u3, [ip1, ip2a], dayDate); u3.push(ip3a);
-          ipDisplay1 = ip1; ipDisplay2 = ip2a; ipDisplay3 = ip3a;
-          ipTime1 = '10:00 AM - 12:00 PM'; ipTime2 = '12:00 PM - 3:00 PM'; ipTime3 = '3:00 PM - 6:15 PM';
-        } else {
-          ip1 = this.findIPadSlot(employees, wk, dy, 9, 12, u1, dayDate); u1.push(ip1);
-          ip2a = this.findIPadSlotRotate(employees, wk, dy, 12, 14, u2, [ip1], dayDate); u2.push(ip2a);
-          ip2b = this.findIPadSlotRotate(employees, wk, dy, 14, 16, u2, [ip1], dayDate); u2.push(ip2b);
-          ip3a = this.findIPadSlotRotate(employees, wk, dy, 16, 18, u3, [ip1, ip2a, ip2b], dayDate); u3.push(ip3a);
-          ip3b = this.findIPadSlotRotate(employees, wk, dy, 18, 20, u3, [ip1, ip2a, ip2b], dayDate); u3.push(ip3b);
-          ipDisplay1 = ip1; ipTime1 = '9:00 AM - 12:00 PM';
-          if (ip2a === ip2b && ip2a !== 'X') ipDisplay2 = ip2a;
-          else if (ip2a !== 'X' && ip2b !== 'X') ipDisplay2 = ip2a + ' 12-2 / ' + ip2b + ' 2-4';
-          else if (ip2a !== 'X') ipDisplay2 = ip2a + ' 12-2'; else if (ip2b !== 'X') ipDisplay2 = ip2b + ' 2-4'; else ipDisplay2 = 'X';
-          ipTime2 = '12:00 PM - 4:00 PM';
-          if (ip3a === ip3b && ip3a !== 'X') ipDisplay3 = ip3a;
-          else if (ip3a !== 'X' && ip3b !== 'X') ipDisplay3 = ip3a + ' 4-6 / ' + ip3b + ' 6-8';
-          else if (ip3a !== 'X') ipDisplay3 = ip3a + ' 4-6'; else if (ip3b !== 'X') ipDisplay3 = ip3b + ' 6-8'; else ipDisplay3 = 'X';
-          ipTime3 = '4:00 PM - 8:00 PM';
-        }
-        let uReg1 = [r1, r2, ip1], uReg2 = [r1b2, r2b2, ip2a, ip2b].filter(Boolean), uReg3 = [r1b3, r2b3, ip3a, ip3b].filter(Boolean);
-        const rg3b1 = lod1 !== 'X' ? lod1 : this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(rg3b1);
-        const a1 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(a1);
-        const a2 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(a2);
-        const a3 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(a3);
-        const rg1 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(rg1);
-        const rg2 = this.findRole(employees, wk, dy, 1, 'REG', uReg1, dayDate, isSunday, false); uReg1.push(rg2);
-        const rg3b2 = lod2 !== 'X' ? lod2 : this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [rg3b1], dayDate, isSunday); uReg2.push(rg3b2);
-        const a1b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [a1], dayDate, isSunday); uReg2.push(a1b2);
-        const a2b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [a2], dayDate, isSunday); uReg2.push(a2b2);
-        const a3b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [a3], dayDate, isSunday); uReg2.push(a3b2);
-        const rg1b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [rg1], dayDate, isSunday); uReg2.push(rg1b2);
-        const rg2b2 = this.findRoleRotate(employees, wk, dy, 2, 'REG', uReg2, [rg2], dayDate, isSunday); uReg2.push(rg2b2);
-        const rg3b3 = lod3 !== 'X' ? lod3 : this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [rg3b1, rg3b2], dayDate, isSunday); uReg3.push(rg3b3);
-        const a1b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [a1, a1b2], dayDate, isSunday); uReg3.push(a1b3);
-        const a2b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [a2, a2b2], dayDate, isSunday); uReg3.push(a2b3);
-        const a3b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [a3, a3b2], dayDate, isSunday); uReg3.push(a3b3);
-        const rg1b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [rg1, rg1b2], dayDate, isSunday); uReg3.push(rg1b3);
-        const rg2b3 = this.findRoleRotate(employees, wk, dy, 3, 'REG', uReg3, [rg2, rg2b2], dayDate, isSunday); uReg3.push(rg2b3);
-        let vUsed1 = uReg1.concat([lod1]); const vAU1 = this.findVaultPerson(employees, wk, dy, 1, vUsed1, dayDate, isSunday); vUsed1.push(vAU1); const vMed1 = this.findVaultPerson(employees, wk, dy, 1, vUsed1, dayDate, isSunday);
-        let vUsed2 = uReg2.concat([lod2]); const vAU2 = this.findVaultPerson(employees, wk, dy, 2, vUsed2, dayDate, isSunday); vUsed2.push(vAU2); const vMed2 = this.findVaultPerson(employees, wk, dy, 2, vUsed2, dayDate, isSunday);
-        let vUsed3 = uReg3.concat([lod3]); const vAU3 = this.findVaultPerson(employees, wk, dy, 3, vUsed3, dayDate, isSunday); vUsed3.push(vAU3); const vMed3 = this.findVaultPerson(employees, wk, dy, 3, vUsed3, dayDate, isSunday);
-        // Updated lunch logic: early shifts first (8:30-4:15), then late shifts (12-8:15)
-        const earlyLunchEmps = employees.filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.isEarlyShift(emp, wk, dy)).map(emp => ({ name: emp.name, startTime: this.getEmpStartTime(emp, wk, dy) }));
-        const lateLunchEmps = employees.filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.isLateShift(emp, wk, dy)).map(emp => ({ name: emp.name, startTime: this.getEmpStartTime(emp, wk, dy) }));
-        const lunches = []; let lunchTime = 12;
-        // Early shift people get first lunch slots (12:00, 12:30, 1:00...)
-        for (const emp of earlyLunchEmps) { if (lunchTime <= 14) { lunches.push({ name: emp.name, time: this.formatTime(lunchTime), cover: '' }); lunchTime += 0.5; } }
-        // Late shift people get later lunch slots
-        for (const emp of lateLunchEmps) { if (lunchTime <= 16.5) { lunches.push({ name: emp.name, time: this.formatTime(lunchTime), cover: '' }); lunchTime += 0.5; } }
-        // 15 min breaks: 5:00 PM - 6:00 PM for 4-8:15 shift employees
-        const breakEmps = employees.filter(emp => !this.isVaultOnly(emp) && !this.isOnPTO(emp, dayDate) && this.needs15MinBreak(emp, wk, dy));
-        const breaks = []; const breakSlots = [17, 17.25, 17.5, 17.75]; // 5:00, 5:15, 5:30, 5:45
-        let breakIdx = 0;
-        for (const emp of breakEmps) { if (breakIdx < breakSlots.length) { breaks.push({ name: emp.name, time: this.formatTime(breakSlots[breakIdx]), cover: '' }); breakIdx++; } }
-        while (breaks.length < 4) breaks.push({ name: '', time: this.formatTime(breakSlots[breaks.length] || 17.75), cover: '' });
-        const cf = (n) => n && n !== 'X' ? 1 : 0;
-        const stats = { vaultB1: cf(vAU1) + cf(vMed1), vaultB2: cf(vAU2) + cf(vMed2), vaultB3: cf(vAU3) + cf(vMed3), recB1: cf(r1) + cf(r2), recB2: cf(r1b2) + cf(r2b2), recB3: cf(r1b3) + cf(r2b3), regB1: cf(rg3b1) + cf(a1) + cf(a2) + cf(a3) + cf(rg1) + cf(rg2), regB2: cf(rg3b2) + cf(a1b2) + cf(a2b2) + cf(a3b2) + cf(rg1b2) + cf(rg2b2), regB3: cf(rg3b3) + cf(a1b3) + cf(a2b3) + cf(a3b3) + cf(rg1b3) + cf(rg2b3) };
-        return { dayTitle, dateStr, fullTitle: dayTitle + ' ' + dateStr, cleanTime, cleaning, times: { t1S, t1E, t2S, t2E, t3S, t3E }, lod: [{ name: lod1, time: t1S + ' - ' + t1E }, { name: lod2, time: t2S + ' - ' + t2E }, { name: lod3, time: t3S + ' - ' + t3E }], reception: [{ r1, r2, time: t1S + ' - ' + t1E }, { r1: r1b2, r2: r2b2, time: t2S + ' - ' + t2E }, { r1: r1b3, r2: r2b3, time: t3S + ' - ' + t3E }], ipad: [{ display: ipDisplay1, time: ipTime1 }, { display: ipDisplay2, time: ipTime2 }, { display: ipDisplay3, time: ipTime3 }], medCheckout: [{ mc1: rg1, mc2: rg2, med3au1: rg3b1, time: t1S + ' - ' + t1E }, { mc1: rg1b2, mc2: rg2b2, med3au1: rg3b2, time: t2S + ' - ' + t2E }, { mc1: rg1b3, mc2: rg2b3, med3au1: rg3b3, time: t3S + ' - ' + t3E }], auCheckout: [{ au2: a1, au3: a2, au4: a3, time: t1S + ' - ' + t1E }, { au2: a1b2, au3: a2b2, au4: a3b2, time: t2S + ' - ' + t2E }, { au2: a1b3, au3: a2b3, au4: a3b3, time: t3S + ' - ' + t3E }], vault: [{ au: vAU1 === 'X' ? 'RPH' : vAU1, med: vMed1 === 'X' ? 'RPH' : vMed1, time: t1S + ' - ' + t1E }, { au: vAU2 === 'X' ? 'RPH' : vAU2, med: vMed2 === 'X' ? 'RPH' : vMed2, time: t2S + ' - ' + t2E }, { au: vAU3 === 'X' ? 'RPH' : vAU3, med: vMed3 === 'X' ? 'RPH' : vMed3, time: t3S + ' - ' + t3E }], vaultOpen: isSunday ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM', lunches, breaks, stats, isSunday, weekNum: wk, dayNum: dy, date: dayDate.toISOString(), generatedAt: new Date().toISOString() };
-      },
-      generateSingleDayStandalone(employees, targetDate, cleanRotation) { const target = new Date(targetDate); const dayOfWeek = target.getDay(); return this.buildDay(employees, 1, dayOfWeek === 0 ? 7 : dayOfWeek, target, dayOfWeek === 0, cleanRotation || 0); },
-      generateSingleDay(employees, targetDate, week1Start, week2Start, cleanRotation) {
-        const w1 = new Date(week1Start), w2 = new Date(week2Start), target = new Date(targetDate);
-        let weekNum = 0, dayNum = 0;
-        for (let d = 0; d < 7; d++) { const checkDate = new Date(w1); checkDate.setDate(checkDate.getDate() + d); if (checkDate.toDateString() === target.toDateString()) { weekNum = 1; dayNum = d + 1; break; } }
-        if (weekNum === 0) { for (let d = 0; d < 7; d++) { const checkDate = new Date(w2); checkDate.setDate(checkDate.getDate() + d); if (checkDate.toDateString() === target.toDateString()) { weekNum = 2; dayNum = d + 1; break; } } }
-        if (weekNum === 0) return null;
-        return this.buildDay(employees, weekNum, dayNum, target, dayNum === 7, cleanRotation || 0);
-      },
-      generateAllSchedules(employees, week1Start, week2Start) {
-        const schedules = []; let cleanRotation = 0;
-        for (let w = 1; w <= 2; w++) { const weekStart = w === 1 ? new Date(week1Start) : new Date(week2Start); for (let d = 1; d <= 7; d++) { const dayDate = new Date(weekStart); dayDate.setDate(dayDate.getDate() + (d - 1)); schedules.push(this.buildDay(employees, w, d, dayDate, d === 7, cleanRotation)); cleanRotation++; } }
-        return schedules;
       }
     };
-
-    // Cleaning Modal
-    const CleaningModal = ({ task, onClose, onSubmit, existingLog }) => {
-      const [checked, setChecked] = useState(existingLog ? existingLog.tasks || {} : {});
-      const [initials, setInitials] = useState(existingLog ? existingLog.initials || '' : '');
-      const tasks = CLEANING_TASKS[task] || [];
-      const isViewOnly = !!existingLog;
-      const allChecked = tasks.every((_, i) => checked[i]);
-      const selectAll = () => { const nc = {}; tasks.forEach((_, i) => { nc[i] = true; }); setChecked(nc); };
-      const handleSubmit = () => {
-        if (!initials.trim()) { alert('Please enter your initials'); return; }
-        if (!allChecked) { alert('Please complete all tasks'); return; }
-        onSubmit({ task, initials: initials.trim().toUpperCase(), tasks: checked, completedAt: new Date().toISOString() });
-        onClose();
-      };
-      return (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg card-shadow fade-in max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{task} Cleaning Tasks {isViewOnly && <span className="text-sm font-normal text-gray-500">- Completed by {existingLog.initials}</span>}</h2>
-            {!isViewOnly && <button onClick={selectAll} className="mb-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200">✓ Select All</button>}
-            <div className="space-y-2 mb-4">{tasks.map((t, i) => (<label key={i} className={'flex items-start gap-3 p-2 rounded ' + (isViewOnly ? '' : 'hover:bg-gray-50 cursor-pointer')}><input type="checkbox" checked={checked[i] || false} onChange={(e) => !isViewOnly && setChecked({...checked, [i]: e.target.checked})} disabled={isViewOnly} className="mt-1 w-5 h-5" /><span className="text-sm">{t}</span></label>))}</div>
-            {!isViewOnly && (<div className="mb-4"><label className="block text-sm font-medium mb-1">Your Initials</label><input type="text" value={initials} onChange={(e) => setInitials(e.target.value.slice(0, 4))} className="w-full px-4 py-2 border rounded-lg uppercase" placeholder="e.g., JD" maxLength={4} /></div>)}
-            <div className="flex gap-2">{!isViewOnly && <button onClick={handleSubmit} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Submit</button>}<button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">{isViewOnly ? 'Close' : 'Cancel'}</button></div>
-          </div>
-        </div>
-      );
-    };
-    
-    // Dropdown for editing names
-    const NameDropdown = ({ value, employees, onSelect, onClose }) => {
-      const options = ['X'].concat(employees.map(e => e.name).sort());
-      return (
-        <div className="absolute top-full left-0 z-50 bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[150px]">
-          {options.map((name, i) => (<div key={i} onClick={() => { onSelect(name); onClose(); }} className={'px-3 py-2 cursor-pointer hover:bg-gray-100 ' + (value === name ? 'bg-emerald-50' : '')}>{name}</div>))}
-        </div>
-      );
-    };
-    
-    // Editable cell WITH shape (for Employee Master Schedule tab)
-    const EditableNameCellWithShape = ({ name, employees, empShapes, onUpdate }) => {
-      const [isOpen, setIsOpen] = useState(false);
-      const shape = name && name !== 'X' && name !== 'RPH' && empShapes[name.toUpperCase()] ? empShapes[name.toUpperCase()] : null;
-      return (
-        <div className="relative">
-          <div onClick={() => setIsOpen(!isOpen)} className={'schedule-cell font-bold text-sm cursor-pointer hover:bg-gray-50 flex items-center justify-center ' + (!name || name === 'X' ? 'bg-gray-400' : 'bg-white')}>
-            {shape && <EmpShape color={shape.color} shape={shape.shape} />}
-            {(name || 'X').toUpperCase()}
-          </div>
-          {isOpen && <NameDropdown value={name} employees={employees} onSelect={onUpdate} onClose={() => setIsOpen(false)} />}
-        </div>
-      );
-    };
-    
-    // Simple editable cell NO shape (for public Daily Schedule tab)
-    const EditableNameCell = ({ name, employees, onUpdate }) => {
-      const [isOpen, setIsOpen] = useState(false);
-      return (
-        <div className="relative">
-          <div onClick={() => setIsOpen(!isOpen)} className={'schedule-cell font-bold text-sm cursor-pointer hover:bg-gray-50 ' + (!name || name === 'X' ? 'bg-gray-400' : 'bg-white')}>
-            {(name || 'X').toUpperCase()}
-          </div>
-          {isOpen && <NameDropdown value={name} employees={employees} onSelect={onUpdate} onClose={() => setIsOpen(false)} />}
-        </div>
-      );
-    };
-    
-    // Editable iPad cell with pencil (text input, not dropdown)
-    const EditableIPadCell = ({ value, onUpdate, showShape, empShapes }) => {
-      const [isEditing, setIsEditing] = useState(false);
-      const [text, setText] = useState(value || '');
-      const handleSave = () => { onUpdate(text); setIsEditing(false); };
-      const handleKeyDown = (e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') { setText(value); setIsEditing(false); } };
-      // For shape, try to extract first name from display
-      const firstName = value && value !== 'X' ? value.split(' ')[0].toUpperCase() : null;
-      const shape = showShape && firstName && empShapes[firstName] ? empShapes[firstName] : null;
-      if (isEditing) {
-        return (<div className="schedule-cell bg-white p-0"><input type="text" value={text} onChange={(e) => setText(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} autoFocus className="w-full h-full px-2 py-1 text-xs font-bold text-center border-0 outline-none" /></div>);
-      }
-      return (
-        <div onClick={() => setIsEditing(true)} className={'schedule-cell font-bold text-xs cursor-pointer hover:bg-gray-50 flex items-center justify-center gap-1 ' + (value === 'X' || !value ? 'bg-gray-400' : 'bg-white')}>
-          {shape && <EmpShape color={shape.color} shape={shape.shape} />}
-          <span>{(value || 'X').toUpperCase()}</span>
-          <span className="text-gray-400 text-[10px]">✏️</span>
-        </div>
-      );
-    };
-    
-    const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
-    const HeaderCell = ({ children, color }) => {
-      const colors = { black: 'bg-black text-white', green: 'bg-[#67d50d] text-black', blue: 'bg-[#bdd7ee] text-black', yellow: 'bg-[#ffe699] text-black' };
-      return <div className={'schedule-cell font-bold text-base ' + (colors[color] || colors.black)}>{children}</div>;
-    };
-    const NameCell = ({ name }) => <div className={'schedule-cell font-bold text-sm ' + (!name || name === 'X' ? 'bg-gray-400' : 'bg-white')}>{(name || 'X').toUpperCase()}</div>;
-    // Name cell WITH shape for Employee Master Schedule
-    const NameCellWithShape = ({ name, empShapes }) => {
-      const shape = name && name !== 'X' && name !== 'RPH' && empShapes[name.toUpperCase()] ? empShapes[name.toUpperCase()] : null;
-      return <div className={'schedule-cell font-bold text-sm flex items-center justify-center ' + (!name || name === 'X' ? 'bg-gray-400' : 'bg-white')}>{shape && <EmpShape color={shape.color} shape={shape.shape} />}{(name || 'X').toUpperCase()}</div>;
-    };
-
-    // Schedule Display - showShapes determines if shapes appear (true for Employee Master Schedule, false for public)
-    const ScheduleDisplay = ({ schedule, onCleaningClick, employees, empShapes, onScheduleUpdate, isEditable, onCleaningSign, showShapes }) => {
-      if (!schedule) return null;
-      
-      const updateField = (path, value) => {
-        if (!onScheduleUpdate) return;
-        const newSched = JSON.parse(JSON.stringify(schedule));
-        const parts = path.split('.');
-        let obj = newSched;
-        for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
-        obj[parts[parts.length - 1]] = value;
-        newSched.manuallyEdited = true;
-        newSched.editedAt = new Date().toISOString();
-        onScheduleUpdate(newSched);
-      };
-      
-      // Cleaning row with dropdown + sign button
-      const CleaningCell = ({ cleaning, idx }) => {
-        const [isOpen, setIsOpen] = useState(false);
-        const shape = showShapes && cleaning.name && cleaning.name !== 'X' && empShapes && empShapes[cleaning.name.toUpperCase()] ? empShapes[cleaning.name.toUpperCase()] : null;
-        return (
-          <div className="schedule-cell text-red-600 font-bold text-xs py-1 flex items-center justify-between relative">
-            <div className="flex items-center flex-1 cursor-pointer" onClick={() => isEditable && setIsOpen(!isOpen)}>
-              {shape && <EmpShape color={shape.color} shape={shape.shape} />}
-              <span>{cleaning.name.toUpperCase()} - {cleaning.task}</span>
-            </div>
-            <button onClick={() => onCleaningSign && onCleaningSign(cleaning.task)} className="ml-2 px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700 font-medium">Sign</button>
-            {isOpen && <NameDropdown value={cleaning.name} employees={employees || []} onSelect={(v) => updateField('cleaning.' + idx + '.name', v)} onClose={() => setIsOpen(false)} />}
-          </div>
-        );
-      };
-      
-      // Helper to render name cell based on context
-      const renderNameCell = (name, path) => {
-        if (isEditable) {
-          if (showShapes) return <EditableNameCellWithShape name={name} employees={employees || []} empShapes={empShapes || {}} onUpdate={(v) => updateField(path, v)} />;
-          return <EditableNameCell name={name} employees={employees || []} onUpdate={(v) => updateField(path, v)} />;
+    const int = setInterval(check, 60000);
+    return () => clearInterval(int);
+  }, [allScheds, scheds, selDay]);
+  
+  const todaySched = useMemo(() => {
+    const d = new Date();
+    if (getESTHour() >= 20) d.setDate(d.getDate()+1);
+    return allScheds[toDateKey(d)] || null;
+  }, [allScheds]);
+  
+  const genAll = () => {
+    if (!w1 || !w2 || emps.length === 0) return;
+    const s = Engine.genAll(sorted, w1, w2);
+    setScheds(s);
+    const ng = {...generated}, na = {...allScheds};
+    s.forEach(x => { const k = toDateKey(new Date(x.date)); ng[k] = new Date().toISOString(); na[k] = x; });
+    setGenerated(ng); setAllScheds(na); setSelDay(0);
+  };
+  
+  const genSingle = (date) => {
+    if (emps.length === 0) return;
+    const target = new Date(date); target.setHours(12,0,0,0);
+    let s = w1 && w2 ? Engine.genSingle(sorted, target, w1, w2, 0) : null;
+    if (!s) s = Engine.genStandalone(sorted, target, 0);
+    if (!s) return;
+    const key = toDateKey(target);
+    const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
+    const ns = [...scheds];
+    if (idx >= 0) ns[idx] = s; else { ns.push(s); ns.sort((a,b) => new Date(a.date) - new Date(b.date)); }
+    setScheds(ns);
+    setGenerated({...generated, [key]: new Date().toISOString()});
+    setAllScheds({...allScheds, [key]: s});
+    setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === key));
+  };
+  
+  const updSched = (s) => {
+    const key = toDateKey(new Date(s.date));
+    const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
+    if (idx >= 0) { const ns = [...scheds]; ns[idx] = s; setScheds(ns); }
+    setAllScheds({...allScheds, [key]: s});
+    setDirty(true);
+  };
+  
+  const save = () => { setDirty(false); alert('Saved!'); };
+  
+  const upload = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+        const ne = [];
+        for (let i=2; i<json.length; i++) {
+          const r = json[i]; if (!r[0]) continue;
+          const chk = v => ['✓','X','x',true,'TRUE'].includes(v);
+          ne.push({ name:r[0]||'', vault:chk(r[1]), reception:chk(r[2]), lod:chk(r[3]), ipad:chk(r[4]), registers:chk(r[5]), ptoText:r[6]||'', notes:r[7]||'', week1:{1:r[8]||'',2:r[9]||'',3:r[10]||'',4:r[11]||'',5:r[12]||'',6:r[13]||'',7:r[14]||''}, week2:{1:r[15]||'',2:r[16]||'',3:r[17]||'',4:r[18]||'',5:r[19]||'',6:r[20]||'',7:r[21]||''} });
         }
-        if (showShapes) return <NameCellWithShape name={name} empShapes={empShapes || {}} />;
-        return <NameCell name={name} />;
-      };
+        setEmps(ne);
+      } catch(err) { console.error(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  
+  const saveEmp = (emp) => {
+    if (editEmp !== null) { const u = [...emps]; u[editEmp] = emp; setEmps(u); setEditEmp(null); }
+    else { setEmps([...emps, emp]); setShowAdd(false); }
+  };
+  
+  const calClick = (date) => {
+    const key = toDateKey(date);
+    if (allScheds[key]) {
+      const idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
+      if (idx >= 0) setSelDay(idx);
+    } else genSingle(date);
+  };
+  
+  const cleanSubmit = (log) => {
+    const key = new Date().toISOString().split('T')[0];
+    setCleanLogs({...cleanLogs, [key]: [...(cleanLogs[key]||[]), log]});
+  };
+  
+  const dateForDay = (wk, dy) => {
+    const st = new Date((wk===1?w1:w2)+'T12:00:00');
+    st.setDate(st.getDate()+(dy-1));
+    return (st.getMonth()+1)+'/'+st.getDate();
+  };
+  
+  return (
+    <div className="min-h-screen pb-20">
+      {showLogin && <LoginModal onLogin={()=>{setLogged(true);setShowLogin(false);}} onClose={()=>setShowLogin(false)}/>}
+      {cleanModal && <CleaningModal task={cleanModal} onClose={()=>setCleanModal(null)} onSubmit={cleanSubmit}/>}
+      {viewLog && <CleaningModal task={viewLog.task} log={viewLog} onClose={()=>setViewLog(null)} onSubmit={()=>{}}/>}
       
-      return (
-        <div className="schedule-container bg-white p-4 rounded-lg card-shadow fade-in">
-          <div className="text-center mb-3">
-            <h2 className="font-black text-3xl">{schedule.fullTitle}</h2>
-            <p className="text-gray-500 text-sm bg-gray-100 py-1 rounded">{schedule.cleanTime}</p>
+      <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40">
+        <div className="max-w-[1800px] mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xl">📋</div>
+            <h1 className="text-xl font-bold">Scheduler</h1>
           </div>
-          
-          <div className="grid grid-cols-5 gap-1 mb-3">
-            {schedule.cleaning.map((c, i) => <CleaningCell key={i} cleaning={c} idx={i} />)}
-          </div>
-          
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="mb-3">
-                <HeaderCell color="black">LEADER OF THE DAY</HeaderCell>
-                <div className="grid grid-cols-2 gap-0">
-                  {schedule.lod.map((l, i) => (
-                    <React.Fragment key={i}>
-                      {renderNameCell(l.name, 'lod.' + i + '.name')}
-                      <TimeCell time={l.time} />
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="mb-3">
-                <div className="schedule-cell font-bold text-lg bg-[#67d50d] text-black">FRONT END RECEPTION</div>
-                <div className="grid grid-cols-6 gap-0">
-                  <div className="col-span-2"><HeaderCell color="green">RECEPTION 1</HeaderCell></div>
-                  <div className="col-span-2"><HeaderCell color="green">RECEPTION 2</HeaderCell></div>
-                  <div className="col-span-2"><HeaderCell color="green">iPAD</HeaderCell></div>
-                  {schedule.reception.map((r, i) => (
-                    <React.Fragment key={i}>
-                      {renderNameCell(r.r1, 'reception.' + i + '.r1')}
-                      <TimeCell time={r.time} />
-                      {renderNameCell(r.r2, 'reception.' + i + '.r2')}
-                      <TimeCell time={r.time} />
-                      {isEditable ? <EditableIPadCell value={schedule.ipad[i].display} onUpdate={(v) => updateField('ipad.' + i + '.display', v)} showShape={showShapes} empShapes={empShapes || {}} /> : <div className={'schedule-cell font-bold text-xs ' + (schedule.ipad[i].display === 'X' ? 'bg-gray-400' : 'bg-white')}>{schedule.ipad[i].display.toUpperCase()}</div>}
-                      <TimeCell time={schedule.ipad[i].time} />
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="mb-3">
-                <div className="schedule-cell font-bold text-lg bg-[#bdd7ee] text-black">BACK END DISPENSARY</div>
-                <div className="grid grid-cols-6 gap-0">
-                  <div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 1</HeaderCell></div>
-                  <div className="col-span-2"><HeaderCell color="blue">MEDICAL CHECKOUT 2</HeaderCell></div>
-                  <div className="col-span-2"><HeaderCell color="blue">MED 3 / AU 1</HeaderCell></div>
-                  {schedule.medCheckout.map((m, i) => (
-                    <React.Fragment key={i}>
-                      {renderNameCell(m.mc1, 'medCheckout.' + i + '.mc1')}
-                      <TimeCell time={m.time} />
-                      {renderNameCell(m.mc2, 'medCheckout.' + i + '.mc2')}
-                      <TimeCell time={m.time} />
-                      {renderNameCell(m.med3au1, 'medCheckout.' + i + '.med3au1')}
-                      <TimeCell time={m.time} />
-                    </React.Fragment>
-                  ))}
-                </div>
-                <div className="grid grid-cols-6 gap-0 mt-2">
-                  <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 2</HeaderCell></div>
-                  <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 3</HeaderCell></div>
-                  <div className="col-span-2"><HeaderCell color="blue">AU CHECKOUT 4</HeaderCell></div>
-                  {schedule.auCheckout.map((a, i) => (
-                    <React.Fragment key={i}>
-                      {renderNameCell(a.au2, 'auCheckout.' + i + '.au2')}
-                      <TimeCell time={a.time} />
-                      {renderNameCell(a.au3, 'auCheckout.' + i + '.au3')}
-                      <TimeCell time={a.time} />
-                      {renderNameCell(a.au4, 'auCheckout.' + i + '.au4')}
-                      <TimeCell time={a.time} />
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-4 gap-0">
-                <div className="col-span-2"><HeaderCell color="yellow">AU LEFT VAULT</HeaderCell></div>
-                <div className="col-span-2"><HeaderCell color="yellow">MEDICAL RIGHT VAULT</HeaderCell></div>
-                <NameCell name="RPH" /><TimeCell time={schedule.vaultOpen} />
-                <NameCell name="RPH" /><TimeCell time={schedule.vaultOpen} />
-                {schedule.vault.map((v, i) => (
-                  <React.Fragment key={i}>
-                    {renderNameCell(v.au, 'vault.' + i + '.au')}
-                    <TimeCell time={v.time} />
-                    {renderNameCell(v.med, 'vault.' + i + '.med')}
-                    <TimeCell time={v.time} />
-                  </React.Fragment>
-                ))}
-              </div>
+          <div className="flex items-center gap-4">
+            <div className="flex gap-2">
+              <button onClick={()=>setTab('schedule')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='schedule'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Daily Schedule</button>
+              {logged && <>
+                <button onClick={()=>setTab('employees')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='employees'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Employee Master Schedule</button>
+                <button onClick={()=>setTab('summary')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='summary'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Staffing Summary</button>
+                <button onClick={()=>setTab('cleaning')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='cleaning'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Cleaning Logs</button>
+              </>}
             </div>
-            
-            <div className="w-80">
-              <div className="mb-3">
-                <HeaderCell color="black">LUNCH BREAK</HeaderCell>
-                <div className="grid grid-cols-3 gap-0">
-                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
-                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
-                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
-                  {schedule.lunches.map((l, i) => (
-                    <React.Fragment key={i}>
-                      {isEditable ? (showShapes ? <EditableNameCellWithShape name={l.name} employees={employees || []} empShapes={empShapes || {}} onUpdate={(v) => updateField('lunches.' + i + '.name', v)} /> : <EditableNameCell name={l.name} employees={employees || []} onUpdate={(v) => updateField('lunches.' + i + '.name', v)} />) : (showShapes ? <NameCellWithShape name={l.name} empShapes={empShapes || {}} /> : <div className="schedule-cell font-bold text-xs py-1">{l.name.toUpperCase()}</div>)}
-                      <div className="schedule-cell text-xs py-1">{l.time}</div>
-                      {isEditable ? <EditableNameCell name={l.cover || ''} employees={employees || []} onUpdate={(v) => updateField('lunches.' + i + '.cover', v)} /> : <div className="schedule-cell text-xs py-1">{l.cover || ''}</div>}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="mb-3">
-                <HeaderCell color="black">15-MIN BREAK</HeaderCell>
-                <div className="grid grid-cols-3 gap-0">
-                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">NAME</div>
-                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">TIME</div>
-                  <div className="schedule-cell bg-green-100 font-bold text-xs py-1">COVER</div>
-                  {schedule.breaks.slice(0, 4).map((b, i) => (
-                    <React.Fragment key={i}>
-                      <div className="schedule-cell font-bold text-xs py-1">{b.name ? b.name.toUpperCase() : ''}</div>
-                      <div className="schedule-cell text-xs py-1">{b.time}</div>
-                      {isEditable ? <EditableNameCell name={b.cover || ''} employees={employees || []} onUpdate={(v) => updateField('breaks.' + i + '.cover', v)} /> : <div className="schedule-cell text-xs py-1">{b.cover || ''}</div>}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <HeaderCell color="black">DEPOSITS</HeaderCell>
-                <div className="grid grid-cols-2 gap-0">
-                  <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">TIME</div>
-                  <div className="schedule-cell bg-blue-100 font-bold text-xs py-1">PERSON</div>
-                  <div className="schedule-cell text-xs py-1">9:00 AM - 12:00 PM</div>
-                  <div className="schedule-cell text-xs py-1">LOD</div>
-                </div>
-              </div>
-            </div>
+            {!logged ? <button onClick={()=>setShowLogin(true)} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🔐 Login</button> : <button onClick={()=>{setLogged(false);setTab('schedule');}} className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700">Logout</button>}
           </div>
-          {isEditable && schedule.manuallyEdited && <div className="mt-2 text-xs text-amber-600">⚠️ Manually edited at {formatToEST(schedule.editedAt)}</div>}
         </div>
-      );
-    };
-
-    // Staffing Summary - NO iPad requirement
-    const StaffingSummary = ({ schedules, allSchedules, onDaySelect }) => {
-      const [selectedIdx, setSelectedIdx] = useState(null);
-      const [viewMonth, setViewMonth] = useState(new Date().getMonth());
-      const [viewYear, setViewYear] = useState(new Date().getFullYear());
-      // NO iPad in requirements
-      const getIdeal = (isSunday) => isSunday ? { vault: [1,1,1], rec: [2,2,2], reg: [3,3,3] } : { vault: [2,2,2], rec: [2,2,2], reg: [2,3,3] };
-      const getBlockTimes = (isSunday, block) => isSunday ? (block === 1 ? '10A-12P' : block === 2 ? '12P-3P' : '3P-6:15P') : (block === 1 ? '9A-12P' : block === 2 ? '12P-4:15P' : '4P-8:15P');
-      const getIssues = (s) => {
-        const ideal = getIdeal(s.isSunday); const issues = [];
-        if (s.stats.vaultB1 < ideal.vault[0]) issues.push('Vault B1: need ' + ideal.vault[0] + ', have ' + s.stats.vaultB1);
-        if (s.stats.vaultB2 < ideal.vault[1]) issues.push('Vault B2: need ' + ideal.vault[1] + ', have ' + s.stats.vaultB2);
-        if (s.stats.vaultB3 < ideal.vault[2]) issues.push('Vault B3: need ' + ideal.vault[2] + ', have ' + s.stats.vaultB3);
-        if (s.stats.recB1 < ideal.rec[0]) issues.push('Reception B1: need ' + ideal.rec[0] + ', have ' + s.stats.recB1);
-        if (s.stats.recB2 < ideal.rec[1]) issues.push('Reception B2: need ' + ideal.rec[1] + ', have ' + s.stats.recB2);
-        if (s.stats.recB3 < ideal.rec[2]) issues.push('Reception B3: need ' + ideal.rec[2] + ', have ' + s.stats.recB3);
-        if (s.stats.regB1 < ideal.reg[0]) issues.push('Registers B1: need ' + ideal.reg[0] + ', have ' + s.stats.regB1);
-        if (s.stats.regB2 < ideal.reg[1]) issues.push('Registers B2: need ' + ideal.reg[1] + ', have ' + s.stats.regB2);
-        if (s.stats.regB3 < ideal.reg[2]) issues.push('Registers B3: need ' + ideal.reg[2] + ', have ' + s.stats.regB3);
-        return issues;
-      };
-      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-      const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
-      const days = []; for (let i = 0; i < firstDayOfMonth; i++) days.push(null); for (let i = 1; i <= daysInMonth; i++) days.push(i);
-      const getSchedForDay = (day) => { if (!day || !allSchedules) return null; const dateStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'); return allSchedules[dateStr]; };
-      const selected = selectedIdx !== null && schedules[selectedIdx] ? schedules[selectedIdx] : null;
-      const issues = selected ? getIssues(selected) : [];
-      return (
-        <div className="fade-in">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl mb-6">
-            <h2 className="text-2xl font-bold mb-4">Staffing Requirements</h2>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Monday - Saturday</h3><div className="text-sm space-y-1"><p>• Vault: 2 people (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 2 (9-12), 3 (12-4), 3 (4-8)</p></div></div>
-              <div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Sunday</h3><div className="text-sm space-y-1"><p>• Vault: 1 person (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 3 people (all shifts)</p></div></div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg card-shadow p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
-              <h3 className="font-bold text-xl">{monthNames[viewMonth]} {viewYear}</h3>
-              <button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
-            </div>
-            <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}</div>
-            <div className="grid grid-cols-7 gap-2">{days.map((day, i) => { const sched = getSchedForDay(day); const iss = sched ? getIssues(sched) : []; const hasIssues = iss.length > 0; const today = new Date(); const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
-              return (<div key={i} onClick={() => { if (sched) { const idx = schedules.findIndex(s => new Date(s.date).toISOString().split('T')[0] === new Date(sched.date).toISOString().split('T')[0]); if (idx >= 0) { setSelectedIdx(idx); if (onDaySelect) onDaySelect(idx); } } }} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer transition-all ' + (!day ? 'bg-gray-50 border-transparent' : 'hover:bg-gray-50') + ' ' + (sched ? (hasIssues ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300') : 'border-gray-200') + ' ' + (isToday ? 'ring-2 ring-blue-500' : '')}>{day && (<><div className={'font-bold ' + (isToday ? 'text-blue-600' : '')}>{day}</div>{sched && <div className={'text-xs mt-1 ' + (hasIssues ? 'text-red-600' : 'text-emerald-600')}>{hasIssues ? '⚠️ ' + iss.length + ' issue' + (iss.length > 1 ? 's' : '') : '✓ OK'}</div>}</>)}</div>); })}</div>
-          </div>
-          {selected && (<div className="bg-white rounded-xl p-6 card-shadow"><h3 className="text-xl font-bold mb-4">{selected.fullTitle}</h3>{issues.length === 0 ? (<div className="bg-emerald-100 text-emerald-800 p-4 rounded-lg">✓ All positions adequately staffed!</div>) : (<div className="bg-red-100 text-red-800 p-4 rounded-lg"><p className="font-bold mb-2">⚠️ Staffing Shortages:</p><ul className="list-disc list-inside text-sm">{issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul></div>)}
-            <div className="mt-4 grid grid-cols-3 gap-4">{['Vault','Reception','Registers'].map(area => (<div key={area} className="bg-gray-50 p-3 rounded-lg"><div className="font-bold text-sm mb-2">{area}</div><div className="text-xs space-y-1"><div className="flex justify-between"><span>Block 1 ({getBlockTimes(selected.isSunday, 1)}):</span><span className="font-bold">{area === 'Vault' ? selected.stats.vaultB1 : area === 'Reception' ? selected.stats.recB1 : selected.stats.regB1}</span></div><div className="flex justify-between"><span>Block 2 ({getBlockTimes(selected.isSunday, 2)}):</span><span className="font-bold">{area === 'Vault' ? selected.stats.vaultB2 : area === 'Reception' ? selected.stats.recB2 : selected.stats.regB2}</span></div><div className="flex justify-between"><span>Block 3 ({getBlockTimes(selected.isSunday, 3)}):</span><span className="font-bold">{area === 'Vault' ? selected.stats.vaultB3 : area === 'Reception' ? selected.stats.recB3 : selected.stats.regB3}</span></div></div></div>))}</div></div>)}
-        </div>
-      );
-    };
-    
-    const CleaningLogsCalendar = ({ cleaningLogs, onViewLog }) => {
-      const today = new Date();
-      const [viewMonth, setViewMonth] = useState(today.getMonth());
-      const [viewYear, setViewYear] = useState(today.getFullYear());
-      const [selectedDate, setSelectedDate] = useState(null);
-      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-      const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
-      const days = []; for (let i = 0; i < firstDayOfMonth; i++) days.push(null); for (let i = 1; i <= daysInMonth; i++) days.push(i);
-      const getLogsForDate = (day) => { if (!day) return []; const dateStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'); return cleaningLogs[dateStr] || []; };
-      const getCompletedAreas = (logs) => new Set(logs.map(l => l.task)).size;
-      const getMissingAreas = (logs) => { const completed = new Set(logs.map(l => l.task)); return CLEANING_AREAS.filter(a => !completed.has(a)); };
-      const selectedLogs = selectedDate ? getLogsForDate(selectedDate) : [];
-      const missingAreas = selectedDate ? getMissingAreas(selectedLogs) : [];
-      return (
-        <div className="fade-in">
-          <div className="bg-white rounded-lg card-shadow p-6 mb-6">
-            <div className="flex items-center justify-between mb-4"><button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">←</button><h3 className="font-bold text-xl">{monthNames[viewMonth]} {viewYear}</h3><button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); }} className="p-2 hover:bg-gray-100 rounded text-xl">→</button></div>
-            <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d}>{d}</div>)}</div>
-            <div className="grid grid-cols-7 gap-2">{days.map((day, i) => { const logs = getLogsForDate(day); const completed = getCompletedAreas(logs); const allDone = completed === 5; const partial = completed > 0 && completed < 5; const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
-              return (<div key={i} onClick={() => day && setSelectedDate(day)} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer transition-all ' + (!day ? 'bg-gray-50 border-transparent' : 'hover:bg-gray-50') + ' ' + (allDone ? 'bg-emerald-50 border-emerald-300' : partial ? 'bg-amber-50 border-amber-300' : 'border-gray-200') + ' ' + (selectedDate === day ? 'ring-2 ring-blue-500' : '') + ' ' + (isToday ? 'border-blue-500 border-2' : '')}>{day && (<><div className={'font-bold ' + (isToday ? 'text-blue-600' : '')}>{day}</div>{completed > 0 && <div className={'text-xs mt-1 ' + (allDone ? 'text-emerald-600' : 'text-amber-600')}>{completed}/5 Areas</div>}{completed === 0 && isToday && <div className="text-xs mt-1 text-red-500">⚠️ None</div>}</>)}</div>); })}</div>
-          </div>
-          {selectedDate && (<div className="bg-white rounded-lg card-shadow p-6"><h3 className="font-bold text-lg mb-4">Cleaning Log - {monthNames[viewMonth]} {selectedDate}, {viewYear}</h3>{selectedLogs.length === 0 ? (<p className="text-gray-500">No cleaning tasks logged for this day.</p>) : (<div className="space-y-3">{selectedLogs.map((log, i) => (<div key={i} onClick={() => onViewLog && onViewLog(log)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"><div><span className="font-bold">{log.task}</span><span className="text-gray-500 ml-2">by {log.initials}</span></div><span className="text-sm text-gray-500">{formatToEST(log.completedAt)}</span></div>))}</div>)}{missingAreas.length > 0 && (<div className="mt-4 p-3 bg-red-50 rounded-lg"><p className="font-bold text-red-700 text-sm mb-1">⚠️ Missing Areas:</p><p className="text-red-600 text-sm">{missingAreas.join(', ')}</p></div>)}</div>)}
-        </div>
-      );
-    };
-    
-    const EmployeeForm = ({ employee, onSave, onCancel }) => {
-      const [form, setForm] = useState(employee || { name: '', vault: false, reception: false, lod: false, ipad: false, registers: false, ptoText: '', notes: '', week1: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' }, week2: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '' } });
-      const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-      return (
-        <div className="bg-white p-4 rounded-lg card-shadow">
-          <h3 className="text-lg font-bold mb-3">{employee ? 'Edit Employee' : 'Add Employee'}</h3>
-          <div className="grid grid-cols-2 gap-3 mb-3"><div><label className="block text-xs font-medium mb-1">Name</label><input type="text" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Employee name" /></div><div><label className="block text-xs font-medium mb-1">PTO</label><input type="text" value={form.ptoText} onChange={(e) => setForm({...form, ptoText: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 3/1-3/5" /></div></div>
-          <div className="flex flex-wrap gap-4 mb-3">{['vault','reception','lod','ipad','registers'].map(role => (<label key={role} className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form[role]} onChange={(e) => setForm({...form, [role]: e.target.checked})} className="w-4 h-4" /><span className="text-sm capitalize">{role}</span></label>))}</div>
-          <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 1</label><div className="grid grid-cols-7 gap-1">{dayNames.map((day, i) => (<div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{day}</div><select value={form.week1[i + 1] || ''} onChange={(e) => setForm({...form, week1: {...form.week1, [i + 1]: e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i === 6 ? SUNDAY_TIME_SLOTS : TIME_SLOTS).map((slot, si) => <option key={si} value={slot.value}>{slot.label}</option>)}</select></div>))}</div></div>
-          <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 2</label><div className="grid grid-cols-7 gap-1">{dayNames.map((day, i) => (<div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{day}</div><select value={form.week2[i + 1] || ''} onChange={(e) => setForm({...form, week2: {...form.week2, [i + 1]: e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i === 6 ? SUNDAY_TIME_SLOTS : TIME_SLOTS).map((slot, si) => <option key={si} value={slot.value}>{slot.label}</option>)}</select></div>))}</div></div>
-          <div className="flex gap-2"><button onClick={() => onSave(form)} className="btn-primary px-4 py-2 text-white rounded-lg text-sm font-medium">Save</button><button onClick={onCancel} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Cancel</button></div>
-        </div>
-      );
-    };
-    
-    const LoginModal = ({ onLogin, onClose }) => {
-      const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState('');
-      const handleLogin = () => { if (username === 'supervisor' && password === 'admin123') onLogin(); else setError('Invalid username or password'); };
-      return (<div className="fixed inset-0 modal-overlay flex items-center justify-center z-50"><div className="bg-white rounded-xl p-8 w-full max-w-md card-shadow fade-in"><h2 className="text-2xl font-bold mb-6 text-center">Supervisor Login</h2>{error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}<div className="mb-4"><label className="block text-sm font-medium mb-1">Username</label><input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-3 border rounded-lg" placeholder="Enter username" /></div><div className="mb-6"><label className="block text-sm font-medium mb-1">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 border rounded-lg" placeholder="Enter password" onKeyPress={(e) => e.key === 'Enter' && handleLogin()} /></div><div className="flex gap-3"><button onClick={handleLogin} className="flex-1 btn-primary px-4 py-3 text-white rounded-lg font-bold">Login</button><button onClick={onClose} className="px-4 py-3 bg-gray-200 rounded-lg font-medium">Cancel</button></div></div></div>);
-    };
-
-    // Monthly Calendar - FIXED date handling (no timezone shift)
-    const MonthlyCalendar = ({ generatedDays, onDayClick }) => {
-      const today = new Date(); const [viewMonth, setViewMonth] = useState(today.getMonth()); const [viewYear, setViewYear] = useState(today.getFullYear());
-      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate(); const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
-      const days = []; for (let i = 0; i < firstDayOfMonth; i++) days.push(null); for (let i = 1; i <= daysInMonth; i++) days.push(i);
-      const isDateGenerated = (day) => { if (!day) return null; const dateStr = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'); return generatedDays[dateStr]; };
-      return (
-        <div className="bg-white rounded-lg card-shadow p-4">
-          <div className="flex items-center justify-between mb-3"><button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); } else setViewMonth(viewMonth - 1); }} className="p-1 hover:bg-gray-100 rounded text-lg">←</button><h3 className="font-bold">{monthNames[viewMonth]} {viewYear}</h3><button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); } else setViewMonth(viewMonth + 1); }} className="p-1 hover:bg-gray-100 rounded text-lg">→</button></div>
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">{['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d}>{d}</div>)}</div>
-          <div className="grid grid-cols-7 gap-1">{days.map((day, i) => { const generated = isDateGenerated(day); const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
-            return (<div key={i} onClick={() => { if (day) { const clickedDate = new Date(viewYear, viewMonth, day, 12, 0, 0); onDayClick(clickedDate); } }} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 ' + (!day ? 'bg-gray-50 border-transparent' : '') + ' ' + (generated ? 'bg-emerald-100 border-emerald-400' : 'border-gray-200') + ' ' + (isToday ? 'ring-2 ring-blue-500' : '')}>{day && (<><div className={'font-bold ' + (isToday ? 'text-blue-600' : '')}>{day}</div>{generated && <div className="text-[7px] text-emerald-700 leading-tight mt-0.5">✓ {formatToEST(generated)}</div>}</>)}</div>); })}</div>
-        </div>
-      );
-    };
-    
-    // Shortage Alert Component - shows which shifts are down
-    const ShortageAlert = ({ schedule, employees }) => {
-      if (!schedule) return null;
+      </header>
       
-      // Calculate who is scheduled vs who is missing
-      const getScheduledNames = (s) => {
-        const names = new Set();
-        s.lod.forEach(l => l.name && l.name !== 'X' && names.add(l.name.toUpperCase()));
-        s.reception.forEach(r => { r.r1 && r.r1 !== 'X' && names.add(r.r1.toUpperCase()); r.r2 && r.r2 !== 'X' && names.add(r.r2.toUpperCase()); });
-        s.medCheckout.forEach(m => { m.mc1 && m.mc1 !== 'X' && names.add(m.mc1.toUpperCase()); m.mc2 && m.mc2 !== 'X' && names.add(m.mc2.toUpperCase()); m.med3au1 && m.med3au1 !== 'X' && names.add(m.med3au1.toUpperCase()); });
-        s.auCheckout.forEach(a => { a.au2 && a.au2 !== 'X' && names.add(a.au2.toUpperCase()); a.au3 && a.au3 !== 'X' && names.add(a.au3.toUpperCase()); a.au4 && a.au4 !== 'X' && names.add(a.au4.toUpperCase()); });
-        s.vault.forEach(v => { v.au && v.au !== 'X' && v.au !== 'RPH' && names.add(v.au.toUpperCase()); v.med && v.med !== 'X' && v.med !== 'RPH' && names.add(v.med.toUpperCase()); });
-        s.cleaning.forEach(c => c.name && c.name !== 'X' && names.add(c.name.toUpperCase()));
-        return names;
-      };
-      
-      // Find employees who should be working today but have X in key positions
-      const dayDate = new Date(schedule.date);
-      const wk = schedule.weekNum || 1;
-      const dy = schedule.dayNum || (dayDate.getDay() === 0 ? 7 : dayDate.getDay());
-      
-      const missingShifts = [];
-      employees.forEach(emp => {
-        const sched = wk === 1 ? (emp.week1 && emp.week1[dy]) : (emp.week2 && emp.week2[dy]);
-        if (!sched || sched.toUpperCase() === 'OFF') return;
+      <main className="max-w-[1800px] mx-auto px-4 py-6">
+        {tab === 'schedule' && (
+          <div className="fade-in">
+            {todaySched ? <>
+              <div className="no-print flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
+                <button onClick={()=>window.print()} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900">🖨️ Print</button>
+              </div>
+              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} editable={false} showShapes={false}/>
+            </> : <div className="text-center py-12 bg-white rounded-lg card-shadow">
+              <span className="text-5xl mb-4 block">📅</span>
+              <p className="text-gray-500 mb-4">No schedule for today.</p>
+              {logged ? <button onClick={()=>setTab('employees')} className="btn-primary px-6 py-2 text-white rounded-lg">Go to Master Schedule →</button> : <p className="text-sm text-gray-400">Contact supervisor to generate schedules.</p>}
+            </div>}
+          </div>
+        )}
         
-        const scheduled = getScheduledNames(schedule);
-        if (!scheduled.has(emp.name.toUpperCase())) {
-          // This person should be here but isn't scheduled anywhere
-          const { startHour, endHour } = ScheduleEngine.parseSegment(sched);
-          if (startHour >= 0 && endHour >= 0) {
-            // Determine shift blocks they cover
-            const shifts = [];
-            if (startHour <= 9 && endHour >= 12) shifts.push('8:45-12');
-            if (startHour <= 12 && endHour >= 16) shifts.push('12-4:15');
-            if (startHour <= 16 && endHour >= 20) shifts.push('4-8:15');
-            if (shifts.length > 0) missingShifts.push(...shifts);
-          }
-        }
-      });
-      
-      // Check for X in key positions
-      const xPositions = [];
-      schedule.lod.forEach((l, i) => { if (l.name === 'X') xPositions.push('LOD Block ' + (i + 1)); });
-      schedule.reception.forEach((r, i) => { if (r.r1 === 'X') xPositions.push('Reception 1 Block ' + (i + 1)); if (r.r2 === 'X') xPositions.push('Reception 2 Block ' + (i + 1)); });
-      schedule.medCheckout.forEach((m, i) => { if (m.mc1 === 'X') xPositions.push('Med Checkout 1 Block ' + (i + 1)); if (m.mc2 === 'X') xPositions.push('Med Checkout 2 Block ' + (i + 1)); });
-      
-      // Format missing shifts as coverage needs
-      const uniqueShifts = [...new Set(missingShifts)];
-      const hasShortages = xPositions.length > 0 || uniqueShifts.length > 0;
-      
-      if (!hasShortages) return null;
-      
-      return (
-        <div className="bg-red-100 border-2 border-red-500 rounded-lg p-3 mt-4">
-          <p className="font-bold text-red-700 text-sm mb-1">⚠️ Coverage Needed:</p>
-          {uniqueShifts.length > 0 && <p className="text-red-600 text-sm font-bold">Down {uniqueShifts.join('. ')}</p>}
-          {xPositions.length > 0 && <p className="text-red-600 text-xs mt-1">Unfilled: {xPositions.join(', ')}</p>}
-        </div>
-      );
-    };
-
-    const App = () => {
-      const [tab, setTab] = useState('schedule');
-      const [employees, setEmployees] = useState([]);
-      const [schedules, setSchedules] = useState([]);
-      const [allSchedules, setAllSchedules] = useState({});
-      const [generatedDays, setGeneratedDays] = useState({});
-      const [cleaningLogs, setCleaningLogs] = useState({});
-      const [week1Start, setWeek1Start] = useState('');
-      const [week2Start, setWeek2Start] = useState('');
-      const [singleDayDate, setSingleDayDate] = useState('');
-      const [selectedDay, setSelectedDay] = useState(0);
-      const [editingEmployee, setEditingEmployee] = useState(null);
-      const [showAddForm, setShowAddForm] = useState(false);
-      const [isLoggedIn, setIsLoggedIn] = useState(false);
-      const [showLoginModal, setShowLoginModal] = useState(false);
-      const [showCleaningModal, setShowCleaningModal] = useState(null);
-      const [viewingLog, setViewingLog] = useState(null);
-      const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-      
-      const empShapes = useMemo(() => {
-        const shapes = {};
-        const sorted = [...employees].sort((a, b) => a.name.localeCompare(b.name));
-        sorted.forEach((emp, i) => { shapes[emp.name.toUpperCase()] = { color: EMPLOYEE_COLORS[i % EMPLOYEE_COLORS.length], shape: SHAPES[Math.floor(i / EMPLOYEE_COLORS.length) % SHAPES.length] }; });
-        return shapes;
-      }, [employees]);
-      
-      const sortedEmployees = useMemo(() => [...employees].sort((a, b) => a.name.localeCompare(b.name)), [employees]);
-      
-      useEffect(() => {
-        const saved = localStorage.getItem('pharmacy-scheduler-v3');
-        if (saved) { const data = JSON.parse(saved); setEmployees(data.employees || []); setWeek1Start(data.week1Start || ''); setWeek2Start(data.week2Start || ''); setSchedules(data.schedules || []); setAllSchedules(data.allSchedules || {}); setGeneratedDays(data.generatedDays || {}); setCleaningLogs(data.cleaningLogs || {}); }
-      }, []);
-      
-      useEffect(() => { localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees, week1Start, week2Start, schedules, allSchedules, generatedDays, cleaningLogs })); }, [employees, week1Start, week2Start, schedules, allSchedules, generatedDays, cleaningLogs]);
-      
-      useEffect(() => {
-        const checkTime = () => { const hour = getESTHour(); if (hour >= 20) { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); const tomorrowKey = tomorrow.toISOString().split('T')[0]; if (allSchedules[tomorrowKey]) { const idx = schedules.findIndex(s => s.date && new Date(s.date).toISOString().split('T')[0] === tomorrowKey); if (idx >= 0 && idx !== selectedDay) setSelectedDay(idx); } } };
-        const interval = setInterval(checkTime, 60000); return () => clearInterval(interval);
-      }, [allSchedules, schedules, selectedDay]);
-      
-      const todaySchedule = useMemo(() => { const hour = getESTHour(); const targetDate = new Date(); if (hour >= 20) targetDate.setDate(targetDate.getDate() + 1); const dateKey = targetDate.toISOString().split('T')[0]; return allSchedules[dateKey] || null; }, [allSchedules]);
-      
-      const generateAllSchedules = () => {
-        if (!week1Start || !week2Start || employees.length === 0) return;
-        const scheds = ScheduleEngine.generateAllSchedules(sortedEmployees, week1Start, week2Start);
-        setSchedules(scheds);
-        const newGenerated = { ...generatedDays }; const newAll = { ...allSchedules };
-        scheds.forEach(s => { const d = new Date(s.date); const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); newGenerated[key] = new Date().toISOString(); newAll[key] = s; });
-        setGeneratedDays(newGenerated); setAllSchedules(newAll); setSelectedDay(0);
-      };
-      
-      const generateSingleDay = (targetDate) => {
-        if (employees.length === 0) return;
-        // Create date at noon to avoid timezone issues
-        const target = new Date(targetDate); target.setHours(12, 0, 0, 0);
-        let schedule = null;
-        if (week1Start && week2Start) schedule = ScheduleEngine.generateSingleDay(sortedEmployees, target, week1Start, week2Start, 0);
-        if (!schedule) schedule = ScheduleEngine.generateSingleDayStandalone(sortedEmployees, target, 0);
-        if (!schedule) return;
-        const dateKey = target.getFullYear() + '-' + String(target.getMonth() + 1).padStart(2, '0') + '-' + String(target.getDate()).padStart(2, '0');
-        const existingIndex = schedules.findIndex(s => { const d = new Date(s.date); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') === dateKey; });
-        const newSchedules = [...schedules];
-        if (existingIndex >= 0) newSchedules[existingIndex] = schedule;
-        else { newSchedules.push(schedule); newSchedules.sort((a, b) => new Date(a.date) - new Date(b.date)); }
-        setSchedules(newSchedules);
-        setGeneratedDays({ ...generatedDays, [dateKey]: new Date().toISOString() });
-        setAllSchedules({ ...allSchedules, [dateKey]: schedule });
-        const newIndex = newSchedules.findIndex(s => { const d = new Date(s.date); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') === dateKey; });
-        setSelectedDay(newIndex >= 0 ? newIndex : 0);
-      };
-      
-      const handleScheduleUpdate = (newSched) => {
-        const d = new Date(newSched.date);
-        const dateKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-        const idx = schedules.findIndex(s => { const sd = new Date(s.date); return sd.getFullYear() + '-' + String(sd.getMonth() + 1).padStart(2, '0') + '-' + String(sd.getDate()).padStart(2, '0') === dateKey; });
-        if (idx >= 0) { const newScheds = [...schedules]; newScheds[idx] = newSched; setSchedules(newScheds); }
-        setAllSchedules({ ...allSchedules, [dateKey]: newSched }); setHasUnsavedChanges(true);
-      };
-      
-      const saveChanges = () => { localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees, week1Start, week2Start, schedules, allSchedules, generatedDays, cleaningLogs })); setHasUnsavedChanges(false); alert('Changes saved!'); };
-      
-      const handleFileUpload = (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          try {
-            const data = new Uint8Array(evt.target.result); const workbook = XLSX.read(data, { type: 'array' }); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            const newEmployees = [];
-            for (let i = 2; i < json.length; i++) {
-              const row = json[i]; if (!row[0]) continue;
-              const isCheck = (v) => v === '✓' || v === 'X' || v === 'x' || v === true || v === 'TRUE';
-              newEmployees.push({ name: row[0] || '', vault: isCheck(row[1]), reception: isCheck(row[2]), lod: isCheck(row[3]), ipad: isCheck(row[4]), registers: isCheck(row[5]), ptoText: row[6] || '', notes: row[7] || '', week1: { 1: row[8] || '', 2: row[9] || '', 3: row[10] || '', 4: row[11] || '', 5: row[12] || '', 6: row[13] || '', 7: row[14] || '' }, week2: { 1: row[15] || '', 2: row[16] || '', 3: row[17] || '', 4: row[18] || '', 5: row[19] || '', 6: row[20] || '', 7: row[21] || '' } });
-            }
-            setEmployees(newEmployees);
-          } catch (err) { console.error(err); }
-        };
-        reader.readAsArrayBuffer(file);
-      };
-      
-      const handleSaveEmployee = (emp) => { if (editingEmployee !== null) { const updated = [...employees]; updated[editingEmployee] = emp; setEmployees(updated); setEditingEmployee(null); } else { setEmployees([...employees, emp]); setShowAddForm(false); } };
-      
-      const handleCalendarDayClick = (date) => {
-        const dateKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
-        if (allSchedules[dateKey]) {
-          const idx = schedules.findIndex(s => { const d = new Date(s.date); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') === dateKey; });
-          if (idx >= 0) setSelectedDay(idx);
-          else { setSchedules([...schedules, allSchedules[dateKey]].sort((a, b) => new Date(a.date) - new Date(b.date))); setSelectedDay(schedules.length); }
-        } else generateSingleDay(date);
-      };
-      
-      const handleCleaningSubmit = (log) => { const today = new Date().toISOString().split('T')[0]; const existing = cleaningLogs[today] || []; setCleaningLogs({ ...cleaningLogs, [today]: [...existing, log] }); };
-      
-      const getDateForDay = (wk, dy) => { const start = wk === 1 ? new Date(week1Start + 'T12:00:00') : new Date(week2Start + 'T12:00:00'); start.setDate(start.getDate() + (dy - 1)); return (start.getMonth() + 1) + '/' + start.getDate(); };
-      
-      return (
-        <div className="min-h-screen pb-20">
-          {showLoginModal && <LoginModal onLogin={() => { setIsLoggedIn(true); setShowLoginModal(false); }} onClose={() => setShowLoginModal(false)} />}
-          {showCleaningModal && <CleaningModal task={showCleaningModal} onClose={() => setShowCleaningModal(null)} onSubmit={handleCleaningSubmit} />}
-          {viewingLog && <CleaningModal task={viewingLog.task} existingLog={viewingLog} onClose={() => setViewingLog(null)} onSubmit={() => {}} />}
-          
-          <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40">
-            <div className="max-w-[1800px] mx-auto px-4 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center"><span className="text-white text-xl">📋</span></div>
-                  <h1 className="text-xl font-bold text-gray-900">Scheduler</h1>
+        {tab === 'employees' && logged && (
+          <div className="fade-in grid grid-cols-12 gap-4">
+            <div className="col-span-3">
+              <div className="bg-white p-4 rounded-lg card-shadow mb-4">
+                <h3 className="font-bold mb-3">Schedule Period</h3>
+                <div className="space-y-2">
+                  <div><label className="block text-xs font-medium mb-1">Week 1 Start</label><input type="date" value={w1} onChange={e=>{setW1(e.target.value);const d=new Date(e.target.value+'T12:00:00');d.setDate(d.getDate()+7);setW2(d.toISOString().split('T')[0]);}} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div>
+                  <div><label className="block text-xs font-medium mb-1">Week 2 Start</label><input type="date" value={w2} onChange={e=>setW2(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex gap-2">
-                    <button onClick={() => setTab('schedule')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'schedule' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Daily Schedule</button>
-                    {isLoggedIn && (<>
-                      <button onClick={() => setTab('employees')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'employees' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Employee Master Schedule</button>
-                      <button onClick={() => setTab('summary')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'summary' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Staffing Summary</button>
-                      <button onClick={() => setTab('cleaning')} className={'px-4 py-2 rounded-lg font-medium text-sm transition-all ' + (tab === 'cleaning' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200')}>Cleaning Logs</button>
-                    </>)}
-                  </div>
-                  {!isLoggedIn ? (<button onClick={() => setShowLoginModal(true)} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🔐 Supervisor Login</button>) : (<button onClick={() => { setIsLoggedIn(false); setTab('schedule'); }} className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700">Logout</button>)}
+                {emps.length>0&&w1&&w2 && <button onClick={genAll} className="mt-3 btn-primary px-3 py-2 text-white rounded-lg font-bold text-sm w-full">🗓️ Generate All 14 Days</button>}
+                <div className="mt-4 pt-4 border-t">
+                  <h4 className="font-bold text-sm mb-2">Generate Single Day</h4>
+                  <input type="date" value={singleDate} onChange={e=>setSingleDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2"/>
+                  <button onClick={()=>singleDate&&genSingle(new Date(singleDate+'T12:00:00'))} disabled={!singleDate||emps.length===0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button>
                 </div>
               </div>
+              <Calendar generated={generated} onClick={calClick}/>
+              <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
+                <h3 className="font-bold mb-2">Import</h3>
+                <label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50"><span className="text-xl">📁</span><p className="text-xs font-medium">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={upload} className="hidden"/></div></label>
+                <button onClick={()=>setShowAdd(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
+              </div>
+              {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]} emps={sorted}/>}
             </div>
-          </header>
-          
-          <main className="max-w-[1800px] mx-auto px-4 py-6">
-            {tab === 'schedule' && (
-              <div className="fade-in">
-                {todaySchedule ? (
-                  <>
-                    <div className="no-print flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-bold">{getESTHour() >= 20 ? "Tomorrow's" : "Today's"} Schedule</h2>
-                      <button onClick={() => window.print()} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900">🖨️ Print</button>
-                    </div>
-                    <ScheduleDisplay schedule={todaySchedule} employees={sortedEmployees} empShapes={empShapes} onCleaningSign={setShowCleaningModal} isEditable={false} showShapes={false} />
-                  </>
-                ) : (
-                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
-                    <span className="text-5xl mb-4 block">📅</span>
-                    <p className="text-gray-500 mb-4">No schedule available for today.</p>
-                    {isLoggedIn ? (<button onClick={() => setTab('employees')} className="btn-primary px-6 py-2 text-white rounded-lg font-medium">Go to Employee Master Schedule →</button>) : (<p className="text-sm text-gray-400">Please contact a supervisor to generate schedules.</p>)}
-                  </div>
-                )}
-              </div>
-            )}
             
-            {tab === 'employees' && isLoggedIn && (
-              <div className="fade-in">
-                <div className="grid grid-cols-12 gap-4">
-                  <div className="col-span-3">
-                    <div className="bg-white p-4 rounded-lg card-shadow mb-4">
-                      <h3 className="font-bold mb-3">Schedule Period</h3>
-                      <div className="space-y-2">
-                        <div><label className="block text-xs font-medium mb-1">Week 1 Start</label><input type="date" value={week1Start} onChange={(e) => { setWeek1Start(e.target.value); const d = new Date(e.target.value + 'T12:00:00'); d.setDate(d.getDate() + 7); setWeek2Start(d.toISOString().split('T')[0]); }} className="w-full px-2 py-1.5 text-sm border rounded-lg" /></div>
-                        <div><label className="block text-xs font-medium mb-1">Week 2 Start</label><input type="date" value={week2Start} onChange={(e) => setWeek2Start(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg" /></div>
-                      </div>
-                      {employees.length > 0 && week1Start && week2Start && (<button onClick={generateAllSchedules} className="mt-3 btn-primary px-3 py-2 text-white rounded-lg font-bold text-sm w-full">🗓️ Generate All 14 Days</button>)}
-                      <div className="mt-4 pt-4 border-t"><h4 className="font-bold text-sm mb-2">Generate Single Day</h4><input type="date" value={singleDayDate} onChange={(e) => setSingleDayDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2" /><button onClick={() => singleDayDate && generateSingleDay(new Date(singleDayDate + 'T12:00:00'))} disabled={!singleDayDate || employees.length === 0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button></div>
-                    </div>
-                    <MonthlyCalendar generatedDays={generatedDays} onDayClick={handleCalendarDayClick} />
-                    <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
-                      <h3 className="font-bold mb-2">Import</h3>
-                      <label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all"><span className="text-xl">📁</span><p className="text-xs font-medium text-gray-700">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" /></div></label>
-                      <button onClick={() => setShowAddForm(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
-                    </div>
-                    {/* Shortage Alert below Import */}
-                    {schedules.length > 0 && schedules[selectedDay] && <ShortageAlert schedule={schedules[selectedDay]} employees={sortedEmployees} />}
-                  </div>
-                  
-                  <div className="col-span-9">
-                    {schedules.length > 0 && (<div className="flex flex-wrap gap-1 mb-3">{schedules.map((s, i) => (<button key={i} onClick={() => setSelectedDay(i)} className={'px-2 py-1 rounded text-xs font-medium transition-all ' + (selectedDay === i ? 'bg-emerald-600 text-white' : 'bg-white hover:bg-gray-100 border')}>{s.isSunday ? '☀️' : ''} {s.dateStr}</button>))}</div>)}
-                    
-                    {(showAddForm || editingEmployee !== null) && (<div className="mb-3"><EmployeeForm employee={editingEmployee !== null ? employees[editingEmployee] : null} onSave={handleSaveEmployee} onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }} /></div>)}
-                    
-                    {schedules.length > 0 && schedules[selectedDay] && (
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-600">Editing: {schedules[selectedDay].fullTitle}</span>
-                          {hasUnsavedChanges && <button onClick={saveChanges} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save Changes</button>}
-                        </div>
-                        <ScheduleDisplay schedule={schedules[selectedDay]} employees={sortedEmployees} empShapes={empShapes} onScheduleUpdate={handleScheduleUpdate} isEditable={true} onCleaningSign={setShowCleaningModal} showShapes={true} />
-                      </div>
-                    )}
-                    
-                    {employees.length > 0 && (
-                      <div className="bg-white rounded-lg card-shadow overflow-hidden">
-                        <div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
-                          <h3 className="font-bold text-sm">Master Schedule ({employees.length} Employees)</h3>
-                          {schedules.length > 0 && schedules[selectedDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled for {schedules[selectedDay].fullTitle}</span>}
-                        </div>
-                        <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
-                          <table className="w-full text-xs">
-                            <thead className="sticky top-0 z-10">
-                              <tr className="bg-gray-100">
-                                <th className="px-2 py-1 text-left font-semibold sticky left-0 bg-gray-100 z-20 min-w-[150px]">Name</th>
-                                <th className="px-1 py-1 text-center w-8">V</th><th className="px-1 py-1 text-center w-8">R</th><th className="px-1 py-1 text-center w-8">L</th><th className="px-1 py-1 text-center w-8">I</th><th className="px-1 py-1 text-center w-8">Reg</th><th className="px-1 py-1 text-center min-w-[50px]">PTO</th>
-                                {week1Start && [1,2,3,4,5,6,7].map(d => (<th key={'w1-'+d} className="px-1 py-1 text-center bg-blue-50 min-w-[85px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div><div className="text-[9px] text-gray-500">{getDateForDay(1, d)}</div></th>))}
-                                {week2Start && [1,2,3,4,5,6,7].map(d => (<th key={'w2-'+d} className="px-1 py-1 text-center bg-green-50 min-w-[85px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div><div className="text-[9px] text-gray-500">{getDateForDay(2, d)}</div></th>))}
-                                <th className="px-1 py-1 min-w-[40px]"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sortedEmployees.map((emp, idx) => {
-                                const currentSchedule = schedules[selectedDay];
-                                let isScheduledToday = false;
-                                if (currentSchedule) {
-                                  const allNames = [...currentSchedule.lod.map(l => l.name), ...currentSchedule.reception.flatMap(r => [r.r1, r.r2]), ...currentSchedule.ipad.map(i => i.display), ...currentSchedule.medCheckout.flatMap(m => [m.mc1, m.mc2, m.med3au1]), ...currentSchedule.auCheckout.flatMap(a => [a.au2, a.au3, a.au4]), ...currentSchedule.vault.flatMap(v => [v.au, v.med]), ...currentSchedule.cleaning.map(c => c.name), ...currentSchedule.lunches.map(l => l.name), ...currentSchedule.breaks.filter(b => b.name).map(b => b.name)].map(n => n ? n.toUpperCase() : '');
-                                  isScheduledToday = allNames.includes(emp.name.toUpperCase());
-                                }
-                                const shape = empShapes[emp.name.toUpperCase()];
-                                const realIdx = employees.findIndex(e => e.name === emp.name);
-                                return (
-                                  <tr key={idx} className={'border-t ' + (isScheduledToday ? 'bg-emerald-50' : 'hover:bg-gray-50')}>
-                                    <td className={'px-2 py-1 font-medium sticky left-0 ' + (isScheduledToday ? 'bg-emerald-100' : 'bg-white')}>
-                                      {shape && <EmpShape color={shape.color} shape={shape.shape} />}
-                                      {emp.name}
-                                    </td>
-                                    <td className="px-1 py-1 text-center">{emp.vault && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
-                                    <td className="px-1 py-1 text-center">{emp.reception && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
-                                    <td className="px-1 py-1 text-center">{emp.lod && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
-                                    <td className="px-1 py-1 text-center">{emp.ipad && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
-                                    <td className="px-1 py-1 text-center">{emp.registers && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"></div>}</td>
-                                    <td className="px-1 py-1 text-center text-[10px]">{emp.ptoText || '-'}</td>
-                                    {week1Start && [1,2,3,4,5,6,7].map(d => <td key={'w1-'+d} className="px-1 py-1 text-center text-[10px] bg-blue-50/30">{emp.week1 && emp.week1[d] ? emp.week1[d] : '-'}</td>)}
-                                    {week2Start && [1,2,3,4,5,6,7].map(d => <td key={'w2-'+d} className="px-1 py-1 text-center text-[10px] bg-green-50/30">{emp.week2 && emp.week2[d] ? emp.week2[d] : '-'}</td>)}
-                                    <td className="px-1 py-1"><button onClick={() => setEditingEmployee(realIdx)} className="text-blue-600 hover:underline text-[10px]">Edit</button></td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="col-span-9">
+              {scheds.length>0 && <div className="flex flex-wrap gap-1 mb-3">{scheds.map((s,i)=><button key={i} onClick={()=>setSelDay(i)} className={'px-2 py-1 rounded text-xs font-medium '+(selDay===i?'bg-emerald-600 text-white':'bg-white hover:bg-gray-100 border')}>{s.isSunday?'☀️':''} {s.dateStr}</button>)}</div>}
+              
+              {(showAdd||editEmp!==null) && <div className="mb-3"><EmpForm emp={editEmp!==null?emps[editEmp]:null} onSave={saveEmp} onCancel={()=>{setShowAdd(false);setEditEmp(null);}}/></div>}
+              
+              {scheds.length>0&&scheds[selDay] && <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-600">Editing: {scheds[selDay].fullTitle}</span>
+                  {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
                 </div>
-              </div>
-            )}
-            
-            {tab === 'summary' && isLoggedIn && (
-              <div className="fade-in">
-                {schedules.length > 0 ? <StaffingSummary schedules={schedules} allSchedules={allSchedules} onDaySelect={setSelectedDay} /> : (<div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first to see the summary.</p></div>)}
-              </div>
-            )}
-            
-            {tab === 'cleaning' && isLoggedIn && <CleaningLogsCalendar cleaningLogs={cleaningLogs} onViewLog={setViewingLog} />}
-          </main>
-        </div>
-      );
-    };
-    
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true}/>
+              </div>}
+              
+              {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
+                <div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
+                  <h3 className="font-bold text-sm">Master Schedule ({emps.length} Employees)</h3>
+                  {scheds.length>0&&scheds[selDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled for {scheds[selDay].fullTitle}</span>}
+                </div>
+                <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-gray-100">
+                        <th className="px-2 py-1 text-left font-semibold sticky left-0 bg-gray-100 z-20 min-w-[150px]">Name</th>
+                        <th className="px-1 py-1 text-center w-8">V</th><th className="px-1 py-1 text-center w-8">R</th><th className="px-1 py-1 text-center w-8">L</th><th className="px-1 py-1 text-center w-8">I</th><th className="px-1 py-1 text-center w-8">Rg</th><th className="px-1 py-1 text-center min-w-[50px]">PTO</th>
+                        {w1 && [1,2,3,4,5,6,7].map(d=><th key={'w1'+d} className="px-1 py-1 text-center bg-blue-50 min-w-[85px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div><div className="text-[9px] text-gray-500">{dateForDay(1,d)}</div></th>)}
+                        {w2 && [1,2,3,4,5,6,7].map(d=><th key={'w2'+d} className="px-1 py-1 text-center bg-green-50 min-w-[85px]"><div className="text-[10px]">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]}</div><div className="text-[9px] text-gray-500">{dateForDay(2,d)}</div></th>)}
+                        <th className="px-1 py-1 min-w-[40px]"></th>
+                      </tr>
+                    </thead>
+                    <tbody>{sorted.map((emp,idx) => {
+                      const cur = scheds[selDay];
+                      let onSched = false;
+                      if (cur) {
+                        const all = [...cur.lod.map(l=>l.name),...cur.reception.flatMap(r=>[r.r1,r.r2]),...cur.ipad.map(i=>i.display),...cur.medCheckout.flatMap(m=>[m.mc1,m.mc2,m.med3au1]),...cur.auCheckout.flatMap(a=>[a.au2,a.au3,a.au4]),...cur.vault.flatMap(v=>[v.au,v.med]),...cur.cleaning.map(c=>c.name),...cur.lunches.map(l=>l.name),...cur.breaks.filter(b=>b.name).map(b=>b.name)].map(n=>n?n.toUpperCase():'');
+                        onSched = all.includes(emp.name.toUpperCase());
+                      }
+                      const sh = shapes[emp.name.toUpperCase()];
+                      const realIdx = emps.findIndex(e=>e.name===emp.name);
+                      return <tr key={idx} className={'border-t '+(onSched?'bg-emerald-50':'hover:bg-gray-50')}>
+                        <td className={'px-2 py-1 font-medium sticky left-0 '+(onSched?'bg-emerald-100':'bg-white')}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{emp.name}</td>
+                        <td className="px-1 py-1 text-center">{emp.vault && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
+                        <td className="px-1 py-1 text-center">{emp.reception && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
+                        <td className="px-1 py-1 text-center">{emp.lod && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
+                        <td className="px-1 py-1 text-center">{emp.ipad && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
+                        <td className="px-1 py-1 text-center">{emp.registers && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
+                        <td className="px-1 py-1 text-center text-[10px]">{emp.ptoText||'-'}</td>
+                        {w1 && [1,2,3,4,5,6,7].map(d=><td key={'w1'+d} className="px-1 py-1 text-center text-[10px] bg-blue-50/30">{emp.week1?.[d]||'-'}</td>)}
+                        {w2 && [1,2,3,4,5,6,7].map(d=><td key={'w2'+d} className="px-1 py-1 text-center text-[10px] bg-green-50/30">{emp.week2?.[d]||'-'}</td>)}
+                        <td className="px-1 py-1"><button onClick={()=>setEditEmp(realIdx)} className="text-blue-600 hover:underline text-[10px]">Edit</button></td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                </div>
+              </div>}
+            </div>
+          </div>
+        )}
+        
+        {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
+        
+        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog}/>}
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 </body>
 </html>
