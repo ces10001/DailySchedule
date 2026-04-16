@@ -1368,77 +1368,71 @@
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
-                    <span className="text-white text-xl">💊</span>
+                    <span className="text-white text-xl">📋</span>
                   </div>
-                  <div>
-                    <h1 className="text-xl font-bold text-gray-900">Pharmacy Scheduler</h1>
-                    <p className="text-xs text-gray-500">V9.9 • Position Rotation • Smart Breaks</p>
-                  </div>
+                  <h1 className="text-xl font-bold text-gray-900">Scheduler</h1>
                 </div>
                 
                 <div className="flex gap-2">
-                  {['employees', 'schedule', 'summary'].map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTab(t)}
-                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                        tab === t ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'
-                      }`}
-                    >
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setTab('employees')}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      tab === 'employees' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    Employee Master Schedule
+                  </button>
+                  <button
+                    onClick={() => setTab('schedule')}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      tab === 'schedule' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    Daily Schedule
+                  </button>
+                  <button
+                    onClick={() => setTab('calendar')}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      tab === 'calendar' ? 'tab-active' : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    Calendar
+                  </button>
                 </div>
               </div>
             </div>
           </header>
           
           <main className="max-w-7xl mx-auto px-4 py-6">
-            {/* Employees Tab */}
+            {/* Employee Master Schedule Tab */}
             {tab === 'employees' && (
               <div className="fade-in">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold">Employee Management</h2>
-                  <div className="flex gap-2">
-                    <label className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium cursor-pointer hover:bg-blue-700">
-                      Import Excel/CSV
-                      <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
+                {/* Upload/Add Section */}
+                <div className="bg-white p-6 rounded-lg card-shadow mb-6">
+                  <h2 className="text-xl font-bold mb-4">Import or Add Employees</h2>
+                  
+                  <div className="flex flex-wrap gap-4 mb-4">
+                    <label className="flex-1 min-w-[200px]">
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all">
+                        <span className="text-3xl mb-2 block">📁</span>
+                        <span className="font-medium text-gray-700">Upload Excel/CSV File</span>
+                        <p className="text-xs text-gray-500 mt-1">Click or drag your Master Schedule file</p>
+                        <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
+                      </div>
                     </label>
+                    
                     <button
                       onClick={() => setShowAddForm(true)}
-                      className="btn-primary px-4 py-2 text-white rounded-lg font-medium"
+                      className="flex-1 min-w-[200px] border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-emerald-500 hover:bg-emerald-50 transition-all"
                     >
-                      + Add Employee
+                      <span className="text-3xl mb-2 block">➕</span>
+                      <span className="font-medium text-gray-700">Add Employee Manually</span>
+                      <p className="text-xs text-gray-500 mt-1">Enter employee details by hand</p>
                     </button>
                   </div>
-                </div>
-                
-                {(showAddForm || editingEmployee !== null) && (
-                  <div className="mb-6">
-                    <EmployeeForm
-                      employee={editingEmployee !== null ? employees[editingEmployee] : null}
-                      onSave={handleSaveEmployee}
-                      onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }}
-                    />
-                  </div>
-                )}
-                
-                {employees.length > 0 ? (
-                  <EmployeeList
-                    employees={employees}
-                    onEdit={(i) => setEditingEmployee(i)}
-                    onDelete={handleDeleteEmployee}
-                  />
-                ) : (
-                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
-                    <p className="text-gray-500 mb-4">No employees yet. Add manually or import from Excel.</p>
-                  </div>
-                )}
-                
-                {/* Week Date Pickers */}
-                <div className="mt-6 bg-white p-6 rounded-lg card-shadow">
-                  <h3 className="font-bold mb-4">Week Start Dates</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  
+                  {/* Week Date Pickers */}
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                     <div>
                       <label className="block text-sm font-medium mb-1">Week 1 Start (Monday)</label>
                       <input
@@ -1446,7 +1440,6 @@
                         value={week1Start}
                         onChange={(e) => {
                           setWeek1Start(e.target.value);
-                          // Auto-set week 2 to 7 days later
                           const d = new Date(e.target.value);
                           d.setDate(d.getDate() + 7);
                           setWeek2Start(d.toISOString().split('T')[0]);
@@ -1465,13 +1458,109 @@
                     </div>
                   </div>
                   
-                  <button
-                    onClick={generateSchedules}
-                    className="mt-4 btn-primary px-6 py-3 text-white rounded-lg font-bold text-lg w-full"
-                  >
-                    🗓️ Generate All Schedules
-                  </button>
+                  {employees.length > 0 && (
+                    <button
+                      onClick={generateSchedules}
+                      className="mt-4 btn-primary px-6 py-3 text-white rounded-lg font-bold text-lg w-full"
+                    >
+                      🗓️ Generate All Schedules
+                    </button>
+                  )}
                 </div>
+                
+                {/* Add/Edit Form */}
+                {(showAddForm || editingEmployee !== null) && (
+                  <div className="mb-6">
+                    <EmployeeForm
+                      employee={editingEmployee !== null ? employees[editingEmployee] : null}
+                      onSave={handleSaveEmployee}
+                      onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }}
+                    />
+                  </div>
+                )}
+                
+                {/* Master Schedule Display */}
+                {employees.length > 0 ? (
+                  <div className="bg-white rounded-lg card-shadow overflow-hidden">
+                    <div className="bg-gray-800 text-white px-6 py-3 flex justify-between items-center">
+                      <h3 className="font-bold text-lg">Master Schedule ({employees.length} Employees)</h3>
+                      <button
+                        onClick={() => { if(confirm('Clear all employees?')) setEmployees([]); }}
+                        className="text-red-300 hover:text-red-100 text-sm"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="px-3 py-2 text-left font-semibold sticky left-0 bg-gray-100 z-10 border-r">Name</th>
+                            <th className="px-2 py-2 text-center font-semibold border-r" title="Vault">V</th>
+                            <th className="px-2 py-2 text-center font-semibold border-r" title="Reception">R</th>
+                            <th className="px-2 py-2 text-center font-semibold border-r" title="LOD">L</th>
+                            <th className="px-2 py-2 text-center font-semibold border-r" title="iPad">I</th>
+                            <th className="px-2 py-2 text-center font-semibold border-r" title="Registers">Reg</th>
+                            <th className="px-2 py-2 text-center font-semibold border-r">PTO</th>
+                            <th className="px-2 py-2 text-center font-semibold bg-blue-100 border-r" colSpan="7">Week 1</th>
+                            <th className="px-2 py-2 text-center font-semibold bg-green-100 border-r" colSpan="7">Week 2</th>
+                            <th className="px-2 py-2 text-center font-semibold">Actions</th>
+                          </tr>
+                          <tr className="bg-gray-50 text-xs">
+                            <th className="sticky left-0 bg-gray-50 z-10 border-r"></th>
+                            <th className="border-r"></th>
+                            <th className="border-r"></th>
+                            <th className="border-r"></th>
+                            <th className="border-r"></th>
+                            <th className="border-r"></th>
+                            <th className="border-r"></th>
+                            {['M','T','W','Th','F','Sa','Su'].map((d,i) => (
+                              <th key={`w1-${i}`} className="px-1 py-1 text-center bg-blue-50 border-r">{d}</th>
+                            ))}
+                            {['M','T','W','Th','F','Sa','Su'].map((d,i) => (
+                              <th key={`w2-${i}`} className="px-1 py-1 text-center bg-green-50 border-r">{d}</th>
+                            ))}
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employees.map((emp, idx) => (
+                            <tr key={idx} className="border-t hover:bg-gray-50">
+                              <td className="px-3 py-2 font-medium sticky left-0 bg-white z-10 border-r">{emp.name}</td>
+                              <td className="px-2 py-2 text-center border-r">{emp.vault ? '✓' : ''}</td>
+                              <td className="px-2 py-2 text-center border-r">{emp.reception ? '✓' : ''}</td>
+                              <td className="px-2 py-2 text-center border-r">{emp.lod ? '✓' : ''}</td>
+                              <td className="px-2 py-2 text-center border-r">{emp.ipad ? '✓' : ''}</td>
+                              <td className="px-2 py-2 text-center border-r">{emp.registers ? '✓' : ''}</td>
+                              <td className="px-2 py-2 text-center border-r text-xs">{emp.ptoText || '-'}</td>
+                              {[1,2,3,4,5,6,7].map(d => (
+                                <td key={`w1-${d}`} className="px-1 py-2 text-center text-xs bg-blue-50/30 border-r max-w-[60px] truncate" title={emp.week1?.[d] || 'OFF'}>
+                                  {emp.week1?.[d] || <span className="text-gray-300">OFF</span>}
+                                </td>
+                              ))}
+                              {[1,2,3,4,5,6,7].map(d => (
+                                <td key={`w2-${d}`} className="px-1 py-2 text-center text-xs bg-green-50/30 border-r max-w-[60px] truncate" title={emp.week2?.[d] || 'OFF'}>
+                                  {emp.week2?.[d] || <span className="text-gray-300">OFF</span>}
+                                </td>
+                              ))}
+                              <td className="px-2 py-2 text-center">
+                                <button onClick={() => setEditingEmployee(idx)} className="text-blue-600 hover:underline mr-2 text-xs">Edit</button>
+                                <button onClick={() => handleDeleteEmployee(idx)} className="text-red-600 hover:underline text-xs">Del</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 bg-white rounded-lg card-shadow">
+                    <span className="text-5xl mb-4 block">📋</span>
+                    <p className="text-gray-500 mb-2">No employees loaded yet</p>
+                    <p className="text-sm text-gray-400">Upload your Excel Master Schedule or add employees manually above</p>
+                  </div>
+                )}
               </div>
             )}
             
@@ -1508,20 +1597,21 @@
                   </>
                 ) : (
                   <div className="text-center py-12 bg-white rounded-lg card-shadow">
+                    <span className="text-5xl mb-4 block">📅</span>
                     <p className="text-gray-500 mb-4">No schedules generated yet.</p>
                     <button
                       onClick={() => setTab('employees')}
                       className="btn-primary px-6 py-2 text-white rounded-lg font-medium"
                     >
-                      Go to Employees →
+                      Go to Employee Master Schedule →
                     </button>
                   </div>
                 )}
               </div>
             )}
             
-            {/* Summary Tab */}
-            {tab === 'summary' && (
+            {/* Calendar Tab */}
+            {tab === 'calendar' && (
               <div className="fade-in">
                 {schedules.length > 0 ? (
                   <StaffingSummary schedules={schedules} />
