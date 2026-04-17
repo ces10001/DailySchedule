@@ -23,6 +23,10 @@
     @media print { .no-print { display: none !important; } }
     .compact-schedule .schedule-cell { padding: 2px 4px; font-size: 11px; }
     .compact-schedule h2 { font-size: 1.5rem !important; }
+    .cell-highlight { box-shadow: inset 0 0 0 3px var(--hl-color, #3B82F6); background: color-mix(in srgb, var(--hl-color, #3B82F6) 15%, white) !important; transition: box-shadow 0.15s, background 0.15s; }
+    .emp-name-btn { cursor: pointer; user-select: none; transition: background 0.1s; }
+    .emp-name-btn:hover { filter: brightness(0.95); }
+    .emp-pinned { outline: 2px solid; outline-offset: -2px; }
   </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
@@ -385,21 +389,24 @@ const Dropdown = ({ value, options, onSelect, onClose }) => (
   </div>
 );
 
-const NameCell = ({ name, shapes, editable, emps, onUpdate }) => {
+const NameCell = ({ name, shapes, editable, emps, onUpdate, hl, allShapes }) => {
   const [open, setOpen] = useState(false);
   const sh = name && name!=='X' && name!=='RPH' && shapes?.[name.toUpperCase()];
-  const base = 'schedule-cell font-bold text-sm flex items-center justify-center ' + (!name||name==='X'?'bg-gray-400':'bg-white');
-  if (!editable) return <div className={base}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>;
+  const isHl = hl && hl.size > 0 && name && name !== 'X' && name !== 'RPH' && hl.has(name.toUpperCase());
+  const hlColor = isHl && allShapes?.[name.toUpperCase()]?.color;
+  const hlStyle = isHl ? { '--hl-color': hlColor || '#3B82F6' } : {};
+  const base = 'schedule-cell font-bold text-sm flex items-center justify-center ' + (!name||name==='X'?'bg-gray-400':'bg-white') + (isHl ? ' cell-highlight' : '');
+  if (!editable) return <div className={base} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>;
   return (
     <div className="relative">
-      <div onClick={()=>setOpen(!open)} className={base+' cursor-pointer hover:bg-gray-50'}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>
+      <div onClick={()=>setOpen(!open)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>
       {open && <Dropdown value={name} options={['X',...emps.map(e=>e.name).sort()]} onSelect={onUpdate} onClose={()=>setOpen(false)}/>}
     </div>
   );
 };
 
 // Split cell for iPad and AU2 splits - vertical layout with both shapes
-const SplitCell = ({ value, shapes, editable, onUpdate, splitData }) => {
+const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes }) => {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value||'');
   const save = () => { onUpdate(text); setEditing(false); };
@@ -427,11 +434,16 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData }) => {
     const secondTime = second.replace(new RegExp('^' + second.split(' ')[0] + '\\s*', 'i'), '').trim();
     const sh1 = shapes?.[firstName];
     const sh2 = shapes?.[secondName];
+    const hl1 = hl && hl.size > 0 && hl.has(firstName);
+    const hl2 = hl && hl.size > 0 && hl.has(secondName);
+    const anyHl = hl1 || hl2;
+    const hlColor1 = hl1 && allShapes?.[firstName]?.color;
+    const hlColor2 = hl2 && allShapes?.[secondName]?.color;
     
     return (
       <div onClick={()=>editable&&setEditing(true)} 
-        className={'schedule-cell bg-white font-bold text-xs py-2 min-w-[180px] '+(editable?'cursor-pointer hover:bg-gray-50':'')}>
-        <div className="flex flex-col gap-1">
+        className={'schedule-cell bg-white font-bold text-xs py-2 min-w-[180px] '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
+        style={anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {}}>        <div className="flex flex-col gap-1">
           <div className="flex items-center justify-center gap-1">
             {sh1 && <EmpShape color={sh1.color} shape={sh1.shape}/>}
             <span>{firstName}</span>
@@ -450,9 +462,12 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData }) => {
   
   const firstName = value && value!=='X' ? value.split(' ')[0].toUpperCase() : null;
   const sh = firstName && shapes?.[firstName];
-  const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white');
-  if (!editable) return <div className={base}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(value||'X').toUpperCase()}</div>;
-  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}<span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px] ml-1">✏️</span></div>;
+  const isHl = hl && hl.size > 0 && firstName && hl.has(firstName);
+  const hlColor = isHl && allShapes?.[firstName]?.color;
+  const hlStyle = isHl ? { '--hl-color': hlColor || '#3B82F6' } : {};
+  const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white')+(isHl?' cell-highlight':'');
+  if (!editable) return <div className={base} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(value||'X').toUpperCase()}</div>;
+  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}<span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px] ml-1">✏️</span></div>;
 };
 
 const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
@@ -462,9 +477,10 @@ const Header = ({ children, color }) => {
 };
 
 // ============== SCHEDULE DISPLAY ==============
-const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs }) => {
+const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps }) => {
   if (!sched) return null;
   const sh = showShapes ? shapes : null;
+  const hl = highlightEmps || new Set();
   const upd = (path, val) => {
     if (!onUpdate) return;
     const s = JSON.parse(JSON.stringify(sched)), pts = path.split('.');
@@ -486,9 +502,11 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
     const [open, setOpen] = useState(false);
     const csh = sh && c.name && c.name!=='X' && sh[c.name.toUpperCase()];
     const complete = isTaskComplete(c.task);
+    const cHl = hl.size > 0 && c.name && c.name!=='X' && hl.has(c.name.toUpperCase());
+    const cHlColor = cHl && shapes?.[c.name.toUpperCase()]?.color;
     
     return (
-      <div className="schedule-cell text-red-600 font-bold text-xs py-1 flex items-center justify-between relative">
+      <div className={'schedule-cell text-red-600 font-bold text-xs py-1 flex items-center justify-between relative'+(cHl?' cell-highlight':'')} style={cHl?{'--hl-color':cHlColor||'#3B82F6'}:{}}>
         <div className="flex items-center flex-1 cursor-pointer" onClick={()=>editable&&setOpen(!open)}>
           {csh && <EmpShape color={csh.color} shape={csh.shape}/>}
           <span>{c.name.toUpperCase()} - {c.task}</span>
@@ -516,7 +534,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
         <div className="flex-1">
           <div className="mb-2">
             <Header color="black">LEADER OF THE DAY</Header>
-            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)}/><TimeCell time={l.time}/></React.Fragment>)}</div>
+            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)} hl={hl} allShapes={shapes}/><TimeCell time={l.time}/></React.Fragment>)}</div>
           </div>
           <div className="mb-2">
             <div className="schedule-cell font-bold text-base bg-[#67d50d]">FRONT END RECEPTION</div>
@@ -525,9 +543,9 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="green">RECEPTION 2</Header></div>
               <div className="col-span-2"><Header color="green">iPAD</Header></div>
               {sched.reception.map((r,i) => <React.Fragment key={i}>
-                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)}/><TimeCell time={r.time}/>
-                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)}/><TimeCell time={r.time}/>
-                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split}/>
+                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)} hl={hl} allShapes={shapes}/><TimeCell time={r.time}/>
+                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)} hl={hl} allShapes={shapes}/><TimeCell time={r.time}/>
+                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split} hl={hl} allShapes={shapes}/>
                 <TimeCell time={sched.ipad[i].time}/>
               </React.Fragment>)}
             </div>
@@ -539,9 +557,9 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 2</Header></div>
               <div className="col-span-2"><Header color="blue">MED 3 / AU 1</Header></div>
               {sched.medCheckout.map((m,i) => <React.Fragment key={i}>
-                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)}/><TimeCell time={m.time}/>
-                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)}/><TimeCell time={m.time}/>
-                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)}/><TimeCell time={m.time}/>
+                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)} hl={hl} allShapes={shapes}/><TimeCell time={m.time}/>
+                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)} hl={hl} allShapes={shapes}/><TimeCell time={m.time}/>
+                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)} hl={hl} allShapes={shapes}/><TimeCell time={m.time}/>
               </React.Fragment>)}
             </div>
             <div className="grid grid-cols-6 mt-1">
@@ -549,10 +567,10 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 3</Header></div>
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
               {sched.auCheckout.map((a,i) => <React.Fragment key={i}>
-                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split}/>
+                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split} hl={hl} allShapes={shapes}/>
                 <TimeCell time={a.time}/>
-                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)}/><TimeCell time={a.time}/>
-                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)}/><TimeCell time={a.time}/>
+                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)} hl={hl} allShapes={shapes}/><TimeCell time={a.time}/>
+                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)} hl={hl} allShapes={shapes}/><TimeCell time={a.time}/>
               </React.Fragment>)}
             </div>
           </div>
@@ -562,8 +580,8 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
             <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
             <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
             {sched.vault.map((v,i) => <React.Fragment key={i}>
-              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)}/><TimeCell time={v.time}/>
-              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)}/><TimeCell time={v.time}/>
+              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)} hl={hl} allShapes={shapes}/><TimeCell time={v.time}/>
+              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)} hl={hl} allShapes={shapes}/><TimeCell time={v.time}/>
             </React.Fragment>)}
           </div>
         </div>
@@ -575,9 +593,9 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">TIME</div>
               <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">COVER</div>
               {sched.lunches.map((l,i) => <React.Fragment key={i}>
-                <NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.name',v)}/>
+                <NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.name',v)} hl={hl} allShapes={shapes}/>
                 <div className="schedule-cell text-xs py-0.5">{l.time}</div>
-                <NameCell name={l.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.cover',v)}/>
+                <NameCell name={l.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.cover',v)} hl={hl} allShapes={shapes}/>
               </React.Fragment>)}
             </div>
           </div>
@@ -587,11 +605,14 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">NAME</div>
               <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">TIME</div>
               <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">COVER</div>
-              {sched.breaks.map((b,i) => <React.Fragment key={i}>
-                <div className="schedule-cell font-bold text-xs py-0.5">{b.name?.toUpperCase()||''}</div>
+              {sched.breaks.map((b,i) => {
+                const bHl = hl.size > 0 && b.name && hl.has(b.name.toUpperCase());
+                const bColor = bHl && shapes?.[b.name.toUpperCase()]?.color;
+                return <React.Fragment key={i}>
+                <div className={'schedule-cell font-bold text-xs py-0.5'+(bHl?' cell-highlight':'')} style={bHl?{'--hl-color':bColor||'#3B82F6'}:{}}>{b.name?.toUpperCase()||''}</div>
                 <div className="schedule-cell text-xs py-0.5">{b.time}</div>
-                <NameCell name={b.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('breaks.'+i+'.cover',v)}/>
-              </React.Fragment>)}
+                <NameCell name={b.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('breaks.'+i+'.cover',v)} hl={hl} allShapes={shapes}/>
+              </React.Fragment>; })}
             </div>
           </div>
           <div>
@@ -723,28 +744,197 @@ const CleaningLogs = ({ logs, onView, allScheds }) => {
 // ============== COVERAGE ALERT ==============
 const CoverageAlert = ({ sched }) => {
   if (!sched) return null;
-  const lodX = sched.lod.map((l,i) => l.name==='X' ? 'Block '+(i+1) : null).filter(Boolean);
-  const recX = [];
-  sched.reception.forEach((r,i) => { if(r.r1==='X') recX.push('Rec1 B'+(i+1)); if(r.r2==='X') recX.push('Rec2 B'+(i+1)); });
-  const regX = [];
-  sched.medCheckout.forEach((m,i) => { if(m.mc1==='X') regX.push('MC1 B'+(i+1)); if(m.mc2==='X') regX.push('MC2 B'+(i+1)); if(m.med3au1==='X') regX.push('M3/A1 B'+(i+1)); });
-  sched.auCheckout.forEach((a,i) => { if(a.au2==='X') regX.push('AU2 B'+(i+1)); if(a.au3==='X') regX.push('AU3 B'+(i+1)); if(a.au4==='X') regX.push('AU4 B'+(i+1)); });
+  const sun = sched.isSunday;
   
-  const shiftNeeds = [];
-  if (lodX.length > 0 || recX.some(x=>x.includes('B1')) || regX.some(x=>x.includes('B1'))) shiftNeeds.push('8:45-12');
-  if (lodX.some(x=>x.includes('2')) || recX.some(x=>x.includes('B2')) || regX.some(x=>x.includes('B2'))) shiftNeeds.push('12-4:15');
-  if (lodX.some(x=>x.includes('3')) || recX.some(x=>x.includes('B3')) || regX.some(x=>x.includes('B3'))) shiftNeeds.push('4-8:15');
+  // Block time labels
+  const blkLabels = sun 
+    ? { 1: { name: 'MORNING', time: '10A-12P' }, 2: { name: 'NOON', time: '12P-3P' }, 3: { name: 'EVENING', time: '3P-6:15P' } }
+    : { 1: { name: 'MORNING', time: '9A-12P' }, 2: { name: 'NOON', time: '12P-4:15P' }, 3: { name: 'EVENING', time: '4P-8:15P' } };
   
-  if (lodX.length === 0 && recX.length === 0 && regX.length === 0) return null;
+  // Collect all missing positions by block
+  const byBlock = { 1: [], 2: [], 3: [] };
+  
+  sched.lod.forEach((l, i) => { if (l.name === 'X') byBlock[i+1].push('LOD'); });
+  sched.reception.forEach((r, i) => {
+    if (r.r1 === 'X') byBlock[i+1].push('Reception 1');
+    if (r.r2 === 'X') byBlock[i+1].push('Reception 2');
+  });
+  sched.medCheckout.forEach((m, i) => {
+    if (m.mc1 === 'X') byBlock[i+1].push('Medical Checkout 1');
+    if (m.mc2 === 'X') byBlock[i+1].push('Medical Checkout 2');
+    if (m.med3au1 === 'X') byBlock[i+1].push('Med 3 / AU 1');
+  });
+  sched.auCheckout.forEach((a, i) => {
+    if (a.au2 === 'X') byBlock[i+1].push('AU Checkout 2');
+    if (a.au3 === 'X') byBlock[i+1].push('AU Checkout 3');
+    if (a.au4 === 'X') byBlock[i+1].push('AU Checkout 4');
+  });
+  
+  const total = byBlock[1].length + byBlock[2].length + byBlock[3].length;
+  if (total === 0) return null;
   
   return (
-    <div className="bg-red-100 border-2 border-red-500 rounded-lg p-4 mt-4">
-      <p className="font-bold text-red-800 text-sm mb-3">⚠️ COVERAGE NEEDED</p>
-      {shiftNeeds.length > 0 && <div className="bg-red-200 rounded p-2 mb-3"><p className="font-bold text-red-900 text-sm">Down: {shiftNeeds.join('. ')}</p></div>}
-      <div className="space-y-2 text-xs">
-        {lodX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">LOD:</span><span className="text-red-700">{lodX.join(', ')}</span></div>}
-        {recX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">Reception:</span><span className="text-red-700">{recX.join(', ')}</span></div>}
-        {regX.length > 0 && <div className="flex"><span className="font-bold w-20 text-red-800">Registers:</span><span className="text-red-700">{regX.join(', ')}</span></div>}
+    <div className="bg-red-100 border-2 border-red-500 rounded-lg p-3 mt-4">
+      <p className="font-bold text-red-800 text-sm mb-2">⚠️ COVERAGE NEEDED</p>
+      <div className="space-y-3">
+        {[1, 2, 3].map(b => {
+          if (byBlock[b].length === 0) return null;
+          return (
+            <div key={b} className="bg-white rounded p-2 border border-red-300">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-red-900 text-xs">{blkLabels[b].name} <span className="font-normal text-red-600">({blkLabels[b].time})</span></span>
+                <span className="font-bold text-red-700 text-xs bg-red-200 px-2 py-0.5 rounded">x{byBlock[b].length} Employee{byBlock[b].length > 1 ? 's' : ''} Needed</span>
+              </div>
+              <ul className="text-xs text-red-800 ml-3">
+                {byBlock[b].map((pos, i) => <li key={i}>• {pos}</li>)}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ============== SCHEDULE VALIDATOR - Cross-references master vs daily ==============
+const ScheduleValidator = ({ sched, emps }) => {
+  if (!sched || !emps || emps.length === 0) return null;
+  
+  const date = new Date(sched.date);
+  const sun = sched.isSunday;
+  const wk = sched.weekNum;
+  const dy = sched.dayNum;
+  
+  // Collect all names appearing in each block of daily schedule
+  const getNamesInBlock = (blockIdx) => {
+    const names = new Set();
+    const add = (n) => { if (n && n !== 'X' && n !== 'RPH') {
+      // Handle split cells: "A 12-2 / B 2-4"
+      if (n.includes(' / ')) {
+        n.split(' / ').forEach(p => names.add(p.split(' ')[0].toUpperCase()));
+      } else if (n.includes(' ')) {
+        names.add(n.split(' ')[0].toUpperCase());
+      } else {
+        names.add(n.toUpperCase());
+      }
+    }};
+    add(sched.lod[blockIdx]?.name);
+    add(sched.reception[blockIdx]?.r1); add(sched.reception[blockIdx]?.r2);
+    add(sched.ipad[blockIdx]?.display);
+    add(sched.medCheckout[blockIdx]?.mc1); add(sched.medCheckout[blockIdx]?.mc2); add(sched.medCheckout[blockIdx]?.med3au1);
+    add(sched.auCheckout[blockIdx]?.au2); add(sched.auCheckout[blockIdx]?.au3); add(sched.auCheckout[blockIdx]?.au4);
+    add(sched.vault[blockIdx]?.au); add(sched.vault[blockIdx]?.med);
+    return names;
+  };
+  
+  const issues = [];
+  
+  // For each employee who should be working, verify they're in the schedule for their blocks
+  emps.forEach(emp => {
+    if (Engine.onPTO(emp, date)) return;
+    const shift = wk === 1 ? emp.week1?.[dy] : emp.week2?.[dy];
+    if (!shift || shift.toUpperCase() === 'OFF') return;
+    
+    const { s, e } = Engine.parse(shift);
+    if (s < 0) return;
+    
+    const upName = emp.name.toUpperCase();
+    const blocks = [];
+    
+    // Determine which blocks this employee should appear in
+    if (sun) {
+      if (s <= 10 && e >= 12) blocks.push(0);
+      if (s <= 12 && e >= 15) blocks.push(1);
+      if (s <= 15 && e >= 18.25) blocks.push(2);
+    } else {
+      if (s <= 9 && e >= 12) blocks.push(0);
+      if (s <= 12 && e >= 16.25) blocks.push(1);
+      if (s <= 16 && e >= 20.25) blocks.push(2);
+    }
+    
+    // Check they appear in each expected block
+    const missingBlocks = [];
+    blocks.forEach(bIdx => {
+      const names = getNamesInBlock(bIdx);
+      if (!names.has(upName)) {
+        missingBlocks.push(bIdx + 1);
+      }
+    });
+    
+    if (missingBlocks.length > 0 && !Engine.vaultOnly(emp)) {
+      issues.push({
+        name: emp.name,
+        shift,
+        issue: 'Scheduled ' + shift + ' but missing from block(s) ' + missingBlocks.join(', '),
+        severity: 'warning'
+      });
+    }
+  });
+  
+  // Check for duplicate appearances in same block (shouldn't happen, but let's validate)
+  [0, 1, 2].forEach(bIdx => {
+    const names = [];
+    const addN = (n) => { if (n && n !== 'X' && n !== 'RPH') {
+      if (n.includes(' / ')) {
+        n.split(' / ').forEach(p => names.push(p.split(' ')[0].toUpperCase()));
+      } else if (n.includes(' ')) {
+        names.push(n.split(' ')[0].toUpperCase());
+      } else {
+        names.push(n.toUpperCase());
+      }
+    }};
+    addN(sched.lod[bIdx]?.name);
+    addN(sched.reception[bIdx]?.r1); addN(sched.reception[bIdx]?.r2);
+    addN(sched.ipad[bIdx]?.display);
+    addN(sched.medCheckout[bIdx]?.mc1); addN(sched.medCheckout[bIdx]?.mc2); addN(sched.medCheckout[bIdx]?.med3au1);
+    addN(sched.auCheckout[bIdx]?.au2); addN(sched.auCheckout[bIdx]?.au3); addN(sched.auCheckout[bIdx]?.au4);
+    addN(sched.vault[bIdx]?.au); addN(sched.vault[bIdx]?.med);
+    
+    const counts = {};
+    names.forEach(n => counts[n] = (counts[n] || 0) + 1);
+    Object.entries(counts).forEach(([n, c]) => {
+      if (c > 1) {
+        issues.push({
+          name: n,
+          shift: '',
+          issue: 'Appears ' + c + 'x in block ' + (bIdx + 1) + ' (double-booked)',
+          severity: 'error'
+        });
+      }
+    });
+  });
+  
+  // Check for PTO employees appearing in schedule
+  emps.forEach(emp => {
+    if (!Engine.onPTO(emp, date)) return;
+    const upName = emp.name.toUpperCase();
+    [0, 1, 2].forEach(bIdx => {
+      if (getNamesInBlock(bIdx).has(upName)) {
+        issues.push({
+          name: emp.name,
+          shift: '',
+          issue: 'On PTO but appears in block ' + (bIdx + 1),
+          severity: 'error'
+        });
+      }
+    });
+  });
+  
+  if (issues.length === 0) return (
+    <div className="bg-emerald-50 border-2 border-emerald-500 rounded-lg p-3 mt-3">
+      <p className="font-bold text-emerald-800 text-sm">✓ Cross-Reference: All schedules match master</p>
+    </div>
+  );
+  
+  return (
+    <div className="bg-amber-50 border-2 border-amber-500 rounded-lg p-3 mt-3">
+      <p className="font-bold text-amber-800 text-sm mb-2">⚠️ Schedule Validation ({issues.length} issue{issues.length>1?'s':''})</p>
+      <div className="space-y-1 max-h-48 overflow-y-auto">
+        {issues.map((x, i) => (
+          <div key={i} className={'text-xs p-2 rounded ' + (x.severity === 'error' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800')}>
+            <span className="font-bold">{x.name}:</span> {x.issue}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -831,6 +1021,19 @@ const App = () => {
   const [cleanModal, setCleanModal] = useState(null);
   const [viewLog, setViewLog] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const [hoveredEmp, setHoveredEmp] = useState(null);
+  const [pinnedEmps, setPinnedEmps] = useState([]);
+  
+  const highlightEmps = useMemo(() => {
+    const set = new Set(pinnedEmps.map(n => n.toUpperCase()));
+    if (hoveredEmp) set.add(hoveredEmp.toUpperCase());
+    return set;
+  }, [hoveredEmp, pinnedEmps]);
+  
+  const togglePin = (name) => {
+    const up = name.toUpperCase();
+    setPinnedEmps(prev => prev.some(n => n.toUpperCase() === up) ? prev.filter(n => n.toUpperCase() !== up) : [...prev, name]);
+  };
   
   const shapes = useMemo(() => {
     const s = {}, sorted = [...emps].sort((a,b) => a.name.localeCompare(b.name));
@@ -1019,6 +1222,7 @@ const App = () => {
                 <button onClick={()=>setShowAdd(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
               </div>
               {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]}/>}
+              {scheds.length>0&&scheds[selDay] && <ScheduleValidator sched={scheds[selDay]} emps={sorted}/>}
             </div>
             
             <div className="col-span-9">
@@ -1031,13 +1235,16 @@ const App = () => {
                   <span className="text-sm font-medium text-gray-600">Editing: {scheds[selDay].fullTitle}</span>
                   {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
                 </div>
-                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs}/>
+                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps}/>
               </div>}
               
               {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
                 <div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
                   <h3 className="font-bold text-sm">Master Schedule ({emps.length} Employees)</h3>
-                  {scheds.length>0&&scheds[selDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled for {scheds[selDay].fullTitle}</span>}
+                  <div className="flex items-center gap-3">
+                    {pinnedEmps.length > 0 && <button onClick={()=>setPinnedEmps([])} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] hover:bg-red-600">Clear {pinnedEmps.length} highlight{pinnedEmps.length>1?'s':''}</button>}
+                    {scheds.length>0&&scheds[selDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled &nbsp; Click name = highlight on schedule</span>}
+                  </div>
                 </div>
                 <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
                   <table className="w-full text-xs">
@@ -1059,8 +1266,18 @@ const App = () => {
                       }
                       const sh = shapes[emp.name.toUpperCase()];
                       const realIdx = emps.findIndex(e=>e.name===emp.name);
+                      const isPinned = pinnedEmps.some(n => n.toUpperCase() === emp.name.toUpperCase());
+                      const pinColor = sh?.color || '#3B82F6';
                       return <tr key={idx} className={'border-t '+(onSched?'bg-emerald-50':'hover:bg-gray-50')}>
-                        <td className={'px-2 py-1 font-medium sticky left-0 '+(onSched?'bg-emerald-100':'bg-white')}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{emp.name}</td>
+                        <td className={'px-2 py-1 font-medium sticky left-0 z-[5] '+(onSched?'bg-emerald-100':'bg-white')}>
+                          <div className={'emp-name-btn inline-flex items-center rounded px-1 py-0.5 '+(isPinned?'emp-pinned':'')}
+                            style={isPinned ? {outlineColor: pinColor, backgroundColor: pinColor+'22'} : {}}
+                            onMouseEnter={()=>setHoveredEmp(emp.name)}
+                            onMouseLeave={()=>setHoveredEmp(null)}
+                            onClick={(e)=>{e.stopPropagation();togglePin(emp.name);}}>
+                            {sh && <EmpShape color={sh.color} shape={sh.shape}/>}{emp.name}
+                          </div>
+                        </td>
                         <td className="px-1 py-1 text-center">{emp.vault && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
                         <td className="px-1 py-1 text-center">{emp.reception && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
                         <td className="px-1 py-1 text-center">{emp.lod && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
