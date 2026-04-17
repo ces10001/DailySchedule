@@ -429,7 +429,7 @@ const NameCell = ({ name, shapes, editable, emps, onUpdate, hl, allShapes, confl
 };
 
 // Split cell for iPad and AU2 splits - vertical layout with both shapes
-const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes, onSplitHelper, splitType }) => {
+const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes }) => {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value||'');
   const save = () => { onUpdate(text); setEditing(false); };
@@ -464,18 +464,15 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
     const hlColor2 = hl2 && allShapes?.[secondName]?.color;
     
     return (
-      <div className={'schedule-cell bg-white font-bold text-[11px] whitespace-nowrap overflow-visible '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
+      <div onClick={()=>editable&&setEditing(true)} 
+        className={'schedule-cell bg-white font-bold text-[11px] whitespace-nowrap overflow-visible '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
         style={{textAlign:'left', paddingLeft:'4px', ...(anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {})}}>
-        <span onClick={()=>editable&&setEditing(true)}>
-          <span>{firstName}</span>
-          <span className="text-gray-500 text-[9px] mx-0.5">{firstTime}</span>
-          <span className="text-gray-400 mx-0.5">/</span>
-          <span>{secondName}</span>
-          <span className="text-gray-500 text-[9px] mx-0.5">{secondTime}</span>
-          {editable && <span className="text-gray-400 text-[9px] ml-0.5">✏️</span>}
-        </span>
-        {editable && onSplitHelper && splitType && <button onClick={(e)=>{e.stopPropagation();onSplitHelper(splitType);}} title="Re-assign split" className="ml-1 text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 py-0.5 rounded font-bold">⇄</button>}
-        {editable && <button onClick={(e)=>{e.stopPropagation();onUpdate('X');}} title="Remove split" className="ml-1 text-[9px] bg-red-100 hover:bg-red-200 text-red-700 px-1 py-0.5 rounded font-bold">✕</button>}
+        <span>{firstName}</span>
+        <span className="text-gray-500 text-[9px] mx-0.5">{firstTime}</span>
+        <span className="text-gray-400 mx-0.5">/</span>
+        <span>{secondName}</span>
+        <span className="text-gray-500 text-[9px] mx-0.5">{secondTime}</span>
+        {editable && <span className="text-gray-400 text-[9px] ml-0.5">✏️</span>}
       </div>
     );
   }
@@ -487,10 +484,9 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
   const hlStyle = isHl ? { '--hl-color': hlColor || '#3B82F6' } : {};
   const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white')+(isHl?' cell-highlight':'');
   if (!editable) return <div className={base} style={hlStyle}>{(value||'X').toUpperCase()}</div>;
-  return <div className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>
-    <span onClick={()=>setEditing(true)}>{(value||'X').toUpperCase()}</span>
-    <span onClick={()=>setEditing(true)} className="text-gray-400 text-[10px] ml-1">✏️</span>
-    {onSplitHelper && splitType && <button onClick={(e)=>{e.stopPropagation();onSplitHelper(splitType);}} title="Split this block between two people" className="ml-1 text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 py-0.5 rounded font-bold">⇄ Split</button>}
+  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>
+    <span>{(value||'X').toUpperCase()}</span>
+    <span className="text-gray-400 text-[10px] ml-1">✏️</span>
   </div>;
 };
 
@@ -501,7 +497,7 @@ const Header = ({ children, color }) => {
 };
 
 // ============== SCHEDULE DISPLAY ==============
-const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps, onSplitHelper }) => {
+const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps }) => {
   if (!sched) return null;
   const sh = showShapes ? shapes : null;
   const hl = highlightEmps || new Set();
@@ -613,7 +609,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               {sched.reception.map((r,i) => <React.Fragment key={i}>
                 <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r1')}/><TimeCell time={r.time}/>
                 <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r2')}/><TimeCell time={r.time}/>
-                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split} hl={hl} allShapes={shapes} onSplitHelper={onSplitHelper} splitType={i===1?'ipad2':i===2?'ipad3':null}/>
+                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split} hl={hl} allShapes={shapes}/>
                 <TimeCell time={sched.ipad[i].time}/>
               </React.Fragment>)}
             </div>
@@ -635,7 +631,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 3</Header></div>
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
               {sched.auCheckout.map((a,i) => <React.Fragment key={i}>
-                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split} hl={hl} allShapes={shapes} onSplitHelper={onSplitHelper} splitType={i===1?'au2-2':i===2?'au2-3':null}/>
+                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split} hl={hl} allShapes={shapes}/>
                 <TimeCell time={a.time}/>
                 <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au3')}/><TimeCell time={a.time}/>
                 <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au4')}/><TimeCell time={a.time}/>
@@ -1057,56 +1053,29 @@ const ScheduleValidator = ({ sched, emps }) => {
 };
 
 // ============== SMALLER COMPONENTS ==============
-const SplitHelperModal = ({ helper, emps, onSave, onClose }) => {
-  const [first, setFirst] = useState('');
-  const [second, setSecond] = useState('');
-  if (!helper) return null;
-  // helper.type: 'ipad2', 'ipad3', 'au2-2', 'au2-3'
-  const ranges = {
-    'ipad2': { a: '12-2', b: '2-4', label: 'iPad Noon Block' },
-    'ipad3': { a: '4-6', b: '6-8', label: 'iPad Evening Block' },
-    'au2-2': { a: '12-2', b: '2-4', label: 'AU Checkout 2 — Noon Block' },
-    'au2-3': { a: '4-6', b: '6-8', label: 'AU Checkout 2 — Evening Block' }
-  };
-  const r = ranges[helper.type] || { a: '', b: '', label: 'Split Shift' };
-  const save = () => {
-    if (!first || !second) return alert('Pick both people');
-    if (first === second) return alert('Same person on both halves — use a single name instead');
-    onSave(first + ' ' + r.a + ' / ' + second + ' ' + r.b);
-    onClose();
-  };
-  const opts = ['', ...emps.map(e => e.name).sort()];
-  return (
-    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md card-shadow fade-in">
-        <h2 className="text-xl font-bold mb-4">{r.label} — Split</h2>
-        <p className="text-sm text-gray-600 mb-4">Assign two different people to cover this block in halves.</p>
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Person for {r.a}</label>
-          <select value={first} onChange={e=>setFirst(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
-            {opts.map((n,i)=><option key={i} value={n}>{n || '— Select —'}</option>)}
-          </select>
-        </div>
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Person for {r.b}</label>
-          <select value={second} onChange={e=>setSecond(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
-            {opts.map((n,i)=><option key={i} value={n}>{n || '— Select —'}</option>)}
-          </select>
-        </div>
-        <div className="flex gap-3">
-          <button onClick={save} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Apply Split</button>
-          <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
+const PASS_HASH = '05c0378d73e91e4ef2c39ef5d70dceede6bbde29f541424476895af84662cc6b';
+const USER_HASH = '0834c2d60725ac5902257b3b78dd161ad26d1c0290dbf1e47cc14add5b8c8142';
+
+const hashStr = async (str) => {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
 const LoginModal = ({ onLogin, onClose }) => {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
-  const login = () => { if (user==='supervisor'&&pass==='admin123') onLogin(); else setErr('Invalid credentials'); };
+  const [loading, setLoading] = useState(false);
+  const login = async () => {
+    setLoading(true);
+    setErr('');
+    try {
+      const [uh, ph] = await Promise.all([hashStr(user), hashStr(pass)]);
+      if (uh === USER_HASH && ph === PASS_HASH) onLogin();
+      else setErr('Invalid credentials');
+    } catch(e) { setErr('Login error'); }
+    setLoading(false);
+  };
   return (
     <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-8 w-full max-w-md card-shadow fade-in">
@@ -1114,7 +1083,7 @@ const LoginModal = ({ onLogin, onClose }) => {
         {err && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{err}</div>}
         <div className="mb-4"><label className="block text-sm font-medium mb-1">Username</label><input value={user} onChange={e=>setUser(e.target.value)} className="w-full px-4 py-3 border rounded-lg"/></div>
         <div className="mb-6"><label className="block text-sm font-medium mb-1">Password</label><input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==='Enter'&&login()} className="w-full px-4 py-3 border rounded-lg"/></div>
-        <div className="flex gap-3"><button onClick={login} className="flex-1 btn-primary px-4 py-3 text-white rounded-lg font-bold">Login</button><button onClick={onClose} className="px-4 py-3 bg-gray-200 rounded-lg">Cancel</button></div>
+        <div className="flex gap-3"><button onClick={login} disabled={loading} className="flex-1 btn-primary px-4 py-3 text-white rounded-lg font-bold disabled:opacity-50">{loading?'Verifying...':'Login'}</button><button onClick={onClose} className="px-4 py-3 bg-gray-200 rounded-lg">Cancel</button></div>
       </div>
     </div>
   );
@@ -1198,7 +1167,6 @@ const App = () => {
   });
   const [toast, setToast] = useState(null);
   const [undoHistory, setUndoHistory] = useState([]);
-  const [splitHelper, setSplitHelper] = useState(null); // { blockIdx, type: 'ipad'|'au2', display }
   
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -1554,34 +1522,6 @@ const App = () => {
       {showLogin && <LoginModal onLogin={()=>{setLogged(true);setShowLogin(false);}} onClose={()=>setShowLogin(false)}/>}
       {cleanModal && <CleaningModal task={cleanModal} onClose={()=>setCleanModal(null)} onSubmit={cleanSubmit}/>}
       {viewLog && <CleaningModal task={viewLog.task} log={viewLog} onClose={()=>setViewLog(null)} onSubmit={()=>{}}/>}
-      {splitHelper && <SplitHelperModal helper={splitHelper} emps={sorted} onClose={()=>setSplitHelper(null)} onSave={(display)=>{
-        if (!scheds[selDay]) return;
-        pushUndo('editSched', JSON.parse(JSON.stringify(scheds[selDay])));
-        const s = JSON.parse(JSON.stringify(scheds[selDay]));
-        const t = splitHelper.type;
-        // Parse the display string back to split info: "NAME A-B / NAME C-D"
-        const parts = display.split(' / ');
-        const first = parts[0].split(' ')[0];
-        const second = parts[1].split(' ')[0];
-        if (t === 'ipad2' || t === 'ipad3') {
-          const idx = t === 'ipad2' ? 1 : 2;
-          s.ipad[idx].display = display;
-          s.ipad[idx].split = { first, second };
-          // Auto-swap: iPad split → AU Checkout 2 gets the reverse
-          const ra = t === 'ipad2' ? '12-2' : '4-6';
-          const rb = t === 'ipad2' ? '2-4' : '6-8';
-          s.auCheckout[idx].au2 = second + ' ' + ra + ' / ' + first + ' ' + rb;
-          s.auCheckout[idx].au2Split = { first: second, second: first };
-        } else if (t === 'au2-2' || t === 'au2-3') {
-          const idx = t === 'au2-2' ? 1 : 2;
-          s.auCheckout[idx].au2 = display;
-          s.auCheckout[idx].au2Split = { first, second };
-        }
-        s.manuallyEdited = true;
-        s.editedAt = new Date().toISOString();
-        updSched(s);
-        showToast('Split applied');
-      }}/>}
       
       <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40">
         <div className="max-w-[1800px] mx-auto px-4 py-4 flex items-center justify-between">
@@ -1668,7 +1608,7 @@ const App = () => {
                     <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
                   </div>
                 </div>
-                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps} onSplitHelper={setSplitHelper}/>
+                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps}/>
               </div>}
               
               {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
@@ -1790,8 +1730,8 @@ const App = () => {
                 <div className="border-l-4 border-cyan-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">7. iPad Split Shifts & Register Swaps</h3>
                   <p className="text-sm text-gray-700 mb-2">When two different people cover the iPad in one block (e.g. Dre 12-2 / Pete 2-4), the system auto-swaps them on registers: Pete gets 12-2 on AU Checkout 2, Dre gets 2-4. Both names appear on one line in the same cell.</p>
-                  <p className="text-sm text-gray-700 mb-2"><strong>To manually create a split</strong>: On iPad Block 2/3 or AU Checkout 2 Block 2/3 cells, click the blue <strong>⇄ Split</strong> button. A modal opens where you pick the two people for each half.</p>
-                  <p className="text-sm text-gray-700"><strong>To remove a split</strong>: Click the red <strong>✕</strong> button on a split cell to clear it back to empty.</p>
+                  <p className="text-sm text-gray-700 mb-2"><strong>To manually create or edit a split</strong>: Click the iPad or AU Checkout 2 cell to open the text editor (✏️), then type in the format <code className="bg-gray-100 px-1 rounded">NAME A-B / NAME C-D</code>. For example: <code className="bg-gray-100 px-1 rounded">DRE 12-2 / PETE 2-4</code> for the noon block, or <code className="bg-gray-100 px-1 rounded">DRE 4-6 / PETE 6-8</code> for the evening block.</p>
+                  <p className="text-sm text-gray-700 mb-2"><strong>To remove a split</strong>: Click the cell and replace the text with a single name, or <code className="bg-gray-100 px-1 rounded">X</code> for empty.</p>
                   <p className="text-sm text-gray-700"><strong>Smart fallback</strong>: If only one person is available for one half of a block but their shift covers the full block, they're assigned the full block automatically (no dangling "4-6" suffix).</p>
                 </div>
 
