@@ -1211,7 +1211,7 @@ const App = () => {
     if (fbDB) {
       fbDB.on('value', (snap) => {
         const d = snap.val();
-        if (!d) { dataLoaded.current = true; setFbConnected(true); return; }
+        if (!d) { dataLoaded.current = true; return; }
         fromFB.current = true;
         setEmps(d.employees || []);
         setW1(d.week1Start || '');
@@ -1222,7 +1222,6 @@ const App = () => {
         setCleanLogs(d.cleaningLogs || {});
         if (d.staffReqs) setStaffReqs(d.staffReqs);
         dataLoaded.current = true;
-        setFbConnected(true);
         setTimeout(() => { fromFB.current = false; }, 100);
       });
       return () => fbDB.off();
@@ -1249,15 +1248,6 @@ const App = () => {
       try { localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify(data)); } catch(e) {}
     }, 500);
   }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs, staffReqs]);
-  
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-  
-  const pushUndo = (action, data) => {
-    setUndoHistory(prev => [...prev.slice(-9), { action, data, at: Date.now() }]);
-  };
   
   const highlightEmps = useMemo(() => {
     const set = new Set(pinnedEmps.map(n => n.toUpperCase()));
