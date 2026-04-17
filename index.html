@@ -62,6 +62,8 @@ const toDateKey = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'
 const todayKey = () => toDateKey(new Date());
 
 // ============== UTILITIES (continued) ==============
+// Extract employee name from cell value, stripping trailing time suffixes like "12-2", "2-4", "4-6", "6-8"
+const extractName = (s) => s ? s.replace(/\s+\d+-\d+\s*$/,'').trim().toUpperCase() : '';
 
 // ============== SCHEDULING ENGINE ==============
 const Engine = {
@@ -451,12 +453,11 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
     const parts = value.split(' / ');
     const first = parts[0] || '';
     const second = parts[1] || '';
-    // Extract first word as name, rest as time - use case-insensitive replace
-    const firstName = first.split(' ')[0].toUpperCase();
-    const secondName = second.split(' ')[0].toUpperCase();
-    // Remove the name (case-insensitive) to get just the time portion
-    const firstTime = first.replace(new RegExp('^' + first.split(' ')[0] + '\\s*', 'i'), '').trim();
-    const secondTime = second.replace(new RegExp('^' + second.split(' ')[0] + '\\s*', 'i'), '').trim();
+    // Extract name (stripping trailing time) and time portion
+    const firstName = extractName(first);
+    const secondName = extractName(second);
+    const firstTime = (first.match(/\d+-\d+\s*$/) || [''])[0].trim();
+    const secondTime = (second.match(/\d+-\d+\s*$/) || [''])[0].trim();
     const sh1 = shapes?.[firstName];
     const sh2 = shapes?.[secondName];
     const hl1 = hl && hl.size > 0 && hl.has(firstName);
@@ -479,7 +480,7 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
     );
   }
   
-  const firstName = value && value!=='X' ? value.split(' ')[0].toUpperCase() : null;
+  const firstName = value && value!=='X' ? extractName(value) : null;
   const sh = firstName && shapes?.[firstName];
   const isHl = hl && hl.size > 0 && firstName && hl.has(firstName);
   const hlColor = isHl && allShapes?.[firstName]?.color;
@@ -523,9 +524,9 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
       if (!val || val === 'X' || val === 'RPH') return;
       if (val.includes(' / ')) {
         val.split(' / ').forEach(p => {
-          if (p.split(' ')[0].toUpperCase() === up) inCats.add(cat);
+          if (extractName(p) === up) inCats.add(cat);
         });
-      } else if (val.split(' ')[0].toUpperCase() === up) {
+      } else if (extractName(val) === up) {
         inCats.add(cat);
       }
     };
@@ -911,11 +912,9 @@ const ScheduleValidator = ({ sched, emps }) => {
     const add = (n) => { if (n && n !== 'X' && n !== 'RPH') {
       // Handle split cells: "A 12-2 / B 2-4"
       if (n.includes(' / ')) {
-        n.split(' / ').forEach(p => names.add(p.split(' ')[0].toUpperCase()));
-      } else if (n.includes(' ')) {
-        names.add(n.split(' ')[0].toUpperCase());
+        n.split(' / ').forEach(p => names.add(extractName(p)));
       } else {
-        names.add(n.toUpperCase());
+        names.add(extractName(n));
       }
     }};
     add(sched.lod[blockIdx]?.name);
@@ -978,12 +977,12 @@ const ScheduleValidator = ({ sched, emps }) => {
     const addCat = (n, cat) => { if (n && n !== 'X' && n !== 'RPH') {
       if (n.includes(' / ')) {
         n.split(' / ').forEach(p => {
-          const nm = p.split(' ')[0].toUpperCase();
+          const nm = extractName(p);
           if (!personCats[nm]) personCats[nm] = new Set();
           personCats[nm].add(cat);
         });
       } else {
-        const nm = n.split(' ')[0].toUpperCase();
+        const nm = extractName(n);
         if (!personCats[nm]) personCats[nm] = new Set();
         personCats[nm].add(cat);
       }
@@ -1192,6 +1191,7 @@ const App = () => {
   const [toast, setToast] = useState(null);
   const [undoHistory, setUndoHistory] = useState([]);
   const [uploadWeek, setUploadWeek] = useState('1');
+  const [fbStatus, setFbStatus] = useState(fbDB ? 'connecting' : 'local');
   
   const fromFB = React.useRef(false);
   const writeTimer = React.useRef(null);
@@ -1209,6 +1209,10 @@ const App = () => {
   // Load data: Firebase if available, otherwise localStorage
   useEffect(() => {
     if (fbDB) {
+      // Track connection state
+      firebase.database().ref('.info/connected').on('value', (snap) => {
+        setFbStatus(snap.val() ? 'connected' : 'disconnected');
+      });
       fbDB.on('value', (snap) => {
         const d = snap.val();
         if (!d) { dataLoaded.current = true; return; }
@@ -1371,24 +1375,6 @@ const App = () => {
     showToast('Backup exported');
   };
   
-  const importData = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    if (!confirm('This will REPLACE all current data with the backup. Continue?')) { e.target.value = ''; return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const p = JSON.parse(ev.target.result);
-        setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||'');
-        setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{});
-        setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{});
-        if (p.staffReqs) setStaffReqs(p.staffReqs);
-        showToast('Backup restored');
-      } catch(err) { showToast('Failed to import: invalid file', 'error'); }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-  
   const autoFillEmpty = () => {
     if (!scheds[selDay]) return;
     const cur = scheds[selDay];
@@ -1481,8 +1467,8 @@ const App = () => {
     const getAllNames = (s) => {
       const names = new Set();
       const add = (n) => { if (n && n !== 'X' && n !== 'RPH' && n !== '') {
-        if (n.includes(' / ')) n.split(' / ').forEach(p => names.add(p.split(' ')[0].toUpperCase()));
-        else names.add(n.split(' ')[0].toUpperCase());
+        if (n.includes(' / ')) n.split(' / ').forEach(p => names.add(extractName(p)));
+        else names.add(extractName(n));
       }};
       [0,1,2].forEach(b => {
         add(s.lod[b].name);
@@ -1720,7 +1706,7 @@ const App = () => {
               </div>
               <div className="mt-4 bg-white p-3 rounded-lg card-shadow">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-medium">{fbDB ? <span className="text-emerald-600">🔄 Live sync active</span> : <span className="text-amber-600">⚠️ Local only — add Firebase config to sync</span>}</span>
+                  <span className="text-[10px] font-medium">{fbStatus==='connected' ? <span className="text-emerald-600">🔄 Live sync active</span> : fbStatus==='disconnected' ? <span className="text-red-500">⚠️ Disconnected — reconnecting...</span> : fbStatus==='connecting' ? <span className="text-amber-500">⏳ Connecting...</span> : <span className="text-gray-400">📱 Local only</span>}</span>
                   <button onClick={exportData} className="px-2 py-1 bg-gray-100 rounded text-[10px] font-medium hover:bg-gray-200">💾 Backup</button>
                 </div>
               </div>
@@ -1815,7 +1801,10 @@ const App = () => {
                             {slots(d).map((s,j)=><option key={j} value={s.v}>{s.v?s.l:'OFF'}</option>)}
                           </select>
                         </td>)}
-                        <td className="px-1 py-1"><button onClick={()=>setEditEmp(realIdx)} className="text-blue-600 hover:underline text-[10px]">Edit</button></td>
+                        <td className="px-1 py-1 whitespace-nowrap">
+                          <button onClick={()=>setEditEmp(realIdx)} className="text-blue-600 hover:underline text-[10px]">Edit</button>
+                          <button onClick={()=>{if(confirm('Remove '+emp.name+'?')){const u=[...emps];u.splice(realIdx,1);setEmps(u);showToast(emp.name+' removed');}}} className="text-red-400 hover:text-red-600 text-[10px] ml-1">✕</button>
+                        </td>
                       </tr>;
                     })}</tbody>
                   </table>
@@ -1842,31 +1831,39 @@ const App = () => {
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">2. Import Your Employee Data</h3>
-                  <p className="text-sm text-gray-700 mb-2">Go to <strong>Employee Master Schedule</strong> tab. Use the <strong>📁 Upload Excel</strong> button on the left to import your master schedule spreadsheet. The file should have columns: Name, Vault, Reception, LOD, iPad, Registers, PTO, Notes, then 7 days for Week 1 and 7 days for Week 2.</p>
-                  <p className="text-sm text-gray-700 mb-2">You can also click <strong>➕ Add Manually</strong> to enter employees one at a time, or click <strong>Edit</strong> on any row to update an existing employee.</p>
-                  <p className="text-sm text-gray-700"><strong>PTO format:</strong> Use <code className="bg-gray-100 px-1 rounded">3/1</code> for a single day, <code className="bg-gray-100 px-1 rounded">3/1-3/5</code> for a range, or comma-separate multiple entries like <code className="bg-gray-100 px-1 rounded">3/1-3/5, 4/10</code>.</p>
+                  <h3 className="font-bold text-lg mb-2">2. Import Employee Data</h3>
+                  <p className="text-sm text-gray-700 mb-2">Go to <strong>Employee Master Schedule</strong> tab. On the left panel, choose <strong>Week 1</strong> or <strong>Week 2</strong>, then click <strong>📁 Upload as Week 1/2</strong> to load shifts from your Excel file. The file should have columns: Name, Vault, Reception, LOD, iPad, Registers, PTO, Notes, then 7 day columns (Mon–Sun).</p>
+                  <p className="text-sm text-gray-700 mb-2">Uploading <strong>merges</strong> with existing employees — it won't erase anyone. Existing employees get their shifts updated for that week only; new names are added automatically.</p>
+                  <p className="text-sm text-gray-700 mb-2">You can also click <strong>➕ Add Employee Manually</strong>, or click <strong>Edit</strong> on any row to update an employee. To remove someone, click the <strong>✕</strong> next to Edit.</p>
+                  <p className="text-sm text-gray-700"><strong>PTO format:</strong> Use <code className="bg-gray-100 px-1 rounded">3/1</code> for a single day, <code className="bg-gray-100 px-1 rounded">3/1-3/5</code> for a range, or comma-separate like <code className="bg-gray-100 px-1 rounded">3/1-3/5, 4/10</code>.</p>
                 </div>
 
                 <div className="border-l-4 border-indigo-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">3. Backup & Restore (Important!)</h3>
-                  <p className="text-sm text-gray-700 mb-2">All data is saved in your browser. If the browser clears its storage or you switch devices, data is lost. <strong>Recommended: export a backup weekly.</strong></p>
-                  <p className="text-sm text-gray-700 mb-2">On the Employee Master Schedule tab, find the <strong>Backup & Restore</strong> card on the left:</p>
+                  <h3 className="font-bold text-lg mb-2">3. Real-Time Sync (Firebase)</h3>
+                  <p className="text-sm text-gray-700 mb-2">All data is automatically synced to Firebase in real time. Any change you make — editing a shift, generating a schedule, signing a cleaning task — appears on <strong>every device within 1 second</strong>.</p>
+                  <p className="text-sm text-gray-700 mb-2">The sync indicator on the left panel shows:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>💾 Export Backup</strong> — downloads a JSON file of all employees, schedules, cleaning logs, and settings</li>
-                    <li><strong>📥 Restore from Backup</strong> — loads a backup file (replaces all current data)</li>
+                    <li><strong>🔄 Live sync active</strong> — connected and syncing</li>
+                    <li><strong>⚠️ Disconnected</strong> — temporary loss of internet, will auto-reconnect</li>
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">Schedules older than 90 days are auto-cleaned to prevent storage overflow.</p>
+                  <p className="text-sm text-gray-700 mt-2">No backups are needed. A small 💾 Backup button is available if you ever want a local copy of your data.</p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">4. Set Week Dates & Generate Schedules</h3>
-                  <p className="text-sm text-gray-700 mb-2">On the left panel, set <strong>Week 1 Start</strong> date (Week 2 auto-fills). Then click <strong>🗓️ Generate All 14 Days</strong> to create schedules for the full 2-week period. Or use <strong>Generate Single Day</strong> with a date picker for just one day.</p>
+                  <h3 className="font-bold text-lg mb-2">4. Editing the Master Schedule</h3>
+                  <p className="text-sm text-gray-700 mb-2">The master schedule table shows all employees with their roles and weekly shifts. <strong>Week 1</strong> columns have a blue header, <strong>Week 2</strong> has green.</p>
+                  <p className="text-sm text-gray-700 mb-2"><strong>Change a shift</strong>: Click any shift cell in the table — it's a dropdown. Pick a new time or OFF.</p>
+                  <p className="text-sm text-gray-700"><strong>All changes sync instantly</strong> to every device. There's no separate "save" step for the master schedule.</p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">5. Set Week Dates & Generate Schedules</h3>
+                  <p className="text-sm text-gray-700 mb-2">On the left panel, set <strong>Week 1 Start</strong> date (Week 2 auto-fills to 7 days later). Then click <strong>🗓️ Generate All 14 Days</strong> to create schedules for the full 2-week period. Or use <strong>Generate Single Day</strong> with a date picker for just one day.</p>
                   <p className="text-sm text-gray-700">The engine automatically assigns employees based on qualifications, availability, and role priorities (single-role employees get priority for their position).</p>
                 </div>
 
                 <div className="border-l-4 border-amber-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">5. Editing a Daily Schedule</h3>
+                  <h3 className="font-bold text-lg mb-2">7. Editing a Daily Schedule</h3>
                   <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view that day's schedule. The buttons below each schedule header let you:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>💾 Save</strong> — confirms your edits (appears only after changes are made)</li>
@@ -1878,13 +1875,13 @@ const App = () => {
                 </div>
 
                 <div className="border-l-4 border-teal-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">6. Real-Time Conflict Warnings</h3>
+                  <h3 className="font-bold text-lg mb-2">7. Real-Time Conflict Warnings</h3>
                   <p className="text-sm text-gray-700 mb-2">When you open a name dropdown, any employee who would cause a conflict shows an amber <strong>⚠️</strong> next to their name. Hovering reveals the reason, e.g. "Already on reception this block".</p>
                   <p className="text-sm text-gray-700"><strong>These are NOT flagged</strong> (they're fine): LOD + register (by design), split iPad + register (also by design).</p>
                 </div>
 
                 <div className="border-l-4 border-cyan-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">7. iPad Split Shifts & Register Swaps</h3>
+                  <h3 className="font-bold text-lg mb-2">8. iPad Split Shifts & Register Swaps</h3>
                   <p className="text-sm text-gray-700 mb-2">When two different people cover the iPad in one block (e.g. Dre 12-2 / Pete 2-4), the system auto-swaps them on registers: Pete gets 12-2 on AU Checkout 2, Dre gets 2-4. Both names appear on one line in the same cell.</p>
                   <p className="text-sm text-gray-700 mb-2"><strong>To manually create or edit a split</strong>: Click the iPad or AU Checkout 2 cell to open the text editor (✏️), then type in the format <code className="bg-gray-100 px-1 rounded">NAME A-B / NAME C-D</code>. For example: <code className="bg-gray-100 px-1 rounded">DRE 12-2 / PETE 2-4</code> for the noon block, or <code className="bg-gray-100 px-1 rounded">DRE 4-6 / PETE 6-8</code> for the evening block.</p>
                   <p className="text-sm text-gray-700 mb-2"><strong>To remove a split</strong>: Click the cell and replace the text with a single name, or <code className="bg-gray-100 px-1 rounded">X</code> for empty.</p>
@@ -1892,13 +1889,13 @@ const App = () => {
                 </div>
 
                 <div className="border-l-4 border-pink-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">8. Highlight Employees</h3>
+                  <h3 className="font-bold text-lg mb-2">9. Highlight Employees</h3>
                   <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any employee name in the Master Schedule table below the daily schedule — their assigned positions light up in the schedule above with their unique color.</p>
                   <p className="text-sm text-gray-700"><strong>Click</strong> a name to pin the highlight. Click again to unpin. Pin multiple employees to see all their positions highlighted at once. Use <strong>Clear highlights</strong> button to remove all pins.</p>
                 </div>
 
                 <div className="border-l-4 border-red-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">9. Coverage Alerts & Validation</h3>
+                  <h3 className="font-bold text-lg mb-2">10. Coverage Alerts & Validation</h3>
                   <p className="text-sm text-gray-700 mb-2">Below the Import section on the left, you'll see a <strong>⚠️ Coverage Needed</strong> alert if any shift is understaffed. Organized by Morning, Noon, and Evening with exact counts.</p>
                   <p className="text-sm text-gray-700 mb-2">Below that, the <strong>Cross-Reference Validator</strong> checks that every scheduled employee actually appears in the daily schedule. It flags:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
@@ -1910,25 +1907,25 @@ const App = () => {
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">10. Staffing Summary</h3>
+                  <h3 className="font-bold text-lg mb-2">11. Staffing Summary</h3>
                   <p className="text-sm text-gray-700 mb-2">The <strong>Staffing Summary</strong> tab shows a monthly calendar overview. Green days = fully staffed, red = shortages. Click any day to see a detailed breakdown of what positions are short and by how much.</p>
                   <p className="text-sm text-gray-700"><strong>Edit requirements:</strong> The numbers in the Minimum Staffing Requirements table at the top are <em>editable inputs</em>. Click any number to change it — your custom thresholds are saved and used by the Coverage Alert on the Master Schedule tab.</p>
                 </div>
 
                 <div className="border-l-4 border-emerald-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">11. Daily Schedule (Public View)</h3>
+                  <h3 className="font-bold text-lg mb-2">12. Daily Schedule (Public View)</h3>
                   <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab shows today's schedule, or tomorrow's after 8 PM EST. This view is designed to be displayed on a shared screen in the pharmacy — no login required, no color highlights, compact layout to fit on one page.</p>
                   <p className="text-sm text-gray-700">Staff can click the <strong>Sign</strong> button on their cleaning task to open a checklist. Check all items, enter initials, and submit. The button turns to a green <strong>✓</strong> when complete.</p>
                 </div>
 
                 <div className="border-l-4 border-orange-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">12. Cleaning Logs</h3>
+                  <h3 className="font-bold text-lg mb-2">13. Cleaning Logs</h3>
                   <p className="text-sm text-gray-700 mb-2">The <strong>Cleaning Logs</strong> tab shows a monthly calendar. Green = all 5 areas done, amber = partial, no color = none. Click a day to see who signed off each area with timestamps.</p>
                   <p className="text-sm text-gray-700">Missing areas show the assigned cleaner's name in parentheses so you know who to follow up with. Use <strong>🗑️ Clear Day</strong> to reset a day's logs if needed (undoable).</p>
                 </div>
 
                 <div className="border-l-4 border-violet-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">13. Calendar Indicators</h3>
+                  <h3 className="font-bold text-lg mb-2">14. Calendar Indicators</h3>
                   <p className="text-sm text-gray-700 mb-1">On the mini-calendar under the Master Schedule:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>Green day with ✓ and timestamp</strong> — schedule generated, shows last saved/edited time (EST)</li>
@@ -1938,17 +1935,18 @@ const App = () => {
                 </div>
 
                 <div className="border-l-4 border-gray-400 pl-4">
-                  <h3 className="font-bold text-lg mb-2">14. Printing</h3>
+                  <h3 className="font-bold text-lg mb-2">15. Printing</h3>
                   <p className="text-sm text-gray-700">On the Daily Schedule tab, click <strong>🖨️ Print</strong> to print the current day's schedule. The navigation header and buttons are automatically hidden.</p>
                 </div>
 
                 <div className="border-l-4 border-yellow-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">15. Troubleshooting</h3>
+                  <h3 className="font-bold text-lg mb-2">16. Troubleshooting</h3>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>Duplicate employee names</strong> — an amber banner warns at the top of the Employee tab. Rename one (e.g. "ARIFA K" / "ARIFA M") since the engine can't distinguish them.</li>
                     <li><strong>Nothing happens when generating</strong> — check that Week 1 and Week 2 start dates are set, and that you have employees loaded.</li>
-                    <li><strong>Storage full toast</strong> — appears if localStorage fills up. Old schedules auto-clean, but export a backup first if worried.</li>
-                    <li><strong>Lost my data</strong> — if you have a backup file, use 📥 Restore from Backup. If not, data is gone (this is why weekly backups are recommended).</li>
+                    <li><strong>Sync indicator says "Disconnected"</strong> — check your internet connection. Firebase will auto-reconnect when the connection is restored. Your edits are saved locally and will sync when reconnected.</li>
+                    <li><strong>Changes not appearing on another device</strong> — make sure both devices are on the same URL and have internet access. Try refreshing the page.</li>
+                    <li><strong>Wrong employees appearing on schedule</strong> — regenerate the day. Make sure the master schedule has the correct shifts for that employee on that day.</li>
                   </ul>
                 </div>
               </div>
