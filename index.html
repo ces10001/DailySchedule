@@ -619,11 +619,11 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
 };
 
 // ============== STAFFING SUMMARY ==============
-const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
+const StaffingSummary = ({ scheds, allScheds, onSelect, staffReqs, setStaffReqs }) => {
   const [sel, setSel] = useState(null);
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
-  const ideal = sun => sun ? {v:[1,1,1],r:[2,2,2],rg:[3,3,3]} : {v:[2,2,2],r:[2,2,2],rg:[2,3,3]};
+  const ideal = sun => sun ? staffReqs.sunday : staffReqs.weekday;
   const blkT = (sun, b) => sun ? (b===1?'10A-12P':b===2?'12P-3P':'3P-6:15P') : (b===1?'9A-12P':b===2?'12P-4:15P':'4P-8:15P');
   const blkName = b => b===1?'Morning':b===2?'Noon':'Evening';
   const issues = s => {
@@ -643,30 +643,45 @@ const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
   const selSch = sel !== null && scheds[sel];
   const selIss = selSch ? issues(selSch) : [];
   
+  const updReq = (dayType, pos, blkIdx, val) => {
+    const n = parseInt(val) || 0;
+    setStaffReqs(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      next[dayType][pos][blkIdx] = n;
+      return next;
+    });
+  };
+  
+  const ReqInput = ({ dayType, pos, blkIdx }) => (
+    <input type="number" min="0" max="9" value={staffReqs[dayType][pos][blkIdx]}
+      onChange={e=>updReq(dayType,pos,blkIdx,e.target.value)}
+      className="w-10 text-center bg-white/30 border border-white/40 rounded text-sm py-0.5 text-white font-bold"/>
+  );
+  
   return (
     <div className="fade-in">
       <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-5 rounded-xl mb-6">
-        <h2 className="text-xl font-bold mb-3">Minimum Staffing Requirements</h2>
+        <h2 className="text-xl font-bold mb-3">Minimum Staffing Requirements <span className="text-xs font-normal opacity-75">(click numbers to edit)</span></h2>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="bg-white/15 rounded-lg p-3">
             <h3 className="font-bold mb-2">Monday – Saturday</h3>
             <table className="w-full text-left text-xs">
-              <thead><tr className="border-b border-white/30"><th className="py-1">Position</th><th className="py-1">Morning</th><th className="py-1">Noon</th><th className="py-1">Evening</th></tr></thead>
+              <thead><tr className="border-b border-white/30"><th className="py-1">Position</th><th className="py-1">Morning <span className="opacity-60">(9A-12P)</span></th><th className="py-1">Noon <span className="opacity-60">(12P-4:15P)</span></th><th className="py-1">Evening <span className="opacity-60">(4P-8:15P)</span></th></tr></thead>
               <tbody>
-                <tr><td className="py-0.5">Vault</td><td>2</td><td>2</td><td>2</td></tr>
-                <tr><td className="py-0.5">Reception</td><td>2</td><td>2</td><td>2</td></tr>
-                <tr><td className="py-0.5">Registers (of 6)</td><td>2</td><td>3</td><td>3</td></tr>
+                <tr><td className="py-1">Vault</td><td><ReqInput dayType="weekday" pos="v" blkIdx={0}/></td><td><ReqInput dayType="weekday" pos="v" blkIdx={1}/></td><td><ReqInput dayType="weekday" pos="v" blkIdx={2}/></td></tr>
+                <tr><td className="py-1">Reception</td><td><ReqInput dayType="weekday" pos="r" blkIdx={0}/></td><td><ReqInput dayType="weekday" pos="r" blkIdx={1}/></td><td><ReqInput dayType="weekday" pos="r" blkIdx={2}/></td></tr>
+                <tr><td className="py-1">Registers (of 6)</td><td><ReqInput dayType="weekday" pos="rg" blkIdx={0}/></td><td><ReqInput dayType="weekday" pos="rg" blkIdx={1}/></td><td><ReqInput dayType="weekday" pos="rg" blkIdx={2}/></td></tr>
               </tbody>
             </table>
           </div>
           <div className="bg-white/15 rounded-lg p-3">
             <h3 className="font-bold mb-2">Sunday</h3>
             <table className="w-full text-left text-xs">
-              <thead><tr className="border-b border-white/30"><th className="py-1">Position</th><th className="py-1">Morning</th><th className="py-1">Noon</th><th className="py-1">Evening</th></tr></thead>
+              <thead><tr className="border-b border-white/30"><th className="py-1">Position</th><th className="py-1">Morning <span className="opacity-60">(10A-12P)</span></th><th className="py-1">Noon <span className="opacity-60">(12P-3P)</span></th><th className="py-1">Evening <span className="opacity-60">(3P-6:15P)</span></th></tr></thead>
               <tbody>
-                <tr><td className="py-0.5">Vault</td><td>1</td><td>1</td><td>1</td></tr>
-                <tr><td className="py-0.5">Reception</td><td>2</td><td>2</td><td>2</td></tr>
-                <tr><td className="py-0.5">Registers (of 6)</td><td>3</td><td>3</td><td>3</td></tr>
+                <tr><td className="py-1">Vault</td><td><ReqInput dayType="sunday" pos="v" blkIdx={0}/></td><td><ReqInput dayType="sunday" pos="v" blkIdx={1}/></td><td><ReqInput dayType="sunday" pos="v" blkIdx={2}/></td></tr>
+                <tr><td className="py-1">Reception</td><td><ReqInput dayType="sunday" pos="r" blkIdx={0}/></td><td><ReqInput dayType="sunday" pos="r" blkIdx={1}/></td><td><ReqInput dayType="sunday" pos="r" blkIdx={2}/></td></tr>
+                <tr><td className="py-1">Registers (of 6)</td><td><ReqInput dayType="sunday" pos="rg" blkIdx={0}/></td><td><ReqInput dayType="sunday" pos="rg" blkIdx={1}/></td><td><ReqInput dayType="sunday" pos="rg" blkIdx={2}/></td></tr>
               </tbody>
             </table>
           </div>
@@ -750,36 +765,27 @@ const CleaningLogs = ({ logs, onView, allScheds, onClearLog }) => {
 };
 
 // ============== COVERAGE ALERT ==============
-const CoverageAlert = ({ sched }) => {
+const CoverageAlert = ({ sched, staffReqs }) => {
   if (!sched) return null;
   const sun = sched.isSunday;
   const st = sched.stats;
+  const reqs = sun ? staffReqs.sunday : staffReqs.weekday;
   
   const blkLabels = sun 
     ? { 1: { name: 'MORNING', time: '10A-12P' }, 2: { name: 'NOON', time: '12P-3P' }, 3: { name: 'EVENING', time: '3P-6:15P' } }
     : { 1: { name: 'MORNING', time: '9A-12P' }, 2: { name: 'NOON', time: '12P-4:15P' }, 3: { name: 'EVENING', time: '4P-8:15P' } };
   
-  // Thresholds: Reception=2 all, Registers=2/3/3 (morning/noon/evening), LOD=1, Vault=2 weekday/1 sunday
-  const reqRec = 2;
-  const reqReg = [2, 3, 3]; // Block 1, 2, 3
-  const reqVault = sun ? [1,1,1] : [2,2,2];
-  
   const issues = [];
   [1,2,3].forEach(b => {
     const bi = b - 1;
     const blk = [];
-    // LOD
     if (sched.lod[bi]?.name === 'X') blk.push({ pos: 'LOD', need: 1, have: 0 });
-    // Reception
     const recCount = st['rB'+b];
-    if (recCount < reqRec) blk.push({ pos: 'Reception', need: reqRec, have: recCount });
-    // Registers (6 positions: MC1, MC2, MED3/AU1, AU2, AU3, AU4)
+    if (recCount < reqs.r[bi]) blk.push({ pos: 'Reception', need: reqs.r[bi], have: recCount });
     const regCount = st['rgB'+b];
-    if (regCount < reqReg[bi]) blk.push({ pos: 'Registers', need: reqReg[bi], have: regCount, of: 6 });
-    // Vault
+    if (regCount < reqs.rg[bi]) blk.push({ pos: 'Registers', need: reqs.rg[bi], have: regCount, of: 6 });
     const vaultCount = st['vB'+b];
-    if (vaultCount < reqVault[bi]) blk.push({ pos: 'Vault', need: reqVault[bi], have: vaultCount });
-    
+    if (vaultCount < reqs.v[bi]) blk.push({ pos: 'Vault', need: reqs.v[bi], have: vaultCount });
     if (blk.length > 0) issues.push({ block: b, label: blkLabels[b], items: blk });
   });
   
@@ -886,33 +892,47 @@ const ScheduleValidator = ({ sched, emps }) => {
     }
   });
   
-  // Check for duplicate appearances in same block (shouldn't happen, but let's validate)
+  // Check for actual conflicts (not LOD+register or split iPad+register which are by design)
   [0, 1, 2].forEach(bIdx => {
-    const names = [];
-    const addN = (n) => { if (n && n !== 'X' && n !== 'RPH') {
+    // Track which categories each person appears in
+    const personCats = {};
+    const addCat = (n, cat) => { if (n && n !== 'X' && n !== 'RPH') {
       if (n.includes(' / ')) {
-        n.split(' / ').forEach(p => names.push(p.split(' ')[0].toUpperCase()));
-      } else if (n.includes(' ')) {
-        names.push(n.split(' ')[0].toUpperCase());
+        n.split(' / ').forEach(p => {
+          const nm = p.split(' ')[0].toUpperCase();
+          if (!personCats[nm]) personCats[nm] = new Set();
+          personCats[nm].add(cat);
+        });
       } else {
-        names.push(n.toUpperCase());
+        const nm = n.split(' ')[0].toUpperCase();
+        if (!personCats[nm]) personCats[nm] = new Set();
+        personCats[nm].add(cat);
       }
     }};
-    addN(sched.lod[bIdx]?.name);
-    addN(sched.reception[bIdx]?.r1); addN(sched.reception[bIdx]?.r2);
-    addN(sched.ipad[bIdx]?.display);
-    addN(sched.medCheckout[bIdx]?.mc1); addN(sched.medCheckout[bIdx]?.mc2); addN(sched.medCheckout[bIdx]?.med3au1);
-    addN(sched.auCheckout[bIdx]?.au2); addN(sched.auCheckout[bIdx]?.au3); addN(sched.auCheckout[bIdx]?.au4);
-    addN(sched.vault[bIdx]?.au); addN(sched.vault[bIdx]?.med);
+    addCat(sched.lod[bIdx]?.name, 'lod');
+    addCat(sched.reception[bIdx]?.r1, 'reception'); addCat(sched.reception[bIdx]?.r2, 'reception');
+    addCat(sched.ipad[bIdx]?.display, 'ipad');
+    addCat(sched.medCheckout[bIdx]?.mc1, 'register'); addCat(sched.medCheckout[bIdx]?.mc2, 'register'); addCat(sched.medCheckout[bIdx]?.med3au1, 'register');
+    addCat(sched.auCheckout[bIdx]?.au2, 'register'); addCat(sched.auCheckout[bIdx]?.au3, 'register'); addCat(sched.auCheckout[bIdx]?.au4, 'register');
+    addCat(sched.vault[bIdx]?.au, 'vault'); addCat(sched.vault[bIdx]?.med, 'vault');
     
-    const counts = {};
-    names.forEach(n => counts[n] = (counts[n] || 0) + 1);
-    Object.entries(counts).forEach(([n, c]) => {
-      if (c > 1) {
+    Object.entries(personCats).forEach(([name, cats]) => {
+      // LOD + register is OK by design
+      // iPad + register is OK if it's a split (both appear in the split cell)
+      const hasSplitIpadReg = cats.has('ipad') && cats.has('register') && 
+        (sched.ipad[bIdx]?.display?.includes(' / ') || sched.auCheckout[bIdx]?.au2?.includes(' / '));
+      
+      // Only flag: reception+register, ipad+reception, or non-split ipad+register
+      const hasConflict = (cats.has('reception') && cats.has('register')) ||
+        (cats.has('ipad') && cats.has('reception')) ||
+        (cats.has('ipad') && cats.has('register') && !hasSplitIpadReg);
+      
+      if (hasConflict) {
+        const catList = [...cats].filter(c => c !== 'lod').join(' + ');
         issues.push({
-          name: n,
+          name,
           shift: '',
-          issue: 'Appears ' + c + 'x in block ' + (bIdx + 1) + ' (double-booked)',
+          issue: 'On ' + catList + ' in block ' + (bIdx + 1) + ' (conflict)',
           severity: 'error'
         });
       }
@@ -992,7 +1012,7 @@ const EmpForm = ({ emp, onSave, onCancel }) => {
   );
 };
 
-const Calendar = ({ generated, onClick }) => {
+const Calendar = ({ generated, onClick, allScheds }) => {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
@@ -1000,6 +1020,8 @@ const Calendar = ({ generated, onClick }) => {
   const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
   const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
   const gen = d => d ? generated[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
+  const getSch = d => d ? allScheds?.[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
+  const isPast = d => d && new Date(year,month,d,23,59) < today;
   
   return (
     <div className="bg-white rounded-lg card-shadow p-4">
@@ -1011,7 +1033,10 @@ const Calendar = ({ generated, onClick }) => {
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">{['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d}>{d}</div>)}</div>
       <div className="grid grid-cols-7 gap-1">{days.map((d,i) => {
         const g = gen(d), isT = d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
-        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(g?' bg-emerald-100 border-emerald-400':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{g && <div className="text-[7px] text-emerald-700 mt-0.5">✓</div>}</>}</div>;
+        const s = getSch(d);
+        const lastTime = s?.editedAt || s?.generatedAt || g;
+        const past = isPast(d) && !g;
+        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(g?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{g && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
       })}</div>
     </div>
   );
@@ -1038,6 +1063,10 @@ const App = () => {
   const [dirty, setDirty] = useState(false);
   const [hoveredEmp, setHoveredEmp] = useState(null);
   const [pinnedEmps, setPinnedEmps] = useState([]);
+  const [staffReqs, setStaffReqs] = useState({
+    weekday: { v: [2,2,2], r: [2,2,2], rg: [2,3,3] },
+    sunday: { v: [1,1,1], r: [2,2,2], rg: [3,3,3] }
+  });
   
   const highlightEmps = useMemo(() => {
     const set = new Set(pinnedEmps.map(n => n.toUpperCase()));
@@ -1062,15 +1091,16 @@ const App = () => {
   
   useEffect(() => {
     const d = localStorage.getItem('pharmacy-scheduler-v3');
-    if (d) { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{}); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); }
+    if (d) { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{}); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); if(p.staffReqs) setStaffReqs(p.staffReqs); }
   }, []);
   
   useEffect(() => {
-    localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs }));
-  }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs]);
+    localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, staffReqs }));
+  }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs, staffReqs]);
   
   useEffect(() => {
     const check = () => {
+      if (tab !== 'schedule') return; // Only auto-flip on public schedule tab
       if (getESTHour() >= 20) {
         const tmr = new Date(); tmr.setDate(tmr.getDate()+1);
         const key = toDateKey(tmr);
@@ -1082,7 +1112,7 @@ const App = () => {
     };
     const int = setInterval(check, 60000);
     return () => clearInterval(int);
-  }, [allScheds, scheds, selDay]);
+  }, [allScheds, scheds, selDay, tab]);
   
   const todaySched = useMemo(() => {
     const d = new Date();
@@ -1228,13 +1258,13 @@ const App = () => {
                   <button onClick={()=>singleDate&&genSingle(new Date(singleDate+'T12:00:00'))} disabled={!singleDate||emps.length===0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button>
                 </div>
               </div>
-              <Calendar generated={generated} onClick={calClick}/>
+              <Calendar generated={generated} onClick={calClick} allScheds={allScheds}/>
               <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
                 <h3 className="font-bold mb-2">Import</h3>
                 <label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50"><span className="text-xl">📁</span><p className="text-xs font-medium">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={upload} className="hidden"/></div></label>
                 <button onClick={()=>setShowAdd(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
               </div>
-              {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]}/>}
+              {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]} staffReqs={staffReqs}/>}
               {scheds.length>0&&scheds[selDay] && <ScheduleValidator sched={scheds[selDay]} emps={sorted}/>}
             </div>
             
@@ -1312,7 +1342,7 @@ const App = () => {
           </div>
         )}
         
-        {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
+        {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay} staffReqs={staffReqs} setStaffReqs={setStaffReqs}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
         
         {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds} onClearLog={setCleanLogs}/>}
         
