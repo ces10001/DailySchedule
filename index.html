@@ -273,8 +273,9 @@ const Engine = {
     const a1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a1);
     const a2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a2);
     const a3 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a3);
-    const rg1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg1);
-    const rg2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
+    // MC2 fills before MC1 per priority order
+    const rg2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg2);
+    const rg1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
     
     const rg3b2 = lod2!=='X' ? lod2 : this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg3b1], date, sun); uR2.push(rg3b2);
     
@@ -290,8 +291,8 @@ const Engine = {
     
     const a2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a2], date, sun); uR2.push(a2b2);
     const a3b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a3], date, sun); uR2.push(a3b2);
-    const rg1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun); uR2.push(rg1b2);
-    const rg2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun);
+    const rg2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun); uR2.push(rg2b2);
+    const rg1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun);
     
     const rg3b3 = lod3!=='X' ? lod3 : this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg3b1,rg3b2], date, sun); uR3.push(rg3b3);
     
@@ -307,8 +308,8 @@ const Engine = {
     
     const a2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a2,a2b2], date, sun); uR3.push(a2b3);
     const a3b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a3,a3b2], date, sun); uR3.push(a3b3);
-    const rg1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun); uR3.push(rg1b3);
-    const rg2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg2,rg2b2], date, sun);
+    const rg2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg2,rg2b2], date, sun); uR3.push(rg2b3);
+    const rg1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun);
     
     // Vault
     let vU1=[...uR1,lod1]; const vAU1 = this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = this.findVault(emps, wk, dy, 1, vU1, date, sun);
@@ -1398,9 +1399,11 @@ const App = () => {
     const cur = scheds[selDay];
     const date = new Date(cur.date);
     const fresh = Engine.buildDay(sorted, cur.weekNum, cur.dayNum, date, cur.isSunday, 0);
-    // Only fill positions that are currently X or RPH default
     const filled = JSON.parse(JSON.stringify(cur));
     let filledCount = 0;
+    let extrasCount = 0;
+    
+    // Pass 1: engine-qualified fills (original behavior)
     fresh.lod.forEach((l, i) => { if (filled.lod[i].name === 'X' && l.name !== 'X') { filled.lod[i].name = l.name; filledCount++; } });
     fresh.reception.forEach((r, i) => {
       if (filled.reception[i].r1 === 'X' && r.r1 !== 'X') { filled.reception[i].r1 = r.r1; filledCount++; }
@@ -1419,12 +1422,81 @@ const App = () => {
       if (filled.auCheckout[i].au3 === 'X' && a.au3 !== 'X') { filled.auCheckout[i].au3 = a.au3; filledCount++; }
       if (filled.auCheckout[i].au4 === 'X' && a.au4 !== 'X') { filled.auCheckout[i].au4 = a.au4; filledCount++; }
     });
-    if (filledCount === 0) { showToast('No empty positions could be filled', 'warning'); return; }
+    
+    // Pass 2: fill remaining empty register slots with "extras" (scheduled but unassigned employees)
+    const getAllNames = (s) => {
+      const names = new Set();
+      const add = (n) => { if (n && n !== 'X' && n !== 'RPH') {
+        if (n.includes(' / ')) n.split(' / ').forEach(p => names.add(p.split(' ')[0].toUpperCase()));
+        else names.add(n.split(' ')[0].toUpperCase());
+      }};
+      [0,1,2].forEach(b => {
+        add(s.lod[b].name);
+        add(s.reception[b].r1); add(s.reception[b].r2);
+        add(s.ipad[b].display);
+        add(s.medCheckout[b].mc1); add(s.medCheckout[b].mc2); add(s.medCheckout[b].med3au1);
+        add(s.auCheckout[b].au2); add(s.auCheckout[b].au3); add(s.auCheckout[b].au4);
+        add(s.vault[b].au); add(s.vault[b].med);
+      });
+      return names;
+    };
+    
+    const assignedNames = getAllNames(filled);
+    const extras = sorted.filter(emp => {
+      if (Engine.onPTO(emp, date)) return false;
+      if (Engine.vaultOnly(emp)) return false; // vault-only shouldn't be on registers
+      const shift = cur.weekNum === 1 ? emp.week1?.[cur.dayNum] : emp.week2?.[cur.dayNum];
+      if (!shift || shift.toUpperCase() === 'OFF') return false;
+      return !assignedNames.has(emp.name.toUpperCase());
+    });
+    
+    const sun = cur.isSunday;
+    extras.forEach(emp => {
+      const shift = cur.weekNum === 1 ? emp.week1?.[cur.dayNum] : emp.week2?.[cur.dayNum];
+      const { s: st, e: en } = Engine.parse(shift);
+      if (st < 0) return;
+      
+      // Determine which blocks this person's shift covers
+      const blocks = [];
+      if (sun) {
+        if (st <= 10 && en >= 12) blocks.push(0);
+        if (st <= 12 && en >= 15) blocks.push(1);
+        if (st <= 15 && en >= 18.25) blocks.push(2);
+      } else {
+        if (st <= 9 && en >= 12) blocks.push(0);
+        if (st <= 12 && en >= 16.25) blocks.push(1);
+        if (st <= 16 && en >= 20.25) blocks.push(2);
+      }
+      
+      // Try to place in an empty register slot in every covered block
+      const regSlots = [
+        ['medCheckout', 'med3au1'],
+        ['auCheckout', 'au2'], ['auCheckout', 'au3'], ['auCheckout', 'au4'],
+        ['medCheckout', 'mc2'], ['medCheckout', 'mc1']
+      ];
+      let placed = false;
+      for (const bIdx of blocks) {
+        for (const [group, field] of regSlots) {
+          if (filled[group][bIdx][field] === 'X') {
+            filled[group][bIdx][field] = emp.name;
+            extrasCount++;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) continue; // keep trying other blocks if nothing fit this one
+      }
+    });
+    
+    const total = filledCount + extrasCount;
+    if (total === 0) { showToast('No empty positions could be filled', 'warning'); return; }
     filled.manuallyEdited = true;
     filled.editedAt = new Date().toISOString();
     pushUndo('editSched', cur);
     updSched(filled);
-    showToast('Filled ' + filledCount + ' empty position' + (filledCount>1?'s':''));
+    let msg = 'Filled ' + filledCount + ' position' + (filledCount!==1?'s':'');
+    if (extrasCount > 0) msg += ' + ' + extrasCount + ' extra' + (extrasCount!==1?'s':'');
+    showToast(msg);
   };
   
   const upload = (e) => {
@@ -1702,7 +1774,7 @@ const App = () => {
                   <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view that day's schedule. The buttons below each schedule header let you:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>💾 Save</strong> — confirms your edits (appears only after changes are made)</li>
-                    <li><strong>✨ Auto-fill Empty</strong> — runs the engine on just the empty (X) positions to fill what it can without touching existing assignments</li>
+                    <li><strong>✨ Auto-fill Empty</strong> — runs the engine on just the empty (X) positions to fill what it can. Also automatically assigns any "extra" employees (scheduled but unassigned) to empty register slots so no one is left idle</li>
                     <li><strong>↶ Undo</strong> — reverts the last destructive action (Clear Day, Clear Cleaning Log, or Auto-fill). Supports up to 10 actions back</li>
                     <li><strong>🗑️ Clear Day</strong> — resets every position to empty/RPH so you can fill in manually from scratch (undoable)</li>
                   </ul>
