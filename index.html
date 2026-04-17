@@ -36,7 +36,6 @@ const { useState, useEffect, useMemo } = React;
 
 // ============== CONSTANTS ==============
 const COLORS = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#F43F5E','#0EA5E9','#A855F7','#22C55E','#EAB308','#E11D48','#7C3AED','#0D9488','#DC2626','#2563EB','#16A34A'];
-const SHAPES = ['circle','square','diamond','triangle','star','hexagon'];
 const CLEANING_AREAS = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
 const CLEANING_TASKS = {
   RECEPTION: ['Wipe down front counter','Clean glass doors','Sweep and mop floor','Empty trash','Organize displays','Sanitize touchscreens'],
@@ -60,18 +59,7 @@ const formatTime = (h) => { const hr = Math.floor(h), m = Math.round((h-hr)*60),
 const toDateKey = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const todayKey = () => toDateKey(new Date());
 
-// ============== SHAPE COMPONENT ==============
-const EmpShape = ({ color, shape }) => {
-  const s = 16;
-  switch(shape) {
-    case 'square': return <span style={{width:s,height:s,backgroundColor:color,borderRadius:2,display:'inline-block',marginRight:6,border:'2px solid #000',verticalAlign:'middle'}} />;
-    case 'diamond': return <span style={{width:s*0.8,height:s*0.8,backgroundColor:color,transform:'rotate(45deg)',display:'inline-block',marginRight:8,marginLeft:2,border:'2px solid #000',verticalAlign:'middle'}} />;
-    case 'triangle': return <svg width={s} height={s} style={{display:'inline-block',marginRight:6,verticalAlign:'middle'}}><polygon points={`${s/2},2 ${s-2},${s-2} 2,${s-2}`} fill={color} stroke="#000" strokeWidth="2"/></svg>;
-    case 'star': return <svg width={s} height={s} style={{display:'inline-block',marginRight:6,verticalAlign:'middle'}}><polygon points="8,1 10,6 15,6 11,9 13,14 8,11 3,14 5,9 1,6 6,6" fill={color} stroke="#000" strokeWidth="1.5"/></svg>;
-    case 'hexagon': return <svg width={s} height={s} style={{display:'inline-block',marginRight:6,verticalAlign:'middle'}}><polygon points="8,1 14,4 14,12 8,15 2,12 2,4" fill={color} stroke="#000" strokeWidth="2"/></svg>;
-    default: return <span style={{width:s,height:s,backgroundColor:color,borderRadius:'50%',display:'inline-block',marginRight:6,border:'2px solid #000',verticalAlign:'middle'}} />;
-  }
-};
+// ============== UTILITIES (continued) ==============
 
 // ============== SCHEDULING ENGINE ==============
 const Engine = {
@@ -396,10 +384,10 @@ const NameCell = ({ name, shapes, editable, emps, onUpdate, hl, allShapes }) => 
   const hlColor = isHl && allShapes?.[name.toUpperCase()]?.color;
   const hlStyle = isHl ? { '--hl-color': hlColor || '#3B82F6' } : {};
   const base = 'schedule-cell font-bold text-sm flex items-center justify-center ' + (!name||name==='X'?'bg-gray-400':'bg-white') + (isHl ? ' cell-highlight' : '');
-  if (!editable) return <div className={base} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>;
+  if (!editable) return <div className={base} style={hlStyle}>{(name||'X').toUpperCase()}</div>;
   return (
     <div className="relative">
-      <div onClick={()=>setOpen(!open)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(name||'X').toUpperCase()}</div>
+      <div onClick={()=>setOpen(!open)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>{(name||'X').toUpperCase()}</div>
       {open && <Dropdown value={name} options={['X',...emps.map(e=>e.name).sort()]} onSelect={onUpdate} onClose={()=>setOpen(false)}/>}
     </div>
   );
@@ -445,12 +433,12 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
         className={'schedule-cell bg-white font-bold text-xs py-2 min-w-[180px] '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
         style={anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {}}>        <div className="flex flex-col gap-1">
           <div className="flex items-center justify-center gap-1">
-            {sh1 && <EmpShape color={sh1.color} shape={sh1.shape}/>}
+            
             <span>{firstName}</span>
             <span className="text-gray-500 text-[10px] ml-1">{firstTime}</span>
           </div>
           <div className="flex items-center justify-center gap-1">
-            {sh2 && <EmpShape color={sh2.color} shape={sh2.shape}/>}
+            
             <span>{secondName}</span>
             <span className="text-gray-500 text-[10px] ml-1">{secondTime}</span>
           </div>
@@ -466,8 +454,8 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
   const hlColor = isHl && allShapes?.[firstName]?.color;
   const hlStyle = isHl ? { '--hl-color': hlColor || '#3B82F6' } : {};
   const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white')+(isHl?' cell-highlight':'');
-  if (!editable) return <div className={base} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}{(value||'X').toUpperCase()}</div>;
-  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>{sh && <EmpShape color={sh.color} shape={sh.shape}/>}<span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px] ml-1">✏️</span></div>;
+  if (!editable) return <div className={base} style={hlStyle}>{(value||'X').toUpperCase()}</div>;
+  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}><span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px] ml-1">✏️</span></div>;
 };
 
 const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
@@ -500,7 +488,6 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
   
   const CleanRow = ({ c, i }) => {
     const [open, setOpen] = useState(false);
-    const csh = sh && c.name && c.name!=='X' && sh[c.name.toUpperCase()];
     const complete = isTaskComplete(c.task);
     const cHl = hl.size > 0 && c.name && c.name!=='X' && hl.has(c.name.toUpperCase());
     const cHlColor = cHl && shapes?.[c.name.toUpperCase()]?.color;
@@ -508,7 +495,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
     return (
       <div className={'schedule-cell text-red-600 font-bold text-xs py-1 flex items-center justify-between relative'+(cHl?' cell-highlight':'')} style={cHl?{'--hl-color':cHlColor||'#3B82F6'}:{}}>
         <div className="flex items-center flex-1 cursor-pointer" onClick={()=>editable&&setOpen(!open)}>
-          {csh && <EmpShape color={csh.color} shape={csh.shape}/>}
+          
           <span>{c.name.toUpperCase()} - {c.task}</span>
         </div>
         {complete ? (
@@ -621,7 +608,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">TIME</div>
               <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">PERSON</div>
               <div className="schedule-cell text-xs py-0.5">9:00 AM - 12:00 PM</div>
-              <div className="schedule-cell text-xs py-0.5">LOD</div>
+              <div className="schedule-cell text-xs py-0.5"></div>
             </div>
           </div>
         </div>
@@ -638,17 +625,15 @@ const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const ideal = sun => sun ? {v:[1,1,1],r:[2,2,2],rg:[3,3,3]} : {v:[2,2,2],r:[2,2,2],rg:[2,3,3]};
   const blkT = (sun, b) => sun ? (b===1?'10A-12P':b===2?'12P-3P':'3P-6:15P') : (b===1?'9A-12P':b===2?'12P-4:15P':'4P-8:15P');
+  const blkName = b => b===1?'Morning':b===2?'Noon':'Evening';
   const issues = s => {
     const id = ideal(s.isSunday), out = [];
-    if (s.stats.vB1 < id.v[0]) out.push('Vault B1: need '+id.v[0]+', have '+s.stats.vB1);
-    if (s.stats.vB2 < id.v[1]) out.push('Vault B2: need '+id.v[1]+', have '+s.stats.vB2);
-    if (s.stats.vB3 < id.v[2]) out.push('Vault B3: need '+id.v[2]+', have '+s.stats.vB3);
-    if (s.stats.rB1 < id.r[0]) out.push('Reception B1: need '+id.r[0]+', have '+s.stats.rB1);
-    if (s.stats.rB2 < id.r[1]) out.push('Reception B2: need '+id.r[1]+', have '+s.stats.rB2);
-    if (s.stats.rB3 < id.r[2]) out.push('Reception B3: need '+id.r[2]+', have '+s.stats.rB3);
-    if (s.stats.rgB1 < id.rg[0]) out.push('Registers B1: need '+id.rg[0]+', have '+s.stats.rgB1);
-    if (s.stats.rgB2 < id.rg[1]) out.push('Registers B2: need '+id.rg[1]+', have '+s.stats.rgB2);
-    if (s.stats.rgB3 < id.rg[2]) out.push('Registers B3: need '+id.rg[2]+', have '+s.stats.rgB3);
+    [1,2,3].forEach(b => {
+      const bi = b-1;
+      if (s.stats['vB'+b] < id.v[bi]) out.push(blkName(b)+' ('+blkT(s.isSunday,b)+'): Vault — have '+s.stats['vB'+b]+', need '+id.v[bi]);
+      if (s.stats['rB'+b] < id.r[bi]) out.push(blkName(b)+' ('+blkT(s.isSunday,b)+'): Reception — have '+s.stats['rB'+b]+', need '+id.r[bi]);
+      if (s.stats['rgB'+b] < id.rg[bi]) out.push(blkName(b)+' ('+blkT(s.isSunday,b)+'): Registers — have '+s.stats['rgB'+b]+'/6, need '+id.rg[bi]);
+    });
     return out;
   };
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -660,11 +645,31 @@ const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
   
   return (
     <div className="fade-in">
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl mb-6">
-        <h2 className="text-2xl font-bold mb-4">Staffing Requirements</h2>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Monday - Saturday</h3><div className="text-sm space-y-1"><p>• Vault: 2 people (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 2 (9-12), 3 (12-4), 3 (4-8)</p></div></div>
-          <div className="bg-white/20 rounded-lg p-4"><h3 className="font-bold mb-2">Sunday</h3><div className="text-sm space-y-1"><p>• Vault: 1 person (all shifts)</p><p>• Reception: 2 people (all shifts)</p><p>• Registers: 3 people (all shifts)</p></div></div>
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-5 rounded-xl mb-6">
+        <h2 className="text-xl font-bold mb-3">Minimum Staffing Requirements</h2>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="bg-white/15 rounded-lg p-3">
+            <h3 className="font-bold mb-2">Monday – Saturday</h3>
+            <table className="w-full text-left text-xs">
+              <thead><tr className="border-b border-white/30"><th className="py-1">Position</th><th className="py-1">Morning</th><th className="py-1">Noon</th><th className="py-1">Evening</th></tr></thead>
+              <tbody>
+                <tr><td className="py-0.5">Vault</td><td>2</td><td>2</td><td>2</td></tr>
+                <tr><td className="py-0.5">Reception</td><td>2</td><td>2</td><td>2</td></tr>
+                <tr><td className="py-0.5">Registers (of 6)</td><td>2</td><td>3</td><td>3</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-white/15 rounded-lg p-3">
+            <h3 className="font-bold mb-2">Sunday</h3>
+            <table className="w-full text-left text-xs">
+              <thead><tr className="border-b border-white/30"><th className="py-1">Position</th><th className="py-1">Morning</th><th className="py-1">Noon</th><th className="py-1">Evening</th></tr></thead>
+              <tbody>
+                <tr><td className="py-0.5">Vault</td><td>1</td><td>1</td><td>1</td></tr>
+                <tr><td className="py-0.5">Reception</td><td>2</td><td>2</td><td>2</td></tr>
+                <tr><td className="py-0.5">Registers (of 6)</td><td>3</td><td>3</td><td>3</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
       <div className="bg-white rounded-lg card-shadow p-6 mb-6">
@@ -690,7 +695,7 @@ const StaffingSummary = ({ scheds, allScheds, onSelect }) => {
 };
 
 // ============== CLEANING LOGS ==============
-const CleaningLogs = ({ logs, onView, allScheds }) => {
+const CleaningLogs = ({ logs, onView, allScheds, onClearLog }) => {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
@@ -727,7 +732,10 @@ const CleaningLogs = ({ logs, onView, allScheds }) => {
         })}</div>
       </div>
       {selDay && <div className="bg-white rounded-lg card-shadow p-6">
-        <h3 className="font-bold text-lg mb-4">Cleaning Log - {months[month]} {selDay}, {year}</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-lg">Cleaning Log - {months[month]} {selDay}, {year}</h3>
+          {selLogs.length > 0 && <button onClick={()=>{if(confirm('Clear all cleaning logs for this day?')){const key=year+'-'+String(month+1).padStart(2,'0')+'-'+String(selDay).padStart(2,'0');const nl={...logs};delete nl[key];onClearLog?.(nl);}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>}
+        </div>
         {selLogs.length === 0 ? <p className="text-gray-500">No tasks logged.</p> : <div className="space-y-3">{selLogs.map((l,i)=>{
           const assigned = getAssigned(l.task);
           return <div key={i} onClick={()=>onView?.(l)} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"><div><span className="font-bold">{l.task}</span>{assigned && <span className="text-gray-400 text-sm ml-1">({assigned})</span>}<span className="text-gray-500 ml-2">by {l.initials}</span></div><span className="text-sm text-gray-500">{formatEST(l.completedAt)}</span></div>;
@@ -745,52 +753,59 @@ const CleaningLogs = ({ logs, onView, allScheds }) => {
 const CoverageAlert = ({ sched }) => {
   if (!sched) return null;
   const sun = sched.isSunday;
+  const st = sched.stats;
   
-  // Block time labels
   const blkLabels = sun 
     ? { 1: { name: 'MORNING', time: '10A-12P' }, 2: { name: 'NOON', time: '12P-3P' }, 3: { name: 'EVENING', time: '3P-6:15P' } }
     : { 1: { name: 'MORNING', time: '9A-12P' }, 2: { name: 'NOON', time: '12P-4:15P' }, 3: { name: 'EVENING', time: '4P-8:15P' } };
   
-  // Collect all missing positions by block
-  const byBlock = { 1: [], 2: [], 3: [] };
+  // Thresholds: Reception=2 all, Registers=2/3/3 (morning/noon/evening), LOD=1, Vault=2 weekday/1 sunday
+  const reqRec = 2;
+  const reqReg = [2, 3, 3]; // Block 1, 2, 3
+  const reqVault = sun ? [1,1,1] : [2,2,2];
   
-  sched.lod.forEach((l, i) => { if (l.name === 'X') byBlock[i+1].push('LOD'); });
-  sched.reception.forEach((r, i) => {
-    if (r.r1 === 'X') byBlock[i+1].push('Reception 1');
-    if (r.r2 === 'X') byBlock[i+1].push('Reception 2');
-  });
-  sched.medCheckout.forEach((m, i) => {
-    if (m.mc1 === 'X') byBlock[i+1].push('Medical Checkout 1');
-    if (m.mc2 === 'X') byBlock[i+1].push('Medical Checkout 2');
-    if (m.med3au1 === 'X') byBlock[i+1].push('Med 3 / AU 1');
-  });
-  sched.auCheckout.forEach((a, i) => {
-    if (a.au2 === 'X') byBlock[i+1].push('AU Checkout 2');
-    if (a.au3 === 'X') byBlock[i+1].push('AU Checkout 3');
-    if (a.au4 === 'X') byBlock[i+1].push('AU Checkout 4');
+  const issues = [];
+  [1,2,3].forEach(b => {
+    const bi = b - 1;
+    const blk = [];
+    // LOD
+    if (sched.lod[bi]?.name === 'X') blk.push({ pos: 'LOD', need: 1, have: 0 });
+    // Reception
+    const recCount = st['rB'+b];
+    if (recCount < reqRec) blk.push({ pos: 'Reception', need: reqRec, have: recCount });
+    // Registers (6 positions: MC1, MC2, MED3/AU1, AU2, AU3, AU4)
+    const regCount = st['rgB'+b];
+    if (regCount < reqReg[bi]) blk.push({ pos: 'Registers', need: reqReg[bi], have: regCount, of: 6 });
+    // Vault
+    const vaultCount = st['vB'+b];
+    if (vaultCount < reqVault[bi]) blk.push({ pos: 'Vault', need: reqVault[bi], have: vaultCount });
+    
+    if (blk.length > 0) issues.push({ block: b, label: blkLabels[b], items: blk });
   });
   
-  const total = byBlock[1].length + byBlock[2].length + byBlock[3].length;
-  if (total === 0) return null;
+  if (issues.length === 0) return null;
+  
+  const totalNeeded = issues.reduce((s, x) => s + x.items.length, 0);
   
   return (
     <div className="bg-red-100 border-2 border-red-500 rounded-lg p-3 mt-4">
       <p className="font-bold text-red-800 text-sm mb-2">⚠️ COVERAGE NEEDED</p>
-      <div className="space-y-3">
-        {[1, 2, 3].map(b => {
-          if (byBlock[b].length === 0) return null;
-          return (
-            <div key={b} className="bg-white rounded p-2 border border-red-300">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-red-900 text-xs">{blkLabels[b].name} <span className="font-normal text-red-600">({blkLabels[b].time})</span></span>
-                <span className="font-bold text-red-700 text-xs bg-red-200 px-2 py-0.5 rounded">x{byBlock[b].length} Employee{byBlock[b].length > 1 ? 's' : ''} Needed</span>
-              </div>
-              <ul className="text-xs text-red-800 ml-3">
-                {byBlock[b].map((pos, i) => <li key={i}>• {pos}</li>)}
-              </ul>
+      <div className="space-y-2">
+        {issues.map(({ block, label, items }) => (
+          <div key={block} className="bg-white rounded p-2 border border-red-300">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-red-900 text-xs">{label.name} <span className="font-normal text-red-600">({label.time})</span></span>
             </div>
-          );
-        })}
+            <div className="text-xs text-red-800 space-y-0.5">
+              {items.map((it, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="font-bold bg-red-200 px-1.5 py-0.5 rounded text-red-900">x{it.need - it.have} needed</span>
+                  <span>{it.pos} — have {it.have}{it.of ? '/'+it.of : ''}, need {it.need}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1038,10 +1053,7 @@ const App = () => {
   const shapes = useMemo(() => {
     const s = {}, sorted = [...emps].sort((a,b) => a.name.localeCompare(b.name));
     sorted.forEach((e, i) => {
-      s[e.name.toUpperCase()] = {
-        color: COLORS[Math.floor(i / SHAPES.length) % COLORS.length],
-        shape: SHAPES[i % SHAPES.length]
-      };
+      s[e.name.toUpperCase()] = { color: COLORS[i % COLORS.length] };
     });
     return s;
   }, [emps]);
@@ -1175,6 +1187,7 @@ const App = () => {
                 <button onClick={()=>setTab('employees')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='employees'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Employee Master Schedule</button>
                 <button onClick={()=>setTab('summary')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='summary'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Staffing Summary</button>
                 <button onClick={()=>setTab('cleaning')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='cleaning'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Cleaning Logs</button>
+                <button onClick={()=>setTab('help')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='help'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>How to Use</button>
               </>}
             </div>
             {!logged ? <button onClick={()=>setShowLogin(true)} className="px-4 py-2 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🔐 Login</button> : <button onClick={()=>{setLogged(false);setTab('schedule');}} className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700">Logout</button>}
@@ -1233,7 +1246,10 @@ const App = () => {
               {scheds.length>0&&scheds[selDay] && <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-600">Editing: {scheds[selDay].fullTitle}</span>
-                  {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
+                  <div className="flex gap-2">
+                    {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
+                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
+                  </div>
                 </div>
                 <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps}/>
               </div>}
@@ -1275,7 +1291,7 @@ const App = () => {
                             onMouseEnter={()=>setHoveredEmp(emp.name)}
                             onMouseLeave={()=>setHoveredEmp(null)}
                             onClick={(e)=>{e.stopPropagation();togglePin(emp.name);}}>
-                            {sh && <EmpShape color={sh.color} shape={sh.shape}/>}{emp.name}
+                            <span className="w-2.5 h-2.5 rounded-full inline-block mr-1.5 flex-shrink-0" style={{backgroundColor: pinColor}}/>{emp.name}
                           </div>
                         </td>
                         <td className="px-1 py-1 text-center">{emp.vault && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
@@ -1298,7 +1314,81 @@ const App = () => {
         
         {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
         
-        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds}/>}
+        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds} onClearLog={setCleanLogs}/>}
+        
+        {tab === 'help' && logged && (
+          <div className="fade-in max-w-4xl mx-auto">
+            <div className="bg-white rounded-xl card-shadow p-8">
+              <h2 className="text-2xl font-bold mb-6">How to Use the Scheduler</h2>
+              
+              <div className="space-y-6">
+                <div className="border-l-4 border-emerald-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">1. Getting Started</h3>
+                  <p className="text-sm text-gray-700 mb-2">Click <strong>Login</strong> (top right) with your supervisor credentials to access all features. Without logging in, only the public Daily Schedule is visible.</p>
+                </div>
+
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">2. Import Your Employee Data</h3>
+                  <p className="text-sm text-gray-700 mb-2">Go to <strong>Employee Master Schedule</strong> tab. Use the <strong>Upload Excel</strong> button on the left to import your master schedule spreadsheet. The file should have columns: Name, Vault, Reception, LOD, iPad, Registers, PTO, Notes, then 7 days for Week 1 and 7 days for Week 2.</p>
+                  <p className="text-sm text-gray-700">You can also click <strong>Add Manually</strong> to enter employees one at a time, or click <strong>Edit</strong> on any row to update an existing employee.</p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">3. Set Week Dates & Generate Schedules</h3>
+                  <p className="text-sm text-gray-700 mb-2">On the left panel, set <strong>Week 1 Start</strong> date (Week 2 auto-fills). Then click <strong>Generate All 14 Days</strong> to create schedules for the full 2-week period. Or use <strong>Generate Single Day</strong> with a date picker for just one day.</p>
+                  <p className="text-sm text-gray-700">The engine automatically assigns employees to positions based on their qualifications, availability, and role priorities.</p>
+                </div>
+
+                <div className="border-l-4 border-amber-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">4. Editing a Daily Schedule</h3>
+                  <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view that day's schedule. To change an assignment, click any name cell to open a dropdown and pick a different employee. For iPad and AU Checkout 2 cells, click the <strong>✏️ edit</strong> to type directly (useful for split shifts).</p>
+                  <p className="text-sm text-gray-700 mb-2">Click <strong>💾 Save</strong> when you're done editing. Use <strong>🗑️ Clear Day</strong> to reset all positions to empty if you want to fill in manually from scratch.</p>
+                </div>
+
+                <div className="border-l-4 border-pink-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">5. Highlight Employees</h3>
+                  <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any employee name in the Master Schedule table below the daily schedule — their assigned positions light up in the schedule above with their unique color.</p>
+                  <p className="text-sm text-gray-700">Click a name to <strong>pin</strong> the highlight so it stays on. Click again to unpin. Pin multiple employees at once to see all their positions highlighted. Use <strong>Clear highlights</strong> to remove all pins.</p>
+                </div>
+
+                <div className="border-l-4 border-red-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">6. Coverage Alerts & Validation</h3>
+                  <p className="text-sm text-gray-700 mb-2">Below the Import section on the left, you'll see a <strong>Coverage Needed</strong> alert if any shift is understaffed. It breaks down by Morning, Noon, and Evening with exact counts.</p>
+                  <p className="text-sm text-gray-700 mb-1"><strong>Minimum requirements:</strong></p>
+                  <p className="text-sm text-gray-700 mb-2">Reception: 2 all shifts. Registers: 2 of 6 (morning), 3 of 6 (noon & evening). Vault: 2 weekdays, 1 Sunday.</p>
+                  <p className="text-sm text-gray-700">The <strong>Cross-Reference Validator</strong> below that checks that every scheduled employee actually appears in the daily and flags PTO violations or double-bookings.</p>
+                </div>
+
+                <div className="border-l-4 border-cyan-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">7. iPad Split Shifts & Register Swaps</h3>
+                  <p className="text-sm text-gray-700">When two different people cover the iPad in a single block (e.g. Dre 12-2 / Pete 2-4), the system automatically swaps them on the registers: Pete gets 12-2 on registers and Dre gets 2-4. Both names are stacked in the same cell.</p>
+                </div>
+
+                <div className="border-l-4 border-emerald-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">8. Daily Schedule (Public View)</h3>
+                  <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab shows today's schedule (or tomorrow's after 8 PM EST). This view is designed to be displayed on a shared screen — no login required.</p>
+                  <p className="text-sm text-gray-700">Staff can click the <strong>Sign</strong> button on their cleaning task to open a checklist. Check all items, enter initials, and submit. The button turns to a green ✓ when complete.</p>
+                </div>
+
+                <div className="border-l-4 border-orange-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">9. Cleaning Logs</h3>
+                  <p className="text-sm text-gray-700 mb-2">The <strong>Cleaning Logs</strong> tab shows a monthly calendar. Green = all 5 areas done, amber = partial, red = none. Click a day to see who signed off each area with timestamps.</p>
+                  <p className="text-sm text-gray-700">Missing areas show the assigned cleaner's name in parentheses. Use <strong>🗑️ Clear Day</strong> to reset a day's logs if needed.</p>
+                </div>
+
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">10. Staffing Summary</h3>
+                  <p className="text-sm text-gray-700">The <strong>Staffing Summary</strong> tab shows a monthly overview. Green days = fully staffed, red = shortages. Click any day to see a detailed breakdown of what positions are short and by how much.</p>
+                </div>
+
+                <div className="border-l-4 border-gray-400 pl-4">
+                  <h3 className="font-bold text-lg mb-2">11. Printing</h3>
+                  <p className="text-sm text-gray-700">On the Daily Schedule tab, click <strong>🖨️ Print</strong> to print the current day's schedule. The navigation header and buttons are automatically hidden.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
