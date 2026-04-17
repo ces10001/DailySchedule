@@ -1837,131 +1837,116 @@ const App = () => {
           <div className="fade-in max-w-4xl mx-auto">
             <div className="bg-white rounded-xl card-shadow p-8">
               <h2 className="text-2xl font-bold mb-2">How to Use the Scheduler</h2>
-              <p className="text-sm text-gray-500 mb-6">Complete guide to every feature.</p>
+              <p className="text-sm text-gray-500 mb-6">All changes save automatically across all devices.</p>
               
               <div className="space-y-6">
                 <div className="border-l-4 border-emerald-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">1. Getting Started</h3>
-                  <p className="text-sm text-gray-700">Click <strong>Login</strong> (top right) with your supervisor credentials to access all admin features. Without logging in, only the public Daily Schedule is visible — that view is designed to be displayed on a shared screen in the pharmacy.</p>
+                  <h3 className="font-bold text-lg mb-2">Tabs Overview</h3>
+                  <p className="text-sm text-gray-700 mb-2">There are 5 tabs across the top:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>Daily Schedule</strong> — the public view anyone can see without logging in. Shows today's schedule (or tomorrow's after 8 PM). Designed for a shared pharmacy screen.</li>
+                    <li><strong>Employee Master Schedule</strong> — the main workspace. Manage employees, set shifts, generate daily schedules, and make edits. Requires login.</li>
+                    <li><strong>Staffing Summary</strong> — monthly calendar showing which days are fully staffed (green) or short (red). Click any day for a breakdown.</li>
+                    <li><strong>Cleaning Logs</strong> — monthly view of cleaning completions. Green = all 5 areas done, amber = partial.</li>
+                    <li><strong>How to Use</strong> — you're here!</li>
+                  </ul>
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">2. Import Employee Data</h3>
-                  <p className="text-sm text-gray-700 mb-2">Go to <strong>Employee Master Schedule</strong> tab. On the left panel, choose <strong>Week 1</strong> or <strong>Week 2</strong>, then click <strong>📁 Upload as Week 1/2</strong> to load shifts from your Excel file. The file should have columns: Name, Vault, Reception, LOD, iPad, Registers, PTO, Notes, then 7 day columns (Mon–Sun).</p>
-                  <p className="text-sm text-gray-700 mb-2">Uploading <strong>merges</strong> with existing employees — it won't erase anyone. Existing employees get their shifts updated for that week only; new names are added automatically.</p>
-                  <p className="text-sm text-gray-700 mb-2">You can also click <strong>➕ Add Employee Manually</strong>, or click <strong>Edit</strong> on any row to update an employee. To remove someone, click the <strong>✕</strong> next to Edit.</p>
-                  <p className="text-sm text-gray-700"><strong>PTO format:</strong> Use <code className="bg-gray-100 px-1 rounded">3/1</code> for a single day, <code className="bg-gray-100 px-1 rounded">3/1-3/5</code> for a range, or comma-separate like <code className="bg-gray-100 px-1 rounded">3/1-3/5, 4/10</code>.</p>
+                  <h3 className="font-bold text-lg mb-2">Logging In</h3>
+                  <p className="text-sm text-gray-700">Click <strong>🔐 Login</strong> (top right) with your supervisor credentials to unlock all features. Without logging in, only the Daily Schedule is visible.</p>
                 </div>
 
                 <div className="border-l-4 border-indigo-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">3. Real-Time Sync (Firebase)</h3>
-                  <p className="text-sm text-gray-700 mb-2">All data is automatically synced to Firebase in real time. Any change you make — editing a shift, generating a schedule, signing a cleaning task — appears on <strong>every device within 1 second</strong>.</p>
-                  <p className="text-sm text-gray-700 mb-2">The sync indicator on the left panel shows:</p>
+                  <h3 className="font-bold text-lg mb-2">Loading Employee Schedules</h3>
+                  <p className="text-sm text-gray-700 mb-2">On the <strong>Employee Master Schedule</strong> tab, use the left panel to load shifts from an Excel file:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>🔄 Live sync active</strong> — connected and syncing</li>
-                    <li><strong>⚠️ Disconnected</strong> — temporary loss of internet, will auto-reconnect</li>
+                    <li>Select <strong>Week 1</strong> or <strong>Week 2</strong></li>
+                    <li>Click <strong>📁 Upload</strong> and choose your Excel file</li>
+                    <li>Employees are added or updated — existing data is not erased</li>
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">No backups are needed. A small 💾 Backup button is available if you ever want a local copy of your data.</p>
+                  <p className="text-sm text-gray-700 mt-2">You can also click <strong>➕ Add Employee Manually</strong> to add someone by hand.</p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">4. Editing the Master Schedule</h3>
-                  <p className="text-sm text-gray-700 mb-2">The master schedule table shows all employees with their roles and weekly shifts. <strong>Week 1</strong> columns have a blue header, <strong>Week 2</strong> has green.</p>
-                  <p className="text-sm text-gray-700 mb-2"><strong>Change a shift</strong>: Click any shift cell in the table — it's a dropdown. Pick a new time or OFF.</p>
-                  <p className="text-sm text-gray-700"><strong>All changes sync instantly</strong> to every device. There's no separate "save" step for the master schedule.</p>
-                </div>
-
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">5. Set Week Dates & Generate Schedules</h3>
-                  <p className="text-sm text-gray-700 mb-2">On the left panel, set <strong>Week 1 Start</strong> date (Week 2 auto-fills to 7 days later). Then click <strong>🗓️ Generate All 14 Days</strong> to create schedules for the full 2-week period. Or use <strong>Generate Single Day</strong> with a date picker for just one day.</p>
-                  <p className="text-sm text-gray-700">The engine automatically assigns employees based on qualifications, availability, and role priorities (single-role employees get priority for their position).</p>
+                  <h3 className="font-bold text-lg mb-2">Editing the Master Schedule</h3>
+                  <p className="text-sm text-gray-700 mb-2">The master table shows all employees, their roles, and weekly shifts. <strong>Week 1</strong> = blue columns, <strong>Week 2</strong> = green columns.</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>Change a shift</strong> — click any shift cell to pick a new time or OFF</li>
+                    <li><strong>Edit an employee</strong> — click <strong>Edit</strong> to change name, roles, or PTO</li>
+                    <li><strong>Remove an employee</strong> — click the <strong>✕</strong> next to Edit</li>
+                    <li><strong>PTO format</strong> — <code className="bg-gray-100 px-1 rounded">3/1</code> for one day, <code className="bg-gray-100 px-1 rounded">3/1-3/5</code> for a range, comma-separate multiples</li>
+                  </ul>
                 </div>
 
                 <div className="border-l-4 border-amber-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">7. Editing a Daily Schedule</h3>
-                  <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view that day's schedule. The buttons below each schedule header let you:</p>
+                  <h3 className="font-bold text-lg mb-2">Generating Schedules</h3>
+                  <p className="text-sm text-gray-700 mb-2">On the left panel, set your <strong>Week 1 Start</strong> date (Week 2 fills automatically). Then:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>💾 Save</strong> — confirms your edits (appears only after changes are made)</li>
-                    <li><strong>✨ Auto-fill Empty</strong> — runs the engine on just the empty (X) positions to fill what it can. Also automatically assigns any "extra" employees (scheduled but unassigned) to empty register slots so no one is left idle</li>
-                    <li><strong>↶ Undo</strong> — reverts the last destructive action (Clear Day, Clear Cleaning Log, or Auto-fill). Supports up to 10 actions back</li>
-                    <li><strong>🗑️ Clear Day</strong> — resets every position to empty/RPH so you can fill in manually from scratch (undoable)</li>
+                    <li><strong>🗓️ Generate All 14 Days</strong> — creates schedules for both weeks</li>
+                    <li><strong>Generate Single Day</strong> — pick a date and generate just that day</li>
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">To change an assignment, click any name cell to open a dropdown. You can pick any employee, plus <strong>X</strong> (empty) or <strong>RPH</strong>.</p>
+                  <p className="text-sm text-gray-700 mt-2">Employees are auto-assigned based on roles, availability, and shift times. Single-role employees get priority for their position.</p>
                 </div>
 
                 <div className="border-l-4 border-teal-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">7. Real-Time Conflict Warnings</h3>
-                  <p className="text-sm text-gray-700 mb-2">When you open a name dropdown, any employee who would cause a conflict shows an amber <strong>⚠️</strong> next to their name. Hovering reveals the reason, e.g. "Already on reception this block".</p>
-                  <p className="text-sm text-gray-700"><strong>These are NOT flagged</strong> (they're fine): LOD + register (by design), split iPad + register (also by design).</p>
+                  <h3 className="font-bold text-lg mb-2">Editing a Daily Schedule</h3>
+                  <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view and edit it:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>Click any name cell</strong> — opens a dropdown to reassign. Employees with conflicts show a ⚠️ warning.</li>
+                    <li><strong>✨ Auto-fill Empty</strong> — fills empty positions automatically and assigns unplaced employees to open register slots</li>
+                    <li><strong>↶ Undo</strong> — reverts the last action (up to 10 steps)</li>
+                    <li><strong>🗑️ Clear Day</strong> — resets all positions to start fresh</li>
+                    <li><strong>💾 Save</strong> — confirms your changes</li>
+                  </ul>
                 </div>
 
                 <div className="border-l-4 border-cyan-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">8. iPad Split Shifts & Register Swaps</h3>
-                  <p className="text-sm text-gray-700 mb-2">When two different people cover the iPad in one block (e.g. Dre 12-2 / Pete 2-4), the system auto-swaps them on registers: Pete gets 12-2 on AU Checkout 2, Dre gets 2-4. Both names appear on one line in the same cell.</p>
-                  <p className="text-sm text-gray-700 mb-2"><strong>To manually create or edit a split</strong>: Click the iPad or AU Checkout 2 cell to open the text editor (✏️), then type in the format <code className="bg-gray-100 px-1 rounded">NAME A-B / NAME C-D</code>. For example: <code className="bg-gray-100 px-1 rounded">DRE 12-2 / PETE 2-4</code> for the noon block, or <code className="bg-gray-100 px-1 rounded">DRE 4-6 / PETE 6-8</code> for the evening block.</p>
-                  <p className="text-sm text-gray-700 mb-2"><strong>To remove a split</strong>: Click the cell and replace the text with a single name, or <code className="bg-gray-100 px-1 rounded">X</code> for empty.</p>
-                  <p className="text-sm text-gray-700"><strong>Smart fallback</strong>: If only one person is available for one half of a block but their shift covers the full block, they're assigned the full block automatically (no dangling "4-6" suffix).</p>
+                  <h3 className="font-bold text-lg mb-2">Split Shifts</h3>
+                  <p className="text-sm text-gray-700 mb-2">When two people share iPad or AU Checkout 2 in one block, the cell shows both names with times (e.g. "DRE 12-2 / PETE 2-4"). Registers auto-swap to match.</p>
+                  <p className="text-sm text-gray-700">To create or edit a split, click the ✏️ on the cell and type <code className="bg-gray-100 px-1 rounded">NAME 12-2 / NAME 2-4</code>. To remove, replace with a single name or <code className="bg-gray-100 px-1 rounded">X</code>.</p>
                 </div>
 
                 <div className="border-l-4 border-pink-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">9. Highlight Employees</h3>
-                  <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any employee name in the Master Schedule table below the daily schedule — their assigned positions light up in the schedule above with their unique color.</p>
-                  <p className="text-sm text-gray-700"><strong>Click</strong> a name to pin the highlight. Click again to unpin. Pin multiple employees to see all their positions highlighted at once. Use <strong>Clear highlights</strong> button to remove all pins.</p>
+                  <h3 className="font-bold text-lg mb-2">Employee Highlighting</h3>
+                  <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any name in the master table — their positions in the daily schedule light up with their color.</p>
+                  <p className="text-sm text-gray-700"><strong>Click</strong> to pin a highlight so it stays. Click again to unpin. Pin multiple employees at once. Use <strong>Clear highlights</strong> to remove all.</p>
                 </div>
 
                 <div className="border-l-4 border-red-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">10. Coverage Alerts & Validation</h3>
-                  <p className="text-sm text-gray-700 mb-2">Below the Import section on the left, you'll see a <strong>⚠️ Coverage Needed</strong> alert if any shift is understaffed. Organized by Morning, Noon, and Evening with exact counts.</p>
-                  <p className="text-sm text-gray-700 mb-2">Below that, the <strong>Cross-Reference Validator</strong> checks that every scheduled employee actually appears in the daily schedule. It flags:</p>
+                  <h3 className="font-bold text-lg mb-2">Coverage Alerts & Validation</h3>
+                  <p className="text-sm text-gray-700 mb-2">On the left panel:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li>Employees scheduled to work but missing from blocks they should be in</li>
-                    <li>Real conflicts like reception + register or iPad + reception</li>
-                    <li>Employees on PTO who appear in the schedule anyway</li>
+                    <li><strong>⚠️ Coverage Needed</strong> — warns when a shift is understaffed, showing which positions are short</li>
+                    <li><strong>Schedule Validation</strong> — flags employees who are scheduled but not assigned, or in conflicting positions</li>
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">When all is good, a green "✓ Cross-Reference: All schedules match master" appears.</p>
+                  <p className="text-sm text-gray-700 mt-2">Green ✓ means everything checks out.</p>
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">11. Staffing Summary</h3>
-                  <p className="text-sm text-gray-700 mb-2">The <strong>Staffing Summary</strong> tab shows a monthly calendar overview. Green days = fully staffed, red = shortages. Click any day to see a detailed breakdown of what positions are short and by how much.</p>
-                  <p className="text-sm text-gray-700"><strong>Edit requirements:</strong> The numbers in the Minimum Staffing Requirements table at the top are <em>editable inputs</em>. Click any number to change it — your custom thresholds are saved and used by the Coverage Alert on the Master Schedule tab.</p>
+                  <h3 className="font-bold text-lg mb-2">Staffing Summary</h3>
+                  <p className="text-sm text-gray-700 mb-2">Monthly overview — green = fully staffed, red = shortages. Click any day for details. You can adjust minimum staffing numbers at the top of this tab.</p>
                 </div>
 
                 <div className="border-l-4 border-emerald-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">12. Daily Schedule (Public View)</h3>
-                  <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab shows today's schedule, or tomorrow's after 8 PM EST. This view is designed to be displayed on a shared screen in the pharmacy — no login required, no color highlights, compact layout to fit on one page.</p>
-                  <p className="text-sm text-gray-700">Staff can click the <strong>Sign</strong> button on their cleaning task to open a checklist. Check all items, enter initials, and submit. The button turns to a green <strong>✓</strong> when complete.</p>
-                </div>
-
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">13. Cleaning Logs</h3>
-                  <p className="text-sm text-gray-700 mb-2">The <strong>Cleaning Logs</strong> tab shows a monthly calendar. Green = all 5 areas done, amber = partial, no color = none. Click a day to see who signed off each area with timestamps.</p>
-                  <p className="text-sm text-gray-700">Missing areas show the assigned cleaner's name in parentheses so you know who to follow up with. Use <strong>🗑️ Clear Day</strong> to reset a day's logs if needed (undoable).</p>
+                  <h3 className="font-bold text-lg mb-2">Public Daily View & Cleaning</h3>
+                  <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab is what everyone sees — no login needed. It auto-switches to tomorrow after 8 PM.</p>
+                  <p className="text-sm text-gray-700">Staff click <strong>Sign</strong> on their cleaning task, check off items, enter initials, and submit. Completed tasks show a green ✓. Supervisors can view all completions in the <strong>Cleaning Logs</strong> tab.</p>
                 </div>
 
                 <div className="border-l-4 border-violet-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">14. Calendar Indicators</h3>
-                  <p className="text-sm text-gray-700 mb-1">On the mini-calendar under the Master Schedule:</p>
-                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>Green day with ✓ and timestamp</strong> — schedule generated, shows last saved/edited time (EST)</li>
-                    <li><strong>Red day with ✗</strong> — past day with no schedule generated</li>
-                    <li><strong>Blue ring</strong> — today</li>
-                  </ul>
-                </div>
-
-                <div className="border-l-4 border-gray-400 pl-4">
-                  <h3 className="font-bold text-lg mb-2">15. Printing</h3>
-                  <p className="text-sm text-gray-700">On the Daily Schedule tab, click <strong>🖨️ Print</strong> to print the current day's schedule. The navigation header and buttons are automatically hidden.</p>
+                  <h3 className="font-bold text-lg mb-2">Calendar & Printing</h3>
+                  <p className="text-sm text-gray-700 mb-2">The mini-calendar shows which days have schedules at a glance. Green ✓ = created, red ✗ = missing, blue ring = today. Click any day to jump to it.</p>
+                  <p className="text-sm text-gray-700">Click <strong>🖨️ Print</strong> on the Daily Schedule to print — all buttons hide automatically.</p>
                 </div>
 
                 <div className="border-l-4 border-yellow-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">16. Troubleshooting</h3>
+                  <h3 className="font-bold text-lg mb-2">Troubleshooting</h3>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>Duplicate employee names</strong> — an amber banner warns at the top of the Employee tab. Rename one (e.g. "ARIFA K" / "ARIFA M") since the engine can't distinguish them.</li>
-                    <li><strong>Nothing happens when generating</strong> — check that Week 1 and Week 2 start dates are set, and that you have employees loaded.</li>
-                    <li><strong>Sync indicator says "Disconnected"</strong> — check your internet connection. Firebase will auto-reconnect when the connection is restored. Your edits are saved locally and will sync when reconnected.</li>
-                    <li><strong>Changes not appearing on another device</strong> — make sure both devices are on the same URL and have internet access. Try refreshing the page.</li>
-                    <li><strong>Wrong employees appearing on schedule</strong> — regenerate the day. Make sure the master schedule has the correct shifts for that employee on that day.</li>
+                    <li><strong>Duplicate names</strong> — a warning banner appears. Rename one (e.g. "ARIFA K" / "ARIFA M").</li>
+                    <li><strong>Generate not working</strong> — make sure week dates are set and employees are loaded.</li>
+                    <li><strong>Wrong employees on a schedule</strong> — regenerate the day. Check master schedule shifts are correct.</li>
+                    <li><strong>Changes not showing on another device</strong> — check internet and refresh the page.</li>
                   </ul>
                 </div>
               </div>
