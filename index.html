@@ -208,31 +208,40 @@ const Engine = {
       ip3b = this.findIPadRotate(emps, wk, dy, 18, 20, u3, [ip1,ip2a,ip2b], date); u3.push(ip3b);
       ipD1=ip1; ipT1='9:00 AM - 12:00 PM';
       
-      // Block 2 iPad split detection
+      // Block 2 iPad split detection - if only one half found, check if they can cover full block
       if (ip2a !== ip2b && ip2a !== 'X' && ip2b !== 'X') {
         ipD2 = ip2a+' 12-2 / '+ip2b+' 2-4';
         ipadSplit2 = { first: ip2a, second: ip2b };
       } else if (ip2a === ip2b && ip2a !== 'X') {
         ipD2 = ip2a;
-      } else if (ip2a !== 'X') {
-        ipD2 = ip2a+' 12-2';
-      } else if (ip2b !== 'X') {
-        ipD2 = ip2b+' 2-4';
+      } else if (ip2a !== 'X' && ip2b === 'X') {
+        // Check if ip2a can cover full block 2 (12-16.25)
+        const emp2a = emps.find(e => e.name === ip2a);
+        if (emp2a && this.availH(emp2a, wk, dy, 12, 16, date)) { ipD2 = ip2a; }
+        else { ipD2 = ip2a+' 12-2'; }
+      } else if (ip2b !== 'X' && ip2a === 'X') {
+        const emp2b = emps.find(e => e.name === ip2b);
+        if (emp2b && this.availH(emp2b, wk, dy, 12, 16, date)) { ipD2 = ip2b; }
+        else { ipD2 = ip2b+' 2-4'; }
       } else {
         ipD2 = 'X';
       }
       ipT2='12:00 PM - 4:00 PM';
       
-      // Block 3 iPad split detection
+      // Block 3 iPad split detection - if only one half found, check if they can cover full block
       if (ip3a !== ip3b && ip3a !== 'X' && ip3b !== 'X') {
         ipD3 = ip3a+' 4-6 / '+ip3b+' 6-8';
         ipadSplit3 = { first: ip3a, second: ip3b };
       } else if (ip3a === ip3b && ip3a !== 'X') {
         ipD3 = ip3a;
-      } else if (ip3a !== 'X') {
-        ipD3 = ip3a+' 4-6';
-      } else if (ip3b !== 'X') {
-        ipD3 = ip3b+' 6-8';
+      } else if (ip3a !== 'X' && ip3b === 'X') {
+        const emp3a = emps.find(e => e.name === ip3a);
+        if (emp3a && this.availH(emp3a, wk, dy, 16, 20, date)) { ipD3 = ip3a; }
+        else { ipD3 = ip3a+' 4-6'; }
+      } else if (ip3b !== 'X' && ip3a === 'X') {
+        const emp3b = emps.find(e => e.name === ip3b);
+        if (emp3b && this.availH(emp3b, wk, dy, 16, 20, date)) { ipD3 = ip3b; }
+        else { ipD3 = ip3b+' 6-8'; }
       } else {
         ipD3 = 'X';
       }
@@ -430,20 +439,14 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
     
     return (
       <div onClick={()=>editable&&setEditing(true)} 
-        className={'schedule-cell bg-white font-bold text-xs py-2 min-w-[180px] '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
-        style={anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {}}>        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-center gap-1">
-            
-            <span>{firstName}</span>
-            <span className="text-gray-500 text-[10px] ml-1">{firstTime}</span>
-          </div>
-          <div className="flex items-center justify-center gap-1">
-            
-            <span>{secondName}</span>
-            <span className="text-gray-500 text-[10px] ml-1">{secondTime}</span>
-          </div>
-        </div>
-        {editable && <span className="text-gray-400 text-[10px] block mt-1">✏️ edit</span>}
+        className={'schedule-cell bg-white font-bold text-xs min-w-[220px] whitespace-nowrap '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
+        style={anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {}}>
+        <span>{firstName}</span>
+        <span className="text-gray-500 text-[10px] mx-0.5">{firstTime}</span>
+        <span className="text-gray-400 mx-0.5">/</span>
+        <span>{secondName}</span>
+        <span className="text-gray-500 text-[10px] mx-0.5">{secondTime}</span>
+        {editable && <span className="text-gray-400 text-[10px] ml-1">✏️</span>}
       </div>
     );
   }
