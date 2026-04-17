@@ -64,10 +64,16 @@ const todayKey = () => toDateKey(new Date());
 // ============== SCHEDULING ENGINE ==============
 const Engine = {
   parse(seg) {
-    if (!seg || !seg.includes('-')) return { s: -1, e: -1 };
-    const pts = seg.split('-'), startStr = pts[0].trim(), endStr = pts[pts.length-1].trim();
-    const sAM = /AM/i.test(startStr), sPM = /PM/i.test(startStr), eAM = /AM/i.test(endStr), ePM = /PM/i.test(endStr);
-    const sp = startStr.replace(/AM|PM/gi,'').trim().split(':'), ep = endStr.replace(/AM|PM/gi,'').trim().split(':');
+    if (!seg) return { s: -1, e: -1 };
+    // Normalize: replace em/en dashes with hyphen, trim
+    const s2 = seg.replace(/[–—]/g, '-').trim();
+    if (!s2.includes('-')) return { s: -1, e: -1 };
+    const pts = s2.split('-'), startStr = pts[0].trim(), endStr = pts[pts.length-1].trim();
+    // Support "AM", "PM", "a", "p", "am", "pm"
+    const sAM = /a\.?m?\.?$/i.test(startStr), sPM = /p\.?m?\.?$/i.test(startStr);
+    const eAM = /a\.?m?\.?$/i.test(endStr), ePM = /p\.?m?\.?$/i.test(endStr);
+    const sp = startStr.replace(/[ap]\.?m?\.?/gi,'').trim().split(':');
+    const ep = endStr.replace(/[ap]\.?m?\.?/gi,'').trim().split(':');
     let s = (parseFloat(sp[0])||0) + (parseFloat(sp[1])||0)/60;
     let e = (parseFloat(ep[0])||0) + (parseFloat(ep[1])||0)/60;
     if (sPM && s < 12) s += 12; if (sAM && s === 12) s = 0;
@@ -79,14 +85,27 @@ const Engine = {
     const pto = (emp.ptoText||'').trim();
     if (!pto) return false;
     if (['✓','TRUE','X','x'].includes(pto)) return true;
+    const year = date.getFullYear();
+    const parseMD = (s) => {
+      const parts = s.trim().split('/');
+      if (parts.length < 2) return null;
+      const m = parseInt(parts[0]) - 1, d = parseInt(parts[1]);
+      const y = parts[2] ? parseInt(parts[2]) : year;
+      if (isNaN(m) || isNaN(d)) return null;
+      return new Date(y, m, d, 12, 0, 0); // noon to avoid TZ issues
+    };
     for (let rng of pto.split(',')) {
       rng = rng.trim();
       if (rng.includes('-')) {
         const [a,b] = rng.split('-');
-        const sd = new Date(a.trim()+'/'+date.getFullYear()), ed = new Date(b.trim()+'/'+date.getFullYear());
-        if (date >= sd && date <= ed) return true;
+        const sd = parseMD(a), ed = parseMD(b);
+        if (sd && ed) {
+          const d0 = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
+          if (d0 >= sd && d0 <= ed) return true;
+        }
       } else {
-        if (date.toDateString() === new Date(rng+'/'+date.getFullYear()).toDateString()) return true;
+        const sd = parseMD(rng);
+        if (sd && sd.toDateString() === date.toDateString()) return true;
       }
     }
     return false;
@@ -380,13 +399,19 @@ const CleaningModal = ({ task, onClose, onSubmit, log }) => {
   );
 };
 
-const Dropdown = ({ value, options, onSelect, onClose }) => (
+const Dropdown = ({ value, options, onSelect, onClose, conflictFn }) => (
   <div className="absolute top-full left-0 z-50 bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[140px]">
-    {options.map((n,i) => <div key={i} onClick={()=>{onSelect(n);onClose();}} className={'px-3 py-2 cursor-pointer hover:bg-gray-100 '+(value===n?'bg-emerald-50':'')}>{n}</div>)}
+    {options.map((n,i) => {
+      const conflict = conflictFn ? conflictFn(n) : null;
+      return <div key={i} onClick={()=>{onSelect(n);onClose();}} className={'px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center justify-between gap-2 '+(value===n?'bg-emerald-50':'')+(conflict?' text-amber-700':'')}>
+        <span>{n}</span>
+        {conflict && <span className="text-[9px] text-amber-600" title={conflict}>⚠️</span>}
+      </div>;
+    })}
   </div>
 );
 
-const NameCell = ({ name, shapes, editable, emps, onUpdate, hl, allShapes }) => {
+const NameCell = ({ name, shapes, editable, emps, onUpdate, hl, allShapes, conflictFn }) => {
   const [open, setOpen] = useState(false);
   const sh = name && name!=='X' && name!=='RPH' && shapes?.[name.toUpperCase()];
   const isHl = hl && hl.size > 0 && name && name !== 'X' && name !== 'RPH' && hl.has(name.toUpperCase());
@@ -397,13 +422,13 @@ const NameCell = ({ name, shapes, editable, emps, onUpdate, hl, allShapes }) => 
   return (
     <div className="relative">
       <div onClick={()=>setOpen(!open)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>{(name||'X').toUpperCase()}</div>
-      {open && <Dropdown value={name} options={['X',...emps.map(e=>e.name).sort()]} onSelect={onUpdate} onClose={()=>setOpen(false)}/>}
+      {open && <Dropdown value={name} options={['X','RPH',...emps.map(e=>e.name).sort()]} onSelect={onUpdate} onClose={()=>setOpen(false)} conflictFn={conflictFn}/>}
     </div>
   );
 };
 
 // Split cell for iPad and AU2 splits - vertical layout with both shapes
-const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes }) => {
+const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes, onSplitHelper, splitType }) => {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value||'');
   const save = () => { onUpdate(text); setEditing(false); };
@@ -438,15 +463,18 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
     const hlColor2 = hl2 && allShapes?.[secondName]?.color;
     
     return (
-      <div onClick={()=>editable&&setEditing(true)} 
-        className={'schedule-cell bg-white font-bold text-[11px] min-w-[250px] whitespace-nowrap '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
-        style={anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {}}>
-        <span>{firstName}</span>
-        <span className="text-gray-500 text-[9px] mx-0.5">{firstTime}</span>
-        <span className="text-gray-400 mx-0.5">/</span>
-        <span>{secondName}</span>
-        <span className="text-gray-500 text-[9px] mx-0.5">{secondTime}</span>
-        {editable && <span className="text-gray-400 text-[9px] ml-1">✏️</span>}
+      <div className={'schedule-cell bg-white font-bold text-[11px] whitespace-nowrap overflow-visible '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
+        style={{textAlign:'left', paddingLeft:'4px', ...(anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {})}}>
+        <span onClick={()=>editable&&setEditing(true)}>
+          <span>{firstName}</span>
+          <span className="text-gray-500 text-[9px] mx-0.5">{firstTime}</span>
+          <span className="text-gray-400 mx-0.5">/</span>
+          <span>{secondName}</span>
+          <span className="text-gray-500 text-[9px] mx-0.5">{secondTime}</span>
+          {editable && <span className="text-gray-400 text-[9px] ml-0.5">✏️</span>}
+        </span>
+        {editable && onSplitHelper && splitType && <button onClick={(e)=>{e.stopPropagation();onSplitHelper(splitType);}} title="Re-assign split" className="ml-1 text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 py-0.5 rounded font-bold">⇄</button>}
+        {editable && <button onClick={(e)=>{e.stopPropagation();onUpdate('X');}} title="Remove split" className="ml-1 text-[9px] bg-red-100 hover:bg-red-200 text-red-700 px-1 py-0.5 rounded font-bold">✕</button>}
       </div>
     );
   }
@@ -458,7 +486,11 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
   const hlStyle = isHl ? { '--hl-color': hlColor || '#3B82F6' } : {};
   const base = 'schedule-cell font-bold text-xs flex items-center justify-center gap-1 '+(value==='X'||!value?'bg-gray-400':'bg-white')+(isHl?' cell-highlight':'');
   if (!editable) return <div className={base} style={hlStyle}>{(value||'X').toUpperCase()}</div>;
-  return <div onClick={()=>setEditing(true)} className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}><span>{(value||'X').toUpperCase()}</span><span className="text-gray-400 text-[10px] ml-1">✏️</span></div>;
+  return <div className={base+' cursor-pointer hover:bg-gray-50'} style={hlStyle}>
+    <span onClick={()=>setEditing(true)}>{(value||'X').toUpperCase()}</span>
+    <span onClick={()=>setEditing(true)} className="text-gray-400 text-[10px] ml-1">✏️</span>
+    {onSplitHelper && splitType && <button onClick={(e)=>{e.stopPropagation();onSplitHelper(splitType);}} title="Split this block between two people" className="ml-1 text-[9px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 py-0.5 rounded font-bold">⇄ Split</button>}
+  </div>;
 };
 
 const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
@@ -468,7 +500,7 @@ const Header = ({ children, color }) => {
 };
 
 // ============== SCHEDULE DISPLAY ==============
-const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps }) => {
+const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps, onSplitHelper }) => {
   if (!sched) return null;
   const sh = showShapes ? shapes : null;
   const hl = highlightEmps || new Set();
@@ -479,6 +511,51 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
     o[pts[pts.length-1]] = val;
     s.manuallyEdited = true; s.editedAt = new Date().toISOString();
     onUpdate(s);
+  };
+  
+  // Build conflict function for a specific block + category
+  const makeConflictFn = (blockIdx, currentCat, currentPath) => (candidate) => {
+    if (!candidate || candidate === 'X' || candidate === 'RPH') return null;
+    const up = candidate.toUpperCase();
+    // Check what categories this person is already in for this block
+    const inCats = new Set();
+    const chk = (val, cat, path) => {
+      if (path === currentPath) return; // Skip current cell
+      if (!val || val === 'X' || val === 'RPH') return;
+      if (val.includes(' / ')) {
+        val.split(' / ').forEach(p => {
+          if (p.split(' ')[0].toUpperCase() === up) inCats.add(cat);
+        });
+      } else if (val.split(' ')[0].toUpperCase() === up) {
+        inCats.add(cat);
+      }
+    };
+    chk(sched.lod[blockIdx]?.name, 'LOD', 'lod.'+blockIdx+'.name');
+    chk(sched.reception[blockIdx]?.r1, 'reception', 'reception.'+blockIdx+'.r1');
+    chk(sched.reception[blockIdx]?.r2, 'reception', 'reception.'+blockIdx+'.r2');
+    chk(sched.ipad[blockIdx]?.display, 'ipad', 'ipad.'+blockIdx+'.display');
+    chk(sched.medCheckout[blockIdx]?.mc1, 'register', 'medCheckout.'+blockIdx+'.mc1');
+    chk(sched.medCheckout[blockIdx]?.mc2, 'register', 'medCheckout.'+blockIdx+'.mc2');
+    chk(sched.medCheckout[blockIdx]?.med3au1, 'register', 'medCheckout.'+blockIdx+'.med3au1');
+    chk(sched.auCheckout[blockIdx]?.au2, 'register', 'auCheckout.'+blockIdx+'.au2');
+    chk(sched.auCheckout[blockIdx]?.au3, 'register', 'auCheckout.'+blockIdx+'.au3');
+    chk(sched.auCheckout[blockIdx]?.au4, 'register', 'auCheckout.'+blockIdx+'.au4');
+    chk(sched.vault[blockIdx]?.au, 'vault', 'vault.'+blockIdx+'.au');
+    chk(sched.vault[blockIdx]?.med, 'vault', 'vault.'+blockIdx+'.med');
+    
+    if (inCats.size === 0) return null;
+    // Determine if adding to currentCat would conflict
+    // Allowed: LOD+register (by design)
+    // Conflict: reception+register, ipad+reception, ipad+register (unless split which we can't easily tell here)
+    const wouldConflict = 
+      (currentCat === 'reception' && inCats.has('register')) ||
+      (currentCat === 'register' && inCats.has('reception')) ||
+      (currentCat === 'ipad' && inCats.has('reception')) ||
+      (currentCat === 'reception' && inCats.has('ipad')) ||
+      (currentCat === 'ipad' && inCats.has('register')) ||
+      (currentCat === 'register' && inCats.has('ipad'));
+    if (wouldConflict) return 'Already on ' + [...inCats].join(' + ') + ' this block';
+    return null;
   };
   
   const todaysLogs = cleanLogs?.[todayKey()] || [];
@@ -524,7 +601,7 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
         <div className="flex-1">
           <div className="mb-2">
             <Header color="black">LEADER OF THE DAY</Header>
-            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)} hl={hl} allShapes={shapes}/><TimeCell time={l.time}/></React.Fragment>)}</div>
+            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'lod','lod.'+i+'.name')}/><TimeCell time={l.time}/></React.Fragment>)}</div>
           </div>
           <div className="mb-2">
             <div className="schedule-cell font-bold text-base bg-[#67d50d]">FRONT END RECEPTION</div>
@@ -533,9 +610,9 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="green">RECEPTION 2</Header></div>
               <div className="col-span-2"><Header color="green">iPAD</Header></div>
               {sched.reception.map((r,i) => <React.Fragment key={i}>
-                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)} hl={hl} allShapes={shapes}/><TimeCell time={r.time}/>
-                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)} hl={hl} allShapes={shapes}/><TimeCell time={r.time}/>
-                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split} hl={hl} allShapes={shapes}/>
+                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r1')}/><TimeCell time={r.time}/>
+                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r2')}/><TimeCell time={r.time}/>
+                <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split} hl={hl} allShapes={shapes} onSplitHelper={onSplitHelper} splitType={i===1?'ipad2':i===2?'ipad3':null}/>
                 <TimeCell time={sched.ipad[i].time}/>
               </React.Fragment>)}
             </div>
@@ -547,9 +624,9 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 2</Header></div>
               <div className="col-span-2"><Header color="blue">MED 3 / AU 1</Header></div>
               {sched.medCheckout.map((m,i) => <React.Fragment key={i}>
-                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)} hl={hl} allShapes={shapes}/><TimeCell time={m.time}/>
-                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)} hl={hl} allShapes={shapes}/><TimeCell time={m.time}/>
-                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)} hl={hl} allShapes={shapes}/><TimeCell time={m.time}/>
+                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.mc1')}/><TimeCell time={m.time}/>
+                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.mc2')}/><TimeCell time={m.time}/>
+                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.med3au1')}/><TimeCell time={m.time}/>
               </React.Fragment>)}
             </div>
             <div className="grid grid-cols-6 mt-1">
@@ -557,10 +634,10 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 3</Header></div>
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
               {sched.auCheckout.map((a,i) => <React.Fragment key={i}>
-                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split} hl={hl} allShapes={shapes}/>
+                <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split} hl={hl} allShapes={shapes} onSplitHelper={onSplitHelper} splitType={i===1?'au2-2':i===2?'au2-3':null}/>
                 <TimeCell time={a.time}/>
-                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)} hl={hl} allShapes={shapes}/><TimeCell time={a.time}/>
-                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)} hl={hl} allShapes={shapes}/><TimeCell time={a.time}/>
+                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au3')}/><TimeCell time={a.time}/>
+                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au4')}/><TimeCell time={a.time}/>
               </React.Fragment>)}
             </div>
           </div>
@@ -570,8 +647,8 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
             <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
             <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
             {sched.vault.map((v,i) => <React.Fragment key={i}>
-              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)} hl={hl} allShapes={shapes}/><TimeCell time={v.time}/>
-              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)} hl={hl} allShapes={shapes}/><TimeCell time={v.time}/>
+              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'vault','vault.'+i+'.au')}/><TimeCell time={v.time}/>
+              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'vault','vault.'+i+'.med')}/><TimeCell time={v.time}/>
             </React.Fragment>)}
           </div>
         </div>
@@ -647,7 +724,7 @@ const StaffingSummary = ({ scheds, allScheds, onSelect, staffReqs, setStaffReqs 
   const selIss = selSch ? issues(selSch) : [];
   
   const updReq = (dayType, pos, blkIdx, val) => {
-    const n = parseInt(val) || 0;
+    const n = val === '' ? 0 : Math.max(0, Math.min(9, parseInt(val) || 0));
     setStaffReqs(prev => {
       const next = JSON.parse(JSON.stringify(prev));
       next[dayType][pos][blkIdx] = n;
@@ -979,6 +1056,51 @@ const ScheduleValidator = ({ sched, emps }) => {
 };
 
 // ============== SMALLER COMPONENTS ==============
+const SplitHelperModal = ({ helper, emps, onSave, onClose }) => {
+  const [first, setFirst] = useState('');
+  const [second, setSecond] = useState('');
+  if (!helper) return null;
+  // helper.type: 'ipad2', 'ipad3', 'au2-2', 'au2-3'
+  const ranges = {
+    'ipad2': { a: '12-2', b: '2-4', label: 'iPad Noon Block' },
+    'ipad3': { a: '4-6', b: '6-8', label: 'iPad Evening Block' },
+    'au2-2': { a: '12-2', b: '2-4', label: 'AU Checkout 2 — Noon Block' },
+    'au2-3': { a: '4-6', b: '6-8', label: 'AU Checkout 2 — Evening Block' }
+  };
+  const r = ranges[helper.type] || { a: '', b: '', label: 'Split Shift' };
+  const save = () => {
+    if (!first || !second) return alert('Pick both people');
+    if (first === second) return alert('Same person on both halves — use a single name instead');
+    onSave(first + ' ' + r.a + ' / ' + second + ' ' + r.b);
+    onClose();
+  };
+  const opts = ['', ...emps.map(e => e.name).sort()];
+  return (
+    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md card-shadow fade-in">
+        <h2 className="text-xl font-bold mb-4">{r.label} — Split</h2>
+        <p className="text-sm text-gray-600 mb-4">Assign two different people to cover this block in halves.</p>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Person for {r.a}</label>
+          <select value={first} onChange={e=>setFirst(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
+            {opts.map((n,i)=><option key={i} value={n}>{n || '— Select —'}</option>)}
+          </select>
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Person for {r.b}</label>
+          <select value={second} onChange={e=>setSecond(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
+            {opts.map((n,i)=><option key={i} value={n}>{n || '— Select —'}</option>)}
+          </select>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={save} className="flex-1 btn-primary px-4 py-2 text-white rounded-lg font-bold">Apply Split</button>
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LoginModal = ({ onLogin, onClose }) => {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
@@ -1005,7 +1127,10 @@ const EmpForm = ({ emp, onSave, onCancel }) => {
       <h3 className="text-lg font-bold mb-3">{emp?'Edit':'Add'} Employee</h3>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div><label className="block text-xs font-medium mb-1">Name</label><input value={f.name} onChange={e=>setF({...f,name:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm"/></div>
-        <div><label className="block text-xs font-medium mb-1">PTO</label><input value={f.ptoText} onChange={e=>setF({...f,ptoText:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g., 3/1-3/5"/></div>
+        <div>
+          <label className="block text-xs font-medium mb-1">PTO <span className="text-gray-400 font-normal">(format: 3/1 or 3/1-3/5, comma-separate multiples)</span></label>
+          <input value={f.ptoText} onChange={e=>setF({...f,ptoText:e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. 3/1-3/5, 4/10"/>
+        </div>
       </div>
       <div className="flex flex-wrap gap-4 mb-3">{['vault','reception','lod','ipad','registers'].map(r=><label key={r} className="flex items-center gap-2"><input type="checkbox" checked={f[r]} onChange={e=>setF({...f,[r]:e.target.checked})} className="w-4 h-4"/><span className="text-sm capitalize">{r}</span></label>)}</div>
       <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 1</label><div className="grid grid-cols-7 gap-1">{days.map((d,i)=><div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{d}</div><select value={f.week1[i+1]||''} onChange={e=>setF({...f,week1:{...f.week1,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{(i===6?SUNDAY_SLOTS:TIME_SLOTS).map((s,j)=><option key={j} value={s.v}>{s.l}</option>)}</select></div>)}</div></div>
@@ -1039,7 +1164,7 @@ const Calendar = ({ generated, onClick, allScheds }) => {
         const s = getSch(d);
         const lastTime = s?.editedAt || s?.generatedAt || g;
         const past = isPast(d) && !g;
-        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(g?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{g && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
+        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(g?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{g && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
       })}</div>
     </div>
   );
@@ -1070,6 +1195,18 @@ const App = () => {
     weekday: { v: [2,2,2], r: [2,2,2], rg: [2,3,3] },
     sunday: { v: [1,1,1], r: [2,2,2], rg: [3,3,3] }
   });
+  const [toast, setToast] = useState(null);
+  const [undoHistory, setUndoHistory] = useState([]);
+  const [splitHelper, setSplitHelper] = useState(null); // { blockIdx, type: 'ipad'|'au2', display }
+  
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+  
+  const pushUndo = (action, data) => {
+    setUndoHistory(prev => [...prev.slice(-9), { action, data, at: Date.now() }]);
+  };
   
   const highlightEmps = useMemo(() => {
     const set = new Set(pinnedEmps.map(n => n.toUpperCase()));
@@ -1092,13 +1229,59 @@ const App = () => {
   
   const sorted = useMemo(() => [...emps].sort((a,b) => a.name.localeCompare(b.name)), [emps]);
   
+  // Check for duplicate employee names
+  const duplicateNames = useMemo(() => {
+    const counts = {};
+    emps.forEach(e => {
+      const n = e.name.toUpperCase().trim();
+      counts[n] = (counts[n] || 0) + 1;
+    });
+    return Object.entries(counts).filter(([,c]) => c > 1).map(([n]) => n);
+  }, [emps]);
+  
+  // Auto-cleanup schedules older than 90 days
+  const cleanupOldSchedules = (scheds) => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const cleaned = {};
+    let removed = 0;
+    Object.entries(scheds).forEach(([key, val]) => {
+      const d = new Date(key + 'T12:00:00');
+      if (d >= cutoff) cleaned[key] = val;
+      else removed++;
+    });
+    return { cleaned, removed };
+  };
+  
   useEffect(() => {
     const d = localStorage.getItem('pharmacy-scheduler-v3');
-    if (d) { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{}); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); if(p.staffReqs) setStaffReqs(p.staffReqs); }
+    if (d) { 
+      try {
+        const p = JSON.parse(d); 
+        setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); 
+        setScheds(p.schedules||[]); 
+        // Auto-cleanup on load
+        const { cleaned, removed } = cleanupOldSchedules(p.allSchedules||{});
+        setAllScheds(cleaned);
+        if (removed > 0) console.log('Cleaned up', removed, 'old schedules');
+        setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); 
+        if(p.staffReqs) setStaffReqs(p.staffReqs); 
+      } catch(e) {
+        console.error('Failed to load data:', e);
+      }
+    }
   }, []);
   
   useEffect(() => {
-    localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, staffReqs }));
+    try {
+      localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify({ employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, staffReqs }));
+    } catch(e) {
+      if (e.name === 'QuotaExceededError') {
+        showToast('Storage full — auto-cleaning old schedules', 'warning');
+        const { cleaned } = cleanupOldSchedules(allScheds);
+        setAllScheds(cleaned);
+      }
+    }
   }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs, staffReqs]);
   
   useEffect(() => {
@@ -1156,7 +1339,93 @@ const App = () => {
     setDirty(true);
   };
   
-  const save = () => { setDirty(false); alert('Saved!'); };
+  const save = () => { setDirty(false); showToast('Schedule saved'); };
+  
+  const undo = () => {
+    if (undoHistory.length === 0) { showToast('Nothing to undo', 'warning'); return; }
+    const last = undoHistory[undoHistory.length - 1];
+    setUndoHistory(prev => prev.slice(0, -1));
+    if (last.action === 'clearDay') {
+      const key = toDateKey(new Date(last.data.date));
+      const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
+      if (idx >= 0) { const ns = [...scheds]; ns[idx] = last.data; setScheds(ns); }
+      setAllScheds({...allScheds, [key]: last.data});
+      showToast('Undid Clear Day');
+    } else if (last.action === 'clearCleaningLog') {
+      setCleanLogs(last.data);
+      showToast('Undid Clear Cleaning Log');
+    } else if (last.action === 'editSched') {
+      const key = toDateKey(new Date(last.data.date));
+      const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
+      if (idx >= 0) { const ns = [...scheds]; ns[idx] = last.data; setScheds(ns); }
+      setAllScheds({...allScheds, [key]: last.data});
+      showToast('Undid edit');
+    }
+  };
+  
+  const exportData = () => {
+    const data = { employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, staffReqs, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'scheduler-backup-' + toDateKey(new Date()) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Backup exported');
+  };
+  
+  const importData = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (!confirm('This will REPLACE all current data with the backup. Continue?')) { e.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const p = JSON.parse(ev.target.result);
+        setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||'');
+        setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{});
+        setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{});
+        if (p.staffReqs) setStaffReqs(p.staffReqs);
+        showToast('Backup restored');
+      } catch(err) { showToast('Failed to import: invalid file', 'error'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+  
+  const autoFillEmpty = () => {
+    if (!scheds[selDay]) return;
+    const cur = scheds[selDay];
+    const date = new Date(cur.date);
+    const fresh = Engine.buildDay(sorted, cur.weekNum, cur.dayNum, date, cur.isSunday, 0);
+    // Only fill positions that are currently X or RPH default
+    const filled = JSON.parse(JSON.stringify(cur));
+    let filledCount = 0;
+    fresh.lod.forEach((l, i) => { if (filled.lod[i].name === 'X' && l.name !== 'X') { filled.lod[i].name = l.name; filledCount++; } });
+    fresh.reception.forEach((r, i) => {
+      if (filled.reception[i].r1 === 'X' && r.r1 !== 'X') { filled.reception[i].r1 = r.r1; filledCount++; }
+      if (filled.reception[i].r2 === 'X' && r.r2 !== 'X') { filled.reception[i].r2 = r.r2; filledCount++; }
+    });
+    fresh.ipad.forEach((ip, i) => {
+      if (filled.ipad[i].display === 'X' && ip.display !== 'X') { filled.ipad[i].display = ip.display; filled.ipad[i].split = ip.split; filledCount++; }
+    });
+    fresh.medCheckout.forEach((m, i) => {
+      if (filled.medCheckout[i].mc1 === 'X' && m.mc1 !== 'X') { filled.medCheckout[i].mc1 = m.mc1; filledCount++; }
+      if (filled.medCheckout[i].mc2 === 'X' && m.mc2 !== 'X') { filled.medCheckout[i].mc2 = m.mc2; filledCount++; }
+      if (filled.medCheckout[i].med3au1 === 'X' && m.med3au1 !== 'X') { filled.medCheckout[i].med3au1 = m.med3au1; filledCount++; }
+    });
+    fresh.auCheckout.forEach((a, i) => {
+      if (filled.auCheckout[i].au2 === 'X' && a.au2 !== 'X') { filled.auCheckout[i].au2 = a.au2; filled.auCheckout[i].au2Split = a.au2Split; filledCount++; }
+      if (filled.auCheckout[i].au3 === 'X' && a.au3 !== 'X') { filled.auCheckout[i].au3 = a.au3; filledCount++; }
+      if (filled.auCheckout[i].au4 === 'X' && a.au4 !== 'X') { filled.auCheckout[i].au4 = a.au4; filledCount++; }
+    });
+    if (filledCount === 0) { showToast('No empty positions could be filled', 'warning'); return; }
+    filled.manuallyEdited = true;
+    filled.editedAt = new Date().toISOString();
+    pushUndo('editSched', cur);
+    updSched(filled);
+    showToast('Filled ' + filledCount + ' empty position' + (filledCount>1?'s':''));
+  };
   
   const upload = (e) => {
     const file = e.target.files[0]; if (!file) return;
@@ -1203,9 +1472,44 @@ const App = () => {
   
   return (
     <div className="min-h-screen pb-20">
+      {toast && <div className={'fixed top-4 right-4 z-[100] px-4 py-3 rounded-lg shadow-lg text-white font-medium text-sm flex items-center gap-2 fade-in '+(toast.type==='error'?'bg-red-600':toast.type==='warning'?'bg-amber-500':'bg-emerald-600')}>
+        <span>{toast.type==='error'?'❌':toast.type==='warning'?'⚠️':'✓'}</span>
+        <span>{toast.msg}</span>
+      </div>}
+      {duplicateNames.length > 0 && logged && tab === 'employees' && <div className="bg-amber-100 border-b border-amber-400 px-4 py-2 text-sm text-amber-900">
+        <strong>⚠️ Duplicate employee names:</strong> {duplicateNames.join(', ')} — the engine may confuse them. Please rename one (e.g. "ARIFA K" / "ARIFA M").
+      </div>}
       {showLogin && <LoginModal onLogin={()=>{setLogged(true);setShowLogin(false);}} onClose={()=>setShowLogin(false)}/>}
       {cleanModal && <CleaningModal task={cleanModal} onClose={()=>setCleanModal(null)} onSubmit={cleanSubmit}/>}
       {viewLog && <CleaningModal task={viewLog.task} log={viewLog} onClose={()=>setViewLog(null)} onSubmit={()=>{}}/>}
+      {splitHelper && <SplitHelperModal helper={splitHelper} emps={sorted} onClose={()=>setSplitHelper(null)} onSave={(display)=>{
+        if (!scheds[selDay]) return;
+        pushUndo('editSched', JSON.parse(JSON.stringify(scheds[selDay])));
+        const s = JSON.parse(JSON.stringify(scheds[selDay]));
+        const t = splitHelper.type;
+        // Parse the display string back to split info: "NAME A-B / NAME C-D"
+        const parts = display.split(' / ');
+        const first = parts[0].split(' ')[0];
+        const second = parts[1].split(' ')[0];
+        if (t === 'ipad2' || t === 'ipad3') {
+          const idx = t === 'ipad2' ? 1 : 2;
+          s.ipad[idx].display = display;
+          s.ipad[idx].split = { first, second };
+          // Auto-swap: iPad split → AU Checkout 2 gets the reverse
+          const ra = t === 'ipad2' ? '12-2' : '4-6';
+          const rb = t === 'ipad2' ? '2-4' : '6-8';
+          s.auCheckout[idx].au2 = second + ' ' + ra + ' / ' + first + ' ' + rb;
+          s.auCheckout[idx].au2Split = { first: second, second: first };
+        } else if (t === 'au2-2' || t === 'au2-3') {
+          const idx = t === 'au2-2' ? 1 : 2;
+          s.auCheckout[idx].au2 = display;
+          s.auCheckout[idx].au2Split = { first, second };
+        }
+        s.manuallyEdited = true;
+        s.editedAt = new Date().toISOString();
+        updSched(s);
+        showToast('Split applied');
+      }}/>}
       
       <header className="no-print bg-white/80 backdrop-blur-sm border-b sticky top-0 z-40">
         <div className="max-w-[1800px] mx-auto px-4 py-4 flex items-center justify-between">
@@ -1263,9 +1567,15 @@ const App = () => {
               </div>
               <Calendar generated={generated} onClick={calClick} allScheds={allScheds}/>
               <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
-                <h3 className="font-bold mb-2">Import</h3>
+                <h3 className="font-bold mb-2">Import Employees</h3>
                 <label className="block"><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50"><span className="text-xl">📁</span><p className="text-xs font-medium">Upload Excel</p><input type="file" accept=".xlsx,.xls,.csv" onChange={upload} className="hidden"/></div></label>
                 <button onClick={()=>setShowAdd(true)} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium hover:bg-gray-200">➕ Add Manually</button>
+              </div>
+              <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
+                <h3 className="font-bold mb-2">Backup & Restore</h3>
+                <p className="text-[10px] text-gray-500 mb-2">Export all data to a file, or restore from a backup. Recommended weekly.</p>
+                <button onClick={exportData} className="w-full px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 mb-2">💾 Export Backup</button>
+                <label className="block"><div className="w-full px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium text-center cursor-pointer hover:bg-gray-200">📥 Restore from Backup<input type="file" accept=".json" onChange={importData} className="hidden"/></div></label>
               </div>
               {scheds.length>0&&scheds[selDay] && <CoverageAlert sched={scheds[selDay]} staffReqs={staffReqs}/>}
               {scheds.length>0&&scheds[selDay] && <ScheduleValidator sched={scheds[selDay]} emps={sorted}/>}
@@ -1281,10 +1591,12 @@ const App = () => {
                   <span className="text-sm font-medium text-gray-600">Editing: {scheds[selDay].fullTitle}</span>
                   <div className="flex gap-2">
                     {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
-                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
+                    <button onClick={autoFillEmpty} className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600">✨ Auto-fill Empty</button>
+                    <button onClick={undo} disabled={undoHistory.length===0} className="px-3 py-1 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">↶ Undo</button>
+                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
                   </div>
                 </div>
-                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps}/>
+                <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps} onSplitHelper={setSplitHelper}/>
               </div>}
               
               {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
@@ -1352,71 +1664,124 @@ const App = () => {
         {tab === 'help' && logged && (
           <div className="fade-in max-w-4xl mx-auto">
             <div className="bg-white rounded-xl card-shadow p-8">
-              <h2 className="text-2xl font-bold mb-6">How to Use the Scheduler</h2>
+              <h2 className="text-2xl font-bold mb-2">How to Use the Scheduler</h2>
+              <p className="text-sm text-gray-500 mb-6">Complete guide to every feature.</p>
               
               <div className="space-y-6">
                 <div className="border-l-4 border-emerald-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">1. Getting Started</h3>
-                  <p className="text-sm text-gray-700 mb-2">Click <strong>Login</strong> (top right) with your supervisor credentials to access all features. Without logging in, only the public Daily Schedule is visible.</p>
+                  <p className="text-sm text-gray-700">Click <strong>Login</strong> (top right) with your supervisor credentials to access all admin features. Without logging in, only the public Daily Schedule is visible — that view is designed to be displayed on a shared screen in the pharmacy.</p>
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">2. Import Your Employee Data</h3>
-                  <p className="text-sm text-gray-700 mb-2">Go to <strong>Employee Master Schedule</strong> tab. Use the <strong>Upload Excel</strong> button on the left to import your master schedule spreadsheet. The file should have columns: Name, Vault, Reception, LOD, iPad, Registers, PTO, Notes, then 7 days for Week 1 and 7 days for Week 2.</p>
-                  <p className="text-sm text-gray-700">You can also click <strong>Add Manually</strong> to enter employees one at a time, or click <strong>Edit</strong> on any row to update an existing employee.</p>
+                  <p className="text-sm text-gray-700 mb-2">Go to <strong>Employee Master Schedule</strong> tab. Use the <strong>📁 Upload Excel</strong> button on the left to import your master schedule spreadsheet. The file should have columns: Name, Vault, Reception, LOD, iPad, Registers, PTO, Notes, then 7 days for Week 1 and 7 days for Week 2.</p>
+                  <p className="text-sm text-gray-700 mb-2">You can also click <strong>➕ Add Manually</strong> to enter employees one at a time, or click <strong>Edit</strong> on any row to update an existing employee.</p>
+                  <p className="text-sm text-gray-700"><strong>PTO format:</strong> Use <code className="bg-gray-100 px-1 rounded">3/1</code> for a single day, <code className="bg-gray-100 px-1 rounded">3/1-3/5</code> for a range, or comma-separate multiple entries like <code className="bg-gray-100 px-1 rounded">3/1-3/5, 4/10</code>.</p>
+                </div>
+
+                <div className="border-l-4 border-indigo-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">3. Backup & Restore (Important!)</h3>
+                  <p className="text-sm text-gray-700 mb-2">All data is saved in your browser. If the browser clears its storage or you switch devices, data is lost. <strong>Recommended: export a backup weekly.</strong></p>
+                  <p className="text-sm text-gray-700 mb-2">On the Employee Master Schedule tab, find the <strong>Backup & Restore</strong> card on the left:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>💾 Export Backup</strong> — downloads a JSON file of all employees, schedules, cleaning logs, and settings</li>
+                    <li><strong>📥 Restore from Backup</strong> — loads a backup file (replaces all current data)</li>
+                  </ul>
+                  <p className="text-sm text-gray-700 mt-2">Schedules older than 90 days are auto-cleaned to prevent storage overflow.</p>
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">3. Set Week Dates & Generate Schedules</h3>
-                  <p className="text-sm text-gray-700 mb-2">On the left panel, set <strong>Week 1 Start</strong> date (Week 2 auto-fills). Then click <strong>Generate All 14 Days</strong> to create schedules for the full 2-week period. Or use <strong>Generate Single Day</strong> with a date picker for just one day.</p>
-                  <p className="text-sm text-gray-700">The engine automatically assigns employees to positions based on their qualifications, availability, and role priorities.</p>
+                  <h3 className="font-bold text-lg mb-2">4. Set Week Dates & Generate Schedules</h3>
+                  <p className="text-sm text-gray-700 mb-2">On the left panel, set <strong>Week 1 Start</strong> date (Week 2 auto-fills). Then click <strong>🗓️ Generate All 14 Days</strong> to create schedules for the full 2-week period. Or use <strong>Generate Single Day</strong> with a date picker for just one day.</p>
+                  <p className="text-sm text-gray-700">The engine automatically assigns employees based on qualifications, availability, and role priorities (single-role employees get priority for their position).</p>
                 </div>
 
                 <div className="border-l-4 border-amber-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">4. Editing a Daily Schedule</h3>
-                  <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view that day's schedule. To change an assignment, click any name cell to open a dropdown and pick a different employee. For iPad and AU Checkout 2 cells, click the <strong>✏️ edit</strong> to type directly (useful for split shifts).</p>
-                  <p className="text-sm text-gray-700 mb-2">Click <strong>💾 Save</strong> when you're done editing. Use <strong>🗑️ Clear Day</strong> to reset all positions to empty if you want to fill in manually from scratch.</p>
+                  <h3 className="font-bold text-lg mb-2">5. Editing a Daily Schedule</h3>
+                  <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view that day's schedule. The buttons below each schedule header let you:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>💾 Save</strong> — confirms your edits (appears only after changes are made)</li>
+                    <li><strong>✨ Auto-fill Empty</strong> — runs the engine on just the empty (X) positions to fill what it can without touching existing assignments</li>
+                    <li><strong>↶ Undo</strong> — reverts the last destructive action (Clear Day, Clear Cleaning Log, or Auto-fill). Supports up to 10 actions back</li>
+                    <li><strong>🗑️ Clear Day</strong> — resets every position to empty/RPH so you can fill in manually from scratch (undoable)</li>
+                  </ul>
+                  <p className="text-sm text-gray-700 mt-2">To change an assignment, click any name cell to open a dropdown. You can pick any employee, plus <strong>X</strong> (empty) or <strong>RPH</strong>.</p>
                 </div>
 
-                <div className="border-l-4 border-pink-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">5. Highlight Employees</h3>
-                  <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any employee name in the Master Schedule table below the daily schedule — their assigned positions light up in the schedule above with their unique color.</p>
-                  <p className="text-sm text-gray-700">Click a name to <strong>pin</strong> the highlight so it stays on. Click again to unpin. Pin multiple employees at once to see all their positions highlighted. Use <strong>Clear highlights</strong> to remove all pins.</p>
-                </div>
-
-                <div className="border-l-4 border-red-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">6. Coverage Alerts & Validation</h3>
-                  <p className="text-sm text-gray-700 mb-2">Below the Import section on the left, you'll see a <strong>Coverage Needed</strong> alert if any shift is understaffed. It breaks down by Morning, Noon, and Evening with exact counts.</p>
-                  <p className="text-sm text-gray-700 mb-1"><strong>Minimum requirements:</strong></p>
-                  <p className="text-sm text-gray-700 mb-2">Reception: 2 all shifts. Registers: 2 of 6 (morning), 3 of 6 (noon & evening). Vault: 2 weekdays, 1 Sunday.</p>
-                  <p className="text-sm text-gray-700">The <strong>Cross-Reference Validator</strong> below that checks that every scheduled employee actually appears in the daily and flags PTO violations or double-bookings.</p>
+                <div className="border-l-4 border-teal-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">6. Real-Time Conflict Warnings</h3>
+                  <p className="text-sm text-gray-700 mb-2">When you open a name dropdown, any employee who would cause a conflict shows an amber <strong>⚠️</strong> next to their name. Hovering reveals the reason, e.g. "Already on reception this block".</p>
+                  <p className="text-sm text-gray-700"><strong>These are NOT flagged</strong> (they're fine): LOD + register (by design), split iPad + register (also by design).</p>
                 </div>
 
                 <div className="border-l-4 border-cyan-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">7. iPad Split Shifts & Register Swaps</h3>
-                  <p className="text-sm text-gray-700">When two different people cover the iPad in a single block (e.g. Dre 12-2 / Pete 2-4), the system automatically swaps them on the registers: Pete gets 12-2 on registers and Dre gets 2-4. Both names are stacked in the same cell.</p>
+                  <p className="text-sm text-gray-700 mb-2">When two different people cover the iPad in one block (e.g. Dre 12-2 / Pete 2-4), the system auto-swaps them on registers: Pete gets 12-2 on AU Checkout 2, Dre gets 2-4. Both names appear on one line in the same cell.</p>
+                  <p className="text-sm text-gray-700 mb-2"><strong>To manually create a split</strong>: On iPad Block 2/3 or AU Checkout 2 Block 2/3 cells, click the blue <strong>⇄ Split</strong> button. A modal opens where you pick the two people for each half.</p>
+                  <p className="text-sm text-gray-700"><strong>To remove a split</strong>: Click the red <strong>✕</strong> button on a split cell to clear it back to empty.</p>
+                  <p className="text-sm text-gray-700"><strong>Smart fallback</strong>: If only one person is available for one half of a block but their shift covers the full block, they're assigned the full block automatically (no dangling "4-6" suffix).</p>
                 </div>
 
-                <div className="border-l-4 border-emerald-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">8. Daily Schedule (Public View)</h3>
-                  <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab shows today's schedule (or tomorrow's after 8 PM EST). This view is designed to be displayed on a shared screen — no login required.</p>
-                  <p className="text-sm text-gray-700">Staff can click the <strong>Sign</strong> button on their cleaning task to open a checklist. Check all items, enter initials, and submit. The button turns to a green ✓ when complete.</p>
+                <div className="border-l-4 border-pink-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">8. Highlight Employees</h3>
+                  <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any employee name in the Master Schedule table below the daily schedule — their assigned positions light up in the schedule above with their unique color.</p>
+                  <p className="text-sm text-gray-700"><strong>Click</strong> a name to pin the highlight. Click again to unpin. Pin multiple employees to see all their positions highlighted at once. Use <strong>Clear highlights</strong> button to remove all pins.</p>
                 </div>
 
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">9. Cleaning Logs</h3>
-                  <p className="text-sm text-gray-700 mb-2">The <strong>Cleaning Logs</strong> tab shows a monthly calendar. Green = all 5 areas done, amber = partial, red = none. Click a day to see who signed off each area with timestamps.</p>
-                  <p className="text-sm text-gray-700">Missing areas show the assigned cleaner's name in parentheses. Use <strong>🗑️ Clear Day</strong> to reset a day's logs if needed.</p>
+                <div className="border-l-4 border-red-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">9. Coverage Alerts & Validation</h3>
+                  <p className="text-sm text-gray-700 mb-2">Below the Import section on the left, you'll see a <strong>⚠️ Coverage Needed</strong> alert if any shift is understaffed. Organized by Morning, Noon, and Evening with exact counts.</p>
+                  <p className="text-sm text-gray-700 mb-2">Below that, the <strong>Cross-Reference Validator</strong> checks that every scheduled employee actually appears in the daily schedule. It flags:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li>Employees scheduled to work but missing from blocks they should be in</li>
+                    <li>Real conflicts like reception + register or iPad + reception</li>
+                    <li>Employees on PTO who appear in the schedule anyway</li>
+                  </ul>
+                  <p className="text-sm text-gray-700 mt-2">When all is good, a green "✓ Cross-Reference: All schedules match master" appears.</p>
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">10. Staffing Summary</h3>
-                  <p className="text-sm text-gray-700">The <strong>Staffing Summary</strong> tab shows a monthly overview. Green days = fully staffed, red = shortages. Click any day to see a detailed breakdown of what positions are short and by how much.</p>
+                  <p className="text-sm text-gray-700 mb-2">The <strong>Staffing Summary</strong> tab shows a monthly calendar overview. Green days = fully staffed, red = shortages. Click any day to see a detailed breakdown of what positions are short and by how much.</p>
+                  <p className="text-sm text-gray-700"><strong>Edit requirements:</strong> The numbers in the Minimum Staffing Requirements table at the top are <em>editable inputs</em>. Click any number to change it — your custom thresholds are saved and used by the Coverage Alert on the Master Schedule tab.</p>
+                </div>
+
+                <div className="border-l-4 border-emerald-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">11. Daily Schedule (Public View)</h3>
+                  <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab shows today's schedule, or tomorrow's after 8 PM EST. This view is designed to be displayed on a shared screen in the pharmacy — no login required, no color highlights, compact layout to fit on one page.</p>
+                  <p className="text-sm text-gray-700">Staff can click the <strong>Sign</strong> button on their cleaning task to open a checklist. Check all items, enter initials, and submit. The button turns to a green <strong>✓</strong> when complete.</p>
+                </div>
+
+                <div className="border-l-4 border-orange-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">12. Cleaning Logs</h3>
+                  <p className="text-sm text-gray-700 mb-2">The <strong>Cleaning Logs</strong> tab shows a monthly calendar. Green = all 5 areas done, amber = partial, no color = none. Click a day to see who signed off each area with timestamps.</p>
+                  <p className="text-sm text-gray-700">Missing areas show the assigned cleaner's name in parentheses so you know who to follow up with. Use <strong>🗑️ Clear Day</strong> to reset a day's logs if needed (undoable).</p>
+                </div>
+
+                <div className="border-l-4 border-violet-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">13. Calendar Indicators</h3>
+                  <p className="text-sm text-gray-700 mb-1">On the mini-calendar under the Master Schedule:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>Green day with ✓ and timestamp</strong> — schedule generated, shows last saved/edited time (EST)</li>
+                    <li><strong>Red day with ✗</strong> — past day with no schedule generated</li>
+                    <li><strong>Blue ring</strong> — today</li>
+                  </ul>
                 </div>
 
                 <div className="border-l-4 border-gray-400 pl-4">
-                  <h3 className="font-bold text-lg mb-2">11. Printing</h3>
+                  <h3 className="font-bold text-lg mb-2">14. Printing</h3>
                   <p className="text-sm text-gray-700">On the Daily Schedule tab, click <strong>🖨️ Print</strong> to print the current day's schedule. The navigation header and buttons are automatically hidden.</p>
+                </div>
+
+                <div className="border-l-4 border-yellow-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">15. Troubleshooting</h3>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>Duplicate employee names</strong> — an amber banner warns at the top of the Employee tab. Rename one (e.g. "ARIFA K" / "ARIFA M") since the engine can't distinguish them.</li>
+                    <li><strong>Nothing happens when generating</strong> — check that Week 1 and Week 2 start dates are set, and that you have employees loaded.</li>
+                    <li><strong>Storage full toast</strong> — appears if localStorage fills up. Old schedules auto-clean, but export a backup first if worried.</li>
+                    <li><strong>Lost my data</strong> — if you have a backup file, use 📥 Restore from Backup. If not, data is gone (this is why weekly backups are recommended).</li>
+                  </ul>
                 </div>
               </div>
             </div>
