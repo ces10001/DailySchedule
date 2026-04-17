@@ -439,14 +439,14 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
     
     return (
       <div onClick={()=>editable&&setEditing(true)} 
-        className={'schedule-cell bg-white font-bold text-xs min-w-[220px] whitespace-nowrap '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
+        className={'schedule-cell bg-white font-bold text-[11px] min-w-[250px] whitespace-nowrap '+(anyHl?'cell-highlight ':'')+(editable?'cursor-pointer hover:bg-gray-50':'')}
         style={anyHl ? {'--hl-color': hlColor1 || hlColor2 || '#3B82F6'} : {}}>
         <span>{firstName}</span>
-        <span className="text-gray-500 text-[10px] mx-0.5">{firstTime}</span>
+        <span className="text-gray-500 text-[9px] mx-0.5">{firstTime}</span>
         <span className="text-gray-400 mx-0.5">/</span>
         <span>{secondName}</span>
-        <span className="text-gray-500 text-[10px] mx-0.5">{secondTime}</span>
-        {editable && <span className="text-gray-400 text-[10px] ml-1">✏️</span>}
+        <span className="text-gray-500 text-[9px] mx-0.5">{secondTime}</span>
+        {editable && <span className="text-gray-400 text-[9px] ml-1">✏️</span>}
       </div>
     );
   }
