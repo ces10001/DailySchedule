@@ -356,18 +356,26 @@ const Engine = {
       lunches, breaks, stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
     };
   },
-  genStandalone(emps, date, rot) { const d = new Date(date); d.setHours(12,0,0,0); return this.buildDay(emps, 1, d.getDay()===0?7:d.getDay(), d, d.getDay()===0, rot||0); },
+  genStandalone(emps, date, rot) { const d = new Date(date); d.setHours(12,0,0,0); const dow = d.getDay()===0?7:d.getDay(); return this.buildDay(emps, 1, dow, d, dow===7, rot||0); },
   genSingle(emps, date, w1, w2, rot) {
-    const target = new Date(date); target.setHours(12,0,0,0); let wk=0, dy=0;
-    for (let d=0; d<7; d++) { const c = new Date(w1+'T12:00:00'); c.setDate(c.getDate()+d); if (c.toDateString()===target.toDateString()) { wk=1; dy=d+1; break; } }
-    if (!wk) for (let d=0; d<7; d++) { const c = new Date(w2+'T12:00:00'); c.setDate(c.getDate()+d); if (c.toDateString()===target.toDateString()) { wk=2; dy=d+1; break; } }
-    return wk ? this.buildDay(emps, wk, dy, target, dy===7, rot||0) : null;
+    const target = new Date(date); target.setHours(12,0,0,0); let wk=0;
+    // Check if target falls within 7 days of w1 or w2 start
+    for (let d=0; d<7; d++) { const c = new Date(w1+'T12:00:00'); c.setDate(c.getDate()+d); if (c.toDateString()===target.toDateString()) { wk=1; break; } }
+    if (!wk) for (let d=0; d<7; d++) { const c = new Date(w2+'T12:00:00'); c.setDate(c.getDate()+d); if (c.toDateString()===target.toDateString()) { wk=2; break; } }
+    if (!wk) return null;
+    // Use actual day of week: 1=Mon, 2=Tue, ..., 7=Sun
+    const dow = target.getDay()===0 ? 7 : target.getDay();
+    return this.buildDay(emps, wk, dow, target, dow===7, rot||0);
   },
   genAll(emps, w1, w2) {
     const out = []; let rot = 0;
     for (let w=1; w<=2; w++) {
       const start = new Date((w===1?w1:w2)+'T12:00:00');
-      for (let d=1; d<=7; d++) { const dd = new Date(start); dd.setDate(dd.getDate()+(d-1)); out.push(this.buildDay(emps, w, d, dd, d===7, rot++)); }
+      for (let d=0; d<7; d++) {
+        const dd = new Date(start); dd.setDate(dd.getDate()+d);
+        const dow = dd.getDay()===0 ? 7 : dd.getDay(); // 1=Mon...7=Sun
+        out.push(this.buildDay(emps, w, dow, dd, dow===7, rot++));
+      }
     }
     return out;
   }
