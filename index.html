@@ -352,7 +352,7 @@ const Engine = {
     const stats = { vB1: cf(vAU1)+cf(vMed1), vB2: cf(vAU2)+cf(vMed2), vB3: cf(vAU3)+cf(vMed3), rB1: cf(r1)+cf(r2), rB2: cf(r1b2)+cf(r2b2), rB3: cf(r1b3)+cf(r2b3), rgB1: cf(rg3b1)+cf(a1)+cf(a2)+cf(a3)+cf(rg1)+cf(rg2), rgB2: cf(rg3b2)+cf(a1b2)+cf(a2b2)+cf(a3b2)+cf(rg1b2)+cf(rg2b2), rgB3: cf(rg3b3)+cf(a1b3)+cf(a2b3)+cf(a3b3)+cf(rg1b3)+cf(rg2b3) };
     
     return {
-      dayTitle: title, dateStr, fullTitle: title+' '+dateStr, cleanTime, cleaning,
+      dayTitle: title, dateStr, fullTitle: title+' '+dateStr+' (Wk '+wk+')', cleanTime, cleaning,
       times: { t1S, t1E, t2S, t2E, t3S, t3E },
       lod: [{name:lod1,time:t1S+' - '+t1E},{name:lod2,time:t2S+' - '+t2E},{name:lod3,time:t3S+' - '+t3E}],
       reception: [{r1,r2,time:t1S+' - '+t1E},{r1:r1b2,r2:r2b2,time:t2S+' - '+t2E},{r1:r1b3,r2:r2b3,time:t3S+' - '+t3E}],
@@ -1749,7 +1749,6 @@ const App = () => {
             </div>
             
             <div className="col-span-9">
-              {scheds.length>0 && <div className="flex flex-wrap gap-1 mb-3">{scheds.map((s,i)=><button key={i} onClick={()=>setSelDay(i)} className={'px-2 py-1 rounded text-xs font-medium '+(selDay===i?'bg-emerald-600 text-white':'bg-white hover:bg-gray-100 border')}>{s.isSunday?'☀️':''} {s.dateStr} <span className="opacity-60">(Wk {s.weekNum})</span></button>)}</div>}
               
               {(showAdd||editEmp!==null) && <div className="mb-3"><EmpForm emp={editEmp!==null?emps[editEmp]:null} onSave={saveEmp} onCancel={()=>{setShowAdd(false);setEditEmp(null);}}/></div>}
               
