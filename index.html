@@ -245,107 +245,87 @@ const Engine = {
     const r1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r1,r1b2,lod3], date, sun); u3.push(r1b3);
     const r2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r2,r2b2,lod3], date, sun); u3.push(r2b3);
     
-    // iPad - store split info separately for register swap
-    let ip1, ip2a, ip2b, ip3a, ip3b, ipD1, ipD2, ipD3, ipT1, ipT2, ipT3;
-    let ipadSplit2 = null, ipadSplit3 = null;
-    
-    if (sun) {
-      ip1 = this.findIPad(emps, wk, dy, 10, 12, u1, date); u1.push(ip1);
-      ip2a = this.findIPadRotate(emps, wk, dy, 12, 15, u2, [ip1], date); u2.push(ip2a);
-      ip3a = this.findIPadRotate(emps, wk, dy, 15, 18.25, u3, [ip1,ip2a], date); u3.push(ip3a);
-      ipD1=ip1; ipD2=ip2a; ipD3=ip3a;
-      ipT1='10:00 AM - 12:00 PM'; ipT2='12:00 PM - 3:00 PM'; ipT3='3:00 PM - 6:15 PM';
-    } else {
-      ip1 = this.findIPad(emps, wk, dy, 9, 12, u1, date); u1.push(ip1);
-      ip2a = this.findIPadRotate(emps, wk, dy, 12, 14, u2, [ip1], date); u2.push(ip2a);
-      ip2b = this.findIPadRotate(emps, wk, dy, 14, 16, u2, [ip1], date); u2.push(ip2b);
-      ip3a = this.findIPadRotate(emps, wk, dy, 16, 18, u3, [ip1,ip2a,ip2b], date); u3.push(ip3a);
-      ip3b = this.findIPadRotate(emps, wk, dy, 18, 20, u3, [ip1,ip2a,ip2b], date); u3.push(ip3b);
-      ipD1=ip1; ipT1='9:00 AM - 12:00 PM';
-      
-      // Block 2 iPad split detection - if only one half found, check if they can cover full block
-      if (ip2a !== ip2b && ip2a !== 'X' && ip2b !== 'X') {
-        ipD2 = ip2a+' 12-2 / '+ip2b+' 2-4';
-        ipadSplit2 = { first: ip2a, second: ip2b };
-      } else if (ip2a === ip2b && ip2a !== 'X') {
-        ipD2 = ip2a;
-      } else if (ip2a !== 'X' && ip2b === 'X') {
-        // Check if ip2a can cover full block 2 (12-16.25)
-        const emp2a = emps.find(e => e.name === ip2a);
-        if (emp2a && this.availH(emp2a, wk, dy, 12, 16, date)) { ipD2 = ip2a; }
-        else { ipD2 = ip2a+' 12-2'; }
-      } else if (ip2b !== 'X' && ip2a === 'X') {
-        const emp2b = emps.find(e => e.name === ip2b);
-        if (emp2b && this.availH(emp2b, wk, dy, 12, 16, date)) { ipD2 = ip2b; }
-        else { ipD2 = ip2b+' 2-4'; }
-      } else {
-        ipD2 = 'X';
-      }
-      ipT2='12:00 PM - 4:00 PM';
-      
-      // Block 3 iPad split detection - if only one half found, check if they can cover full block
-      if (ip3a !== ip3b && ip3a !== 'X' && ip3b !== 'X') {
-        ipD3 = ip3a+' 4-6 / '+ip3b+' 6-8';
-        ipadSplit3 = { first: ip3a, second: ip3b };
-      } else if (ip3a === ip3b && ip3a !== 'X') {
-        ipD3 = ip3a;
-      } else if (ip3a !== 'X' && ip3b === 'X') {
-        const emp3a = emps.find(e => e.name === ip3a);
-        if (emp3a && this.availH(emp3a, wk, dy, 16, 20, date)) { ipD3 = ip3a; }
-        else { ipD3 = ip3a+' 4-6'; }
-      } else if (ip3b !== 'X' && ip3a === 'X') {
-        const emp3b = emps.find(e => e.name === ip3b);
-        if (emp3b && this.availH(emp3b, wk, dy, 16, 20, date)) { ipD3 = ip3b; }
-        else { ipD3 = ip3b+' 6-8'; }
-      } else {
-        ipD3 = 'X';
-      }
-      ipT3='4:00 PM - 8:00 PM';
-    }
-    
-    // Registers
-    let uR1=[r1,r2,ip1], uR2=[r1b2,r2b2,ip2a,ip2b].filter(Boolean), uR3=[r1b3,r2b3,ip3a,ip3b].filter(Boolean);
+    // Registers FIRST — registers/reception take priority over iPad
+    let uR1=[r1,r2,lod1], uR2=[r1b2,r2b2,lod2], uR3=[r1b3,r2b3,lod3];
     const rg3b1 = lod1!=='X' ? lod1 : this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg3b1);
     const a1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a1);
     const a2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a2);
     const a3 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a3);
-    // MC2 fills before MC1 per priority order
     const rg2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg2);
     const rg1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
     
     const rg3b2 = lod2!=='X' ? lod2 : this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg3b1], date, sun); uR2.push(rg3b2);
-    
-    // AU CHECKOUT 2 Block 2 - iPad split swap: iPad 12-2 person → register 2-4, iPad 2-4 person → register 12-2
-    let a1b2, a1b2Split = null;
-    if (ipadSplit2) {
-      a1b2 = ipadSplit2.second + ' 12-2 / ' + ipadSplit2.first + ' 2-4';
-      a1b2Split = { first: ipadSplit2.second, second: ipadSplit2.first };
-      uR2.push(ipadSplit2.first); uR2.push(ipadSplit2.second);
-    } else {
-      a1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
-    }
-    
+    let a1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
     const a2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a2], date, sun); uR2.push(a2b2);
     const a3b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a3], date, sun); uR2.push(a3b2);
     const rg2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun); uR2.push(rg2b2);
     const rg1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun);
     
     const rg3b3 = lod3!=='X' ? lod3 : this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg3b1,rg3b2], date, sun); uR3.push(rg3b3);
-    
-    // AU CHECKOUT 2 Block 3 - iPad split swap
-    let a1b3, a1b3Split = null;
-    if (ipadSplit3) {
-      a1b3 = ipadSplit3.second + ' 4-6 / ' + ipadSplit3.first + ' 6-8';
-      a1b3Split = { first: ipadSplit3.second, second: ipadSplit3.first };
-      uR3.push(ipadSplit3.first); uR3.push(ipadSplit3.second);
-    } else {
-      a1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
-    }
-    
+    let a1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
     const a2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a2,a2b2], date, sun); uR3.push(a2b3);
     const a3b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a3,a3b2], date, sun); uR3.push(a3b3);
     const rg2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg2,rg2b2], date, sun); uR3.push(rg2b3);
     const rg1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun);
+    
+    // iPad AFTER registers — gets whoever is left
+    let ip1, ip2a, ip2b, ip3a, ip3b, ipD1, ipD2, ipD3, ipT1, ipT2, ipT3;
+    let ipadSplit2 = null, ipadSplit3 = null;
+    let a1b2Split = null, a1b3Split = null;
+    const allUsed1 = [...u1, ...uR1, rg1];
+    const allUsed2 = [...u2, ...uR2, rg1b2];
+    const allUsed3 = [...u3, ...uR3, rg1b3];
+    
+    if (sun) {
+      ip1 = this.findIPad(emps, wk, dy, 10, 12, allUsed1, date);
+      ip2a = this.findIPadRotate(emps, wk, dy, 12, 15, allUsed2, [ip1], date);
+      ip3a = this.findIPadRotate(emps, wk, dy, 15, 18.25, allUsed3, [ip1,ip2a], date);
+      ipD1=ip1; ipD2=ip2a; ipD3=ip3a;
+      ipT1='10:00 AM - 12:00 PM'; ipT2='12:00 PM - 3:00 PM'; ipT3='3:00 PM - 6:15 PM';
+    } else {
+      ip1 = this.findIPad(emps, wk, dy, 9, 12, allUsed1, date);
+      ip2a = this.findIPadRotate(emps, wk, dy, 12, 14, allUsed2, [ip1], date);
+      ip2b = this.findIPadRotate(emps, wk, dy, 14, 16, allUsed2, [ip1,ip2a], date);
+      ip3a = this.findIPadRotate(emps, wk, dy, 16, 18, allUsed3, [ip1,ip2a,ip2b], date);
+      ip3b = this.findIPadRotate(emps, wk, dy, 18, 20, allUsed3, [ip1,ip2a,ip2b,ip3a], date);
+      ipD1=ip1; ipT1='9:00 AM - 12:00 PM';
+      
+      if (ip2a !== ip2b && ip2a !== 'X' && ip2b !== 'X') {
+        ipD2 = ip2a+' 12-2 / '+ip2b+' 2-4';
+        ipadSplit2 = { first: ip2a, second: ip2b };
+      } else if (ip2a === ip2b && ip2a !== 'X') { ipD2 = ip2a;
+      } else if (ip2a !== 'X' && ip2b === 'X') {
+        const emp2a = emps.find(e => e.name === ip2a);
+        if (emp2a && this.availH(emp2a, wk, dy, 12, 16, date)) { ipD2 = ip2a; } else { ipD2 = ip2a+' 12-2'; }
+      } else if (ip2b !== 'X' && ip2a === 'X') {
+        const emp2b = emps.find(e => e.name === ip2b);
+        if (emp2b && this.availH(emp2b, wk, dy, 12, 16, date)) { ipD2 = ip2b; } else { ipD2 = ip2b+' 2-4'; }
+      } else { ipD2 = 'X'; }
+      ipT2='12:00 PM - 4:00 PM';
+      
+      if (ip3a !== ip3b && ip3a !== 'X' && ip3b !== 'X') {
+        ipD3 = ip3a+' 4-6 / '+ip3b+' 6-8';
+        ipadSplit3 = { first: ip3a, second: ip3b };
+      } else if (ip3a === ip3b && ip3a !== 'X') { ipD3 = ip3a;
+      } else if (ip3a !== 'X' && ip3b === 'X') {
+        const emp3a = emps.find(e => e.name === ip3a);
+        if (emp3a && this.availH(emp3a, wk, dy, 16, 20, date)) { ipD3 = ip3a; } else { ipD3 = ip3a+' 4-6'; }
+      } else if (ip3b !== 'X' && ip3a === 'X') {
+        const emp3b = emps.find(e => e.name === ip3b);
+        if (emp3b && this.availH(emp3b, wk, dy, 16, 20, date)) { ipD3 = ip3b; } else { ipD3 = ip3b+' 6-8'; }
+      } else { ipD3 = 'X'; }
+      ipT3='4:00 PM - 8:00 PM';
+    }
+    
+    // iPad split → AU2 override (swap iPad halves onto AU2)
+    if (ipadSplit2) {
+      a1b2 = ipadSplit2.second+' 12-2 / '+ipadSplit2.first+' 2-4';
+      a1b2Split = { first: ipadSplit2.second, second: ipadSplit2.first };
+    }
+    if (ipadSplit3) {
+      a1b3 = ipadSplit3.second+' 4-6 / '+ipadSplit3.first+' 6-8';
+      a1b3Split = { first: ipadSplit3.second, second: ipadSplit3.first };
+    }
     
     // Vault
     let vU1=[...uR1,lod1]; const vAU1 = this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = this.findVault(emps, wk, dy, 1, vU1, date, sun);
@@ -385,7 +365,7 @@ const Engine = {
       ],
       vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:t1S+' - '+t1E},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:t2S+' - '+t2E},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:t3S+' - '+t3E}],
       vaultOpen: sun ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
-      lunches, breaks, stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
+      lunches, breaks, deposits: [{time:'9:00 AM - 12:00 PM', person:''}], stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
     };
   },
   genStandalone(emps, date, rot) { const d = new Date(date); d.setHours(12,0,0,0); const dow = d.getDay()===0?7:d.getDay(); return this.buildDay(emps, 1, dow, d, dow===7, rot||0); },
@@ -728,8 +708,10 @@ const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, show
             <div className="grid grid-cols-2">
               <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">TIME</div>
               <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">PERSON</div>
-              <div className="schedule-cell text-xs py-0.5">9:00 AM - 12:00 PM</div>
-              <div className="schedule-cell text-xs py-0.5"></div>
+              {(sched.deposits||[{time:'9:00 AM - 12:00 PM',person:''}]).map((dep,i) => <React.Fragment key={i}>
+                <div className="schedule-cell text-xs py-0.5">{editable ? <input type="text" value={dep.time} onChange={e=>{const d=JSON.parse(JSON.stringify(sched));if(!d.deposits)d.deposits=[{time:'9:00 AM - 12:00 PM',person:''}];d.deposits[i].time=e.target.value;upd('deposits',d.deposits);}} className="w-full bg-transparent text-xs border-0 p-0 text-center" placeholder="Time"/> : dep.time}</div>
+                <div className="schedule-cell text-xs py-0.5">{editable ? <input type="text" value={dep.person} onChange={e=>{const d=JSON.parse(JSON.stringify(sched));if(!d.deposits)d.deposits=[{time:'9:00 AM - 12:00 PM',person:''}];d.deposits[i].person=e.target.value;upd('deposits',d.deposits);}} className="w-full bg-transparent text-xs border-0 p-0 text-center font-bold" placeholder="Name"/> : <span className="font-bold">{dep.person}</span>}</div>
+              </React.Fragment>)}
             </div>
           </div>
         </div>
@@ -1778,7 +1760,7 @@ const App = () => {
                     {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
                     <button onClick={autoFillEmpty} className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600">✨ Auto-fill Empty</button>
                     <button onClick={undo} disabled={undoHistory.length===0} className="px-3 py-1 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">↶ Undo</button>
-                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
+                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});if(s.deposits)s.deposits.forEach(d=>{d.person='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
                   </div>
                 </div>
                 <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps}/>
