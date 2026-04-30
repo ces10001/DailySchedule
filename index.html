@@ -22,7 +22,39 @@
     .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
     .fade-in { animation: fadeIn 0.3s ease-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    @media print { .no-print { display: none !important; } }
+    @media print {
+      @page { size: landscape; margin: 0.25in; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+      body { background: white !important; margin: 0 !important; padding: 0 !important; }
+      .no-print, header, footer { display: none !important; }
+      button { display: none !important; }
+      main { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+      main > div { padding: 0 !important; margin: 0 !important; }
+      .min-h-screen { min-height: auto !important; }
+      .pb-20 { padding-bottom: 0 !important; }
+      .card-shadow { box-shadow: none !important; }
+      .fade-in { animation: none !important; }
+      /* Scale compact schedule to fit one landscape page */
+      .compact-schedule { 
+        transform: scale(0.82); transform-origin: top left; width: 122%;
+        padding: 0 !important; margin: 0 !important; border: none !important;
+      }
+      .compact-schedule .schedule-cell { padding: 1px 3px !important; font-size: 10px !important; line-height: 1.2 !important; }
+      .compact-schedule h2 { font-size: 16px !important; margin: 2px 0 !important; }
+      .compact-schedule table { font-size: 10px !important; border-collapse: collapse !important; }
+      .compact-schedule td, .compact-schedule th { padding: 1px 4px !important; }
+      /* Preserve all background colors exactly */
+      .bg-black { background-color: #000 !important; color: white !important; }
+      .bg-\[\#67d50d\] { background-color: #67d50d !important; }
+      .bg-\[\#bdd7ee\] { background-color: #bdd7ee !important; }
+      .bg-\[\#ffe699\] { background-color: #ffe699 !important; }
+      .bg-gray-400 { background-color: #9ca3af !important; color: white !important; }
+      .bg-gray-100 { background-color: #f3f4f6 !important; }
+      .bg-emerald-600 { background-color: #059669 !important; color: white !important; }
+      .bg-emerald-50 { background-color: #ecfdf5 !important; }
+      .bg-red-600 { background-color: #dc2626 !important; color: white !important; }
+      .bg-white { background-color: white !important; }
+    }
     .compact-schedule .schedule-cell { padding: 2px 4px; font-size: 11px; }
     .compact-schedule h2 { font-size: 1.5rem !important; }
     .cell-highlight { box-shadow: inset 0 0 0 3px var(--hl-color, #3B82F6); background: color-mix(in srgb, var(--hl-color, #3B82F6) 15%, white) !important; transition: box-shadow 0.15s, background 0.15s; }
@@ -1796,12 +1828,12 @@ const App = () => {
                       };
                       const slots = (d) => d===7 ? SUNDAY_SLOTS : TIME_SLOTS;
                       return <tr key={idx} className={'border-t '+(onSched?'bg-emerald-50':'hover:bg-gray-50')}>
-                        <td className={'px-2 py-1 font-medium sticky left-0 z-[5] '+(onSched?'bg-emerald-100':'bg-white')}>
+                        <td className={'px-2 py-1 font-medium sticky left-0 z-[5] cursor-pointer '+(onSched?'bg-emerald-100':'bg-white')}
+                          onMouseEnter={()=>setHoveredEmp(emp.name)}
+                          onMouseLeave={()=>setHoveredEmp(null)}
+                          onClick={()=>togglePin(emp.name)}>
                           <div className={'emp-name-btn inline-flex items-center rounded px-1 py-0.5 '+(isPinned?'emp-pinned':'')}
-                            style={isPinned ? {outlineColor: pinColor, backgroundColor: pinColor+'22'} : {}}
-                            onMouseEnter={()=>setHoveredEmp(emp.name)}
-                            onMouseLeave={()=>setHoveredEmp(null)}
-                            onClick={(e)=>{e.stopPropagation();togglePin(emp.name);}}>
+                            style={isPinned ? {outlineColor: pinColor, backgroundColor: pinColor+'22'} : {}}>
                             <span className="w-2.5 h-2.5 rounded-full inline-block mr-1.5 flex-shrink-0" style={{backgroundColor: pinColor}}/>{emp.name}
                             {emp.noBreak && <span className="ml-1 text-[8px] bg-gray-200 text-gray-600 px-1 rounded" title="No break needed">NB</span>}
                           </div>
