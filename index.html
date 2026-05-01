@@ -1432,14 +1432,60 @@ const App = () => {
     const s = Engine.buildDay(sorted, wk, dow, target, dow === 7, 0);
     if (!s) return;
     const key = toDateKey(target);
-    const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
-    const ns = [...scheds];
-    if (idx >= 0) ns[idx] = s; else { ns.push(s); ns.sort((a,b) => new Date(a.date) - new Date(b.date)); }
-    setScheds(ns);
-    setGenerated({...generated, [key]: new Date().toISOString()});
-    setAllScheds({...allScheds, [key]: s});
-    setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === key));
-    showToast('Generated ' + s.fullTitle);
+    setScheds(prev => {
+      const ns = [...prev];
+      const idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
+      if (idx >= 0) ns[idx] = s; else { ns.push(s); ns.sort((a,b) => new Date(a.date) - new Date(b.date)); }
+      return ns;
+    });
+    setGenerated(prev => ({...prev, [key]: new Date().toISOString()}));
+    setAllScheds(prev => ({...prev, [key]: s}));
+    // Only update selDay for the last generated day (handled by caller for batch)
+    return { key, schedule: s };
+  };
+  
+  const genBatch = (from, to, weekNum) => {
+    if (emps.length === 0) return;
+    const d = new Date(from); d.setHours(12,0,0,0);
+    const end = new Date(to); end.setHours(12,0,0,0);
+    const newScheds = [];
+    const newGen = {};
+    const newAll = {};
+    while (d <= end) {
+      const wk = weekNum || 1;
+      const dow = d.getDay() === 0 ? 7 : d.getDay();
+      const s = Engine.buildDay(sorted, wk, dow, new Date(d), dow === 7, 0);
+      if (s) {
+        const key = toDateKey(new Date(d));
+        newScheds.push(s);
+        newGen[key] = new Date().toISOString();
+        newAll[key] = s;
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    if (newScheds.length === 0) return;
+    setScheds(prev => {
+      const ns = [...prev];
+      newScheds.forEach(s => {
+        const key = toDateKey(new Date(s.date));
+        const idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
+        if (idx >= 0) ns[idx] = s; else ns.push(s);
+      });
+      ns.sort((a,b) => new Date(a.date) - new Date(b.date));
+      return ns;
+    });
+    setGenerated(prev => ({...prev, ...newGen}));
+    setAllScheds(prev => ({...prev, ...newAll}));
+    // Select the first generated day
+    setTimeout(() => {
+      setScheds(cur => {
+        const firstKey = toDateKey(new Date(from));
+        const idx = cur.findIndex(x => toDateKey(new Date(x.date)) === firstKey);
+        if (idx >= 0) setSelDay(idx);
+        return cur;
+      });
+    }, 50);
+    showToast('Generated ' + newScheds.length + ' day' + (newScheds.length > 1 ? 's' : ''));
   };
   
   const updSched = (s) => {
@@ -1837,10 +1883,19 @@ const App = () => {
                     {[1,2].map(wk => <button key={wk} onClick={()=>{
                       const from = weekPicker.date || weekPicker.from;
                       const to = weekPicker.to || from;
-                      const d = new Date(from);
-                      while (d <= to) {
-                        genSingle(new Date(d), wk);
-                        d.setDate(d.getDate()+1);
+                      if (from.getTime() === to.getTime()) {
+                        genSingle(from, wk);
+                        // Select the generated day
+                        setTimeout(() => {
+                          setScheds(cur => {
+                            const idx = cur.findIndex(x => toDateKey(new Date(x.date)) === toDateKey(from));
+                            if (idx >= 0) setSelDay(idx);
+                            return cur;
+                          });
+                        }, 50);
+                        showToast('Generated ' + ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][from.getDay()] + ' ' + (from.getMonth()+1)+'/'+from.getDate());
+                      } else {
+                        genBatch(from, to, wk);
                       }
                       setWeekPicker(null);
                     }} className={'flex-1 px-4 py-3 text-white rounded-lg font-bold text-lg hover:opacity-90 '+(wk===1?'bg-blue-600':'bg-green-600')}>Week {wk}</button>)}
