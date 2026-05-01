@@ -1215,8 +1215,9 @@ const Calendar = ({ generated, onClick, allScheds }) => {
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
   const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
-  const gen = d => d ? generated[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
-  const getSch = d => d ? allScheds?.[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
+  const getKey = d => d ? year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0') : null;
+  const getSch = d => d ? allScheds?.[getKey(d)] : null;
+  const hasSchedule = d => { const k = getKey(d); return !!(allScheds?.[k] || generated?.[k]); };
   const isPast = d => d && new Date(year,month,d,23,59) < today;
   
   return (
@@ -1228,11 +1229,11 @@ const Calendar = ({ generated, onClick, allScheds }) => {
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-1">{['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d}>{d}</div>)}</div>
       <div className="grid grid-cols-7 gap-1">{days.map((d,i) => {
-        const g = gen(d), isT = d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
+        const has = hasSchedule(d), isT = d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
         const s = getSch(d);
-        const lastTime = s?.editedAt || s?.generatedAt || g;
-        const past = isPast(d) && !g;
-        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(g?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{g && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
+        const lastTime = s?.editedAt || s?.generatedAt || (generated?.[getKey(d)]);
+        const past = isPast(d) && !has;
+        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(has?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{has && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
       })}</div>
     </div>
   );
