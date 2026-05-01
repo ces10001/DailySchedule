@@ -1200,6 +1200,12 @@ const App = () => {
   const [w2, setW2] = useState('');
   const [singleDate, setSingleDate] = useState('');
   const [selDay, setSelDay] = useState(0);
+  
+  // Clamp selDay when scheds array changes
+  useEffect(() => {
+    if (scheds.length === 0) return;
+    if (selDay < 0 || selDay >= scheds.length) setSelDay(Math.max(0, scheds.length - 1));
+  }, [scheds.length]);
   const [editEmp, setEditEmp] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [logged, setLogged] = useState(false);
@@ -1311,12 +1317,18 @@ const App = () => {
   
   useEffect(() => {
     const check = () => {
-      if (tab !== 'schedule') return; // Only auto-flip on public schedule tab
+      if (tab !== 'schedule') return;
       if (getESTHour() >= 20) {
         const tmr = new Date(); tmr.setDate(tmr.getDate()+1);
         const key = toDateKey(tmr);
         if (allScheds[key]) {
-          const idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
+          let idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
+          if (idx < 0) {
+            const ns = [...scheds, allScheds[key]];
+            ns.sort((a,b) => new Date(a.date) - new Date(b.date));
+            setScheds(ns);
+            idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
+          }
           if (idx >= 0 && idx !== selDay) setSelDay(idx);
         }
       }
@@ -1636,9 +1648,20 @@ const App = () => {
   const calClick = (date) => {
     const key = toDateKey(date);
     if (allScheds[key]) {
-      const idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
-      if (idx >= 0) setSelDay(idx);
-    } else genSingle(date);
+      // Check if already in scheds array
+      let idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
+      if (idx >= 0) {
+        setSelDay(idx);
+      } else {
+        // Load from allScheds into scheds
+        const ns = [...scheds, allScheds[key]];
+        ns.sort((a,b) => new Date(a.date) - new Date(b.date));
+        setScheds(ns);
+        setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === key));
+      }
+    } else {
+      genSingle(date);
+    }
   };
   
   const cleanSubmit = (log) => {
