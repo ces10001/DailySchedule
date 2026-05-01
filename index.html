@@ -1273,6 +1273,7 @@ const App = () => {
   const [w1, setW1] = useState('');
   const [w2, setW2] = useState('');
   const [singleDate, setSingleDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selDay, setSelDay] = useState(0);
   
   // Clamp selDay when scheds array changes
@@ -1808,21 +1809,41 @@ const App = () => {
             <div className="col-span-3">
               <div className="bg-white p-4 rounded-lg card-shadow mb-4">
                 <h3 className="font-bold mb-3">Generate Schedule</h3>
-                <input type="date" value={singleDate} onChange={e=>setSingleDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2"/>
-                <button onClick={()=>singleDate&&setWeekPicker({date:new Date(singleDate+'T12:00:00')})} disabled={!singleDate||emps.length===0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button>
+                <div className="space-y-2">
+                  <div><label className="block text-xs font-medium mb-1">From</label><input type="date" value={singleDate} onChange={e=>setSingleDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div>
+                  <div><label className="block text-xs font-medium mb-1">To</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div>
+                </div>
+                <button onClick={()=>{
+                  if (!singleDate) return;
+                  const from = new Date(singleDate+'T12:00:00');
+                  const to = endDate ? new Date(endDate+'T12:00:00') : from;
+                  if (to < from) { showToast('End date must be after start date', 'warning'); return; }
+                  setWeekPicker({ from, to });
+                }} disabled={!singleDate||emps.length===0} className="mt-3 w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate {endDate && singleDate && endDate !== singleDate ? Math.round((new Date(endDate+'T12:00:00') - new Date(singleDate+'T12:00:00'))/(86400000))+1 + ' Days' : 'Day'}</button>
                 <p className="text-[10px] text-gray-500 mt-2">Or click any day on the calendar below to generate or view it.</p>
               </div>
               
               {weekPicker && <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
                 <div className="bg-white rounded-xl p-6 w-full max-w-sm card-shadow fade-in">
                   <h2 className="text-lg font-bold mb-2">Which week's schedule?</h2>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Generating for <strong>{['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][weekPicker.date.getDay()]} {(weekPicker.date.getMonth()+1)+'/'+weekPicker.date.getDate()}</strong>
+                  <p className="text-sm text-gray-600 mb-2">
+                    {weekPicker.from && weekPicker.to && weekPicker.from.getTime() !== weekPicker.to.getTime()
+                      ? <>Generating <strong>{Math.round((weekPicker.to - weekPicker.from)/86400000)+1} days</strong> ({(weekPicker.from.getMonth()+1)+'/'+weekPicker.from.getDate()} – {(weekPicker.to.getMonth()+1)+'/'+weekPicker.to.getDate()})</>
+                      : <>Generating for <strong>{['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][(weekPicker.date||weekPicker.from).getDay()]} {((weekPicker.date||weekPicker.from).getMonth()+1)+'/'+((weekPicker.date||weekPicker.from).getDate())}</strong></>
+                    }
                   </p>
-                  <p className="text-xs text-gray-500 mb-4">Choose which alternating week's master schedule to use for employee shifts.</p>
+                  <p className="text-xs text-gray-500 mb-4">Choose which alternating week's master schedule to use.</p>
                   <div className="flex gap-3 mb-3">
-                    <button onClick={()=>{genSingle(weekPicker.date, 1);setWeekPicker(null);}} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700">Week 1</button>
-                    <button onClick={()=>{genSingle(weekPicker.date, 2);setWeekPicker(null);}} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-bold text-lg hover:bg-green-700">Week 2</button>
+                    {[1,2].map(wk => <button key={wk} onClick={()=>{
+                      const from = weekPicker.date || weekPicker.from;
+                      const to = weekPicker.to || from;
+                      const d = new Date(from);
+                      while (d <= to) {
+                        genSingle(new Date(d), wk);
+                        d.setDate(d.getDate()+1);
+                      }
+                      setWeekPicker(null);
+                    }} className={'flex-1 px-4 py-3 text-white rounded-lg font-bold text-lg hover:opacity-90 '+(wk===1?'bg-blue-600':'bg-green-600')}>Week {wk}</button>)}
                   </div>
                   <button onClick={()=>setWeekPicker(null)} className="w-full px-3 py-2 bg-gray-200 rounded-lg text-sm hover:bg-gray-300">Cancel</button>
                 </div>
