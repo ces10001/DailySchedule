@@ -289,8 +289,14 @@ const Engine = {
     const r1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r1,r1b2,lod3], date, sun); u3.push(r1b3);
     const r2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r2,r2b2,lod3], date, sun); u3.push(r2b3);
     
-    // Registers FIRST — registers/reception take priority over iPad
-    let uR1=[r1,r2,lod1], uR2=[r1b2,r2b2,lod2], uR3=[r1b3,r2b3,lod3];
+    // Vault FIRST (after LOD/reception) — vault must be filled before registers consume vault-qualified people
+    let vU1=[...u1,lod1]; const vAU1 = this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = this.findVault(emps, wk, dy, 1, vU1, date, sun);
+    let vU2=[...u2,lod2]; const vAU2 = this.findVault(emps, wk, dy, 2, vU2, date, sun); vU2.push(vAU2); const vMed2 = this.findVault(emps, wk, dy, 2, vU2, date, sun);
+    let vU3=[...u3,lod3]; const vAU3 = this.findVault(emps, wk, dy, 3, vU3, date, sun); vU3.push(vAU3); const vMed3 = this.findVault(emps, wk, dy, 3, vU3, date, sun);
+    
+    // Registers AFTER vault — exclude vault people from register pool
+    const vaultPeople = [vAU1,vMed1,vAU2,vMed2,vAU3,vMed3].filter(n=>n&&n!=='X'&&n!=='RPH');
+    let uR1=[r1,r2,lod1,...vaultPeople], uR2=[r1b2,r2b2,lod2,...vaultPeople], uR3=[r1b3,r2b3,lod3,...vaultPeople];
     const rg3b1 = lod1!=='X' ? lod1 : this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg3b1);
     const a1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a1);
     const a2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a2);
@@ -316,9 +322,9 @@ const Engine = {
     let ip1, ip2a, ip2b, ip3a, ip3b, ipD1, ipD2, ipD3, ipT1, ipT2, ipT3;
     let ipadSplit2 = null, ipadSplit3 = null;
     let a1b2Split = null, a1b3Split = null;
-    const allUsed1 = [...u1, ...uR1, rg1];
-    const allUsed2 = [...u2, ...uR2, rg1b2];
-    const allUsed3 = [...u3, ...uR3, rg1b3];
+    const allUsed1 = [...u1, ...uR1, rg1, ...vaultPeople];
+    const allUsed2 = [...u2, ...uR2, rg1b2, ...vaultPeople];
+    const allUsed3 = [...u3, ...uR3, rg1b3, ...vaultPeople];
     
     if (sun) {
       ip1 = this.findIPad(emps, wk, dy, 10, 12, allUsed1, date);
@@ -370,11 +376,6 @@ const Engine = {
       a1b3 = ipadSplit3.second+' 4-6 / '+ipadSplit3.first+' 6-8';
       a1b3Split = { first: ipadSplit3.second, second: ipadSplit3.first };
     }
-    
-    // Vault
-    let vU1=[...uR1,lod1]; const vAU1 = this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = this.findVault(emps, wk, dy, 1, vU1, date, sun);
-    let vU2=[...uR2,lod2]; const vAU2 = this.findVault(emps, wk, dy, 2, vU2, date, sun); vU2.push(vAU2); const vMed2 = this.findVault(emps, wk, dy, 2, vU2, date, sun);
-    let vU3=[...uR3,lod3]; const vAU3 = this.findVault(emps, wk, dy, 3, vU3, date, sun); vU3.push(vAU3); const vMed3 = this.findVault(emps, wk, dy, 3, vU3, date, sun);
     
     // Lunches — early shift employees start at 12 PM, late shift (12-8:15) start at 2:30 PM
     const earlyL = emps.filter(e => !this.vaultOnly(e) && !this.onPTO(e, date) && this.isEarly(e, wk, dy));
