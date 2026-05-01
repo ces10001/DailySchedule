@@ -1297,6 +1297,7 @@ const App = () => {
   const [undoHistory, setUndoHistory] = useState([]);
   const [uploadWeek, setUploadWeek] = useState('1');
   const [fbStatus, setFbStatus] = useState(fbDB ? 'connecting' : 'local');
+  const [weekPicker, setWeekPicker] = useState(null); // {date: Date} — shows Wk1/Wk2 modal
   
   const fromFB = React.useRef(false);
   const writeTimer = React.useRef(null);
@@ -1422,20 +1423,12 @@ const App = () => {
     return sanitizeSched(allScheds[toDateKey(d)]) || null;
   }, [allScheds]);
   
-  const genAll = () => {
-    if (!w1 || !w2 || emps.length === 0) return;
-    const s = Engine.genAll(sorted, w1, w2);
-    setScheds(s);
-    const ng = {...generated}, na = {...allScheds};
-    s.forEach(x => { const k = toDateKey(new Date(x.date)); ng[k] = new Date().toISOString(); na[k] = x; });
-    setGenerated(ng); setAllScheds(na); setSelDay(0);
-  };
-  
-  const genSingle = (date) => {
+  const genSingle = (date, weekNum) => {
     if (emps.length === 0) return;
     const target = new Date(date); target.setHours(12,0,0,0);
-    let s = w1 && w2 ? Engine.genSingle(sorted, target, w1, w2, 0) : null;
-    if (!s) s = Engine.genStandalone(sorted, target, 0);
+    const wk = weekNum || 1;
+    const dow = target.getDay() === 0 ? 7 : target.getDay();
+    const s = Engine.buildDay(sorted, wk, dow, target, dow === 7, 0);
     if (!s) return;
     const key = toDateKey(target);
     const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
@@ -1445,6 +1438,7 @@ const App = () => {
     setGenerated({...generated, [key]: new Date().toISOString()});
     setAllScheds({...allScheds, [key]: s});
     setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === key));
+    showToast('Generated ' + s.fullTitle);
   };
   
   const updSched = (s) => {
@@ -1496,14 +1490,10 @@ const App = () => {
     const cur = sanitizeSched(scheds[selDay]);
     const date = new Date(cur.date);
     
-    // Generate a fresh schedule using the same method as genSingle for correct week/day
-    let fresh = null;
-    if (w1 && w2) {
-      fresh = Engine.genSingle(sorted, date, w1, w2, 0);
-    }
-    if (!fresh) {
-      fresh = Engine.genStandalone(sorted, date, 0);
-    }
+    // Generate a fresh schedule using the schedule's stored weekNum
+    date.setHours(12,0,0,0);
+    const dow = date.getDay() === 0 ? 7 : date.getDay();
+    const fresh = Engine.buildDay(sorted, cur.weekNum || 1, dow, date, dow === 7, 0);
     if (!fresh) { showToast('Could not generate reference schedule', 'error'); return; }
     
     const filled = JSON.parse(JSON.stringify(cur));
@@ -1727,19 +1717,19 @@ const App = () => {
   const calClick = (date) => {
     const key = toDateKey(date);
     if (allScheds[key]) {
-      // Check if already in scheds array
+      // Schedule exists — just show it
       let idx = scheds.findIndex(s => toDateKey(new Date(s.date)) === key);
       if (idx >= 0) {
         setSelDay(idx);
       } else {
-        // Load from allScheds into scheds (sanitize to fill missing fields)
         const ns = [...scheds, sanitizeSched(allScheds[key])];
         ns.sort((a,b) => new Date(a.date) - new Date(b.date));
         setScheds(ns);
         setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === key));
       }
     } else {
-      genSingle(date);
+      // No schedule — show week picker before generating
+      setWeekPicker({ date });
     }
   };
   
@@ -1817,18 +1807,27 @@ const App = () => {
           <div className="fade-in grid grid-cols-12 gap-4">
             <div className="col-span-3">
               <div className="bg-white p-4 rounded-lg card-shadow mb-4">
-                <h3 className="font-bold mb-3">Schedule Period</h3>
-                <div className="space-y-2">
-                  <div><label className="block text-xs font-medium mb-1">Week 1 Start</label><input type="date" value={w1} onChange={e=>{setW1(e.target.value);const d=new Date(e.target.value+'T12:00:00');d.setDate(d.getDate()+7);setW2(d.toISOString().split('T')[0]);}} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div>
-                  <div><label className="block text-xs font-medium mb-1">Week 2 Start</label><input type="date" value={w2} onChange={e=>setW2(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg"/></div>
-                </div>
-                {emps.length>0&&w1&&w2 && <button onClick={genAll} className="mt-3 btn-primary px-3 py-2 text-white rounded-lg font-bold text-sm w-full">🗓️ Generate All 14 Days</button>}
-                <div className="mt-4 pt-4 border-t">
-                  <h4 className="font-bold text-sm mb-2">Generate Single Day</h4>
-                  <input type="date" value={singleDate} onChange={e=>setSingleDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2"/>
-                  <button onClick={()=>singleDate&&genSingle(new Date(singleDate+'T12:00:00'))} disabled={!singleDate||emps.length===0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button>
-                </div>
+                <h3 className="font-bold mb-3">Generate Schedule</h3>
+                <input type="date" value={singleDate} onChange={e=>setSingleDate(e.target.value)} className="w-full px-2 py-1.5 text-sm border rounded-lg mb-2"/>
+                <button onClick={()=>singleDate&&setWeekPicker({date:new Date(singleDate+'T12:00:00')})} disabled={!singleDate||emps.length===0} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Generate Day</button>
+                <p className="text-[10px] text-gray-500 mt-2">Or click any day on the calendar below to generate or view it.</p>
               </div>
+              
+              {weekPicker && <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl p-6 w-full max-w-sm card-shadow fade-in">
+                  <h2 className="text-lg font-bold mb-2">Which week's schedule?</h2>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Generating for <strong>{['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][weekPicker.date.getDay()]} {(weekPicker.date.getMonth()+1)+'/'+weekPicker.date.getDate()}</strong>
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4">Choose which alternating week's master schedule to use for employee shifts.</p>
+                  <div className="flex gap-3 mb-3">
+                    <button onClick={()=>{genSingle(weekPicker.date, 1);setWeekPicker(null);}} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700">Week 1</button>
+                    <button onClick={()=>{genSingle(weekPicker.date, 2);setWeekPicker(null);}} className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-bold text-lg hover:bg-green-700">Week 2</button>
+                  </div>
+                  <button onClick={()=>setWeekPicker(null)} className="w-full px-3 py-2 bg-gray-200 rounded-lg text-sm hover:bg-gray-300">Cancel</button>
+                </div>
+              </div>}
+              
               <Calendar generated={generated} onClick={calClick} allScheds={allScheds}/>
               <div className="mt-4 bg-white p-4 rounded-lg card-shadow">
                 <h3 className="font-bold mb-2">Load Schedule from Excel</h3>
@@ -1870,6 +1869,10 @@ const App = () => {
               {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
                 <div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
                   <h3 className="font-bold text-sm">Master Schedule ({emps.length} Employees)</h3>
+                  <div className="flex items-center gap-3 text-[10px]">
+                    <span className="text-gray-500">Wk 1:</span><input type="date" value={w1} onChange={e=>{setW1(e.target.value);const d=new Date(e.target.value+'T12:00:00');d.setDate(d.getDate()+7);setW2(d.toISOString().split('T')[0]);}} className="px-1 py-0.5 text-[10px] border rounded"/>
+                    <span className="text-gray-500">Wk 2:</span><input type="date" value={w2} onChange={e=>setW2(e.target.value)} className="px-1 py-0.5 text-[10px] border rounded"/>
+                  </div>
                   <div className="flex items-center gap-3">
                     {pinnedEmps.length > 0 && <button onClick={()=>setPinnedEmps([])} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] hover:bg-red-600">Clear {pinnedEmps.length} highlight{pinnedEmps.length>1?'s':''}</button>}
                     {scheds.length>0&&scheds[selDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled &nbsp; Click name = highlight on schedule</span>}
@@ -2016,12 +2019,12 @@ const App = () => {
 
                 <div className="border-l-4 border-amber-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Generating Schedules</h3>
-                  <p className="text-sm text-gray-700 mb-2">On the left panel, set your <strong>Week 1 Start</strong> date (Week 2 fills automatically). Then:</p>
+                  <p className="text-sm text-gray-700 mb-2">There are two ways to generate a daily schedule:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>🗓️ Generate All 14 Days</strong> — creates schedules for both weeks</li>
-                    <li><strong>Generate Single Day</strong> — pick a date and generate just that day</li>
+                    <li><strong>Click any day on the calendar</strong> — if no schedule exists, a popup asks you to choose <strong>Week 1</strong> or <strong>Week 2</strong> to determine which master schedule to use</li>
+                    <li><strong>Use the date picker</strong> — pick a date and click <strong>Generate Day</strong>, then choose Week 1 or Week 2</li>
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">Employees are auto-assigned based on roles, availability, and shift times. Single-role employees get priority for their position.</p>
+                  <p className="text-sm text-gray-700 mt-2">If a schedule already exists for that day, clicking the calendar shows it immediately without regenerating. The scheduler auto-assigns employees based on roles, availability, and shift times.</p>
                 </div>
 
                 <div className="border-l-4 border-teal-500 pl-4">
