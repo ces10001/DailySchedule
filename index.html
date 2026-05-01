@@ -97,6 +97,38 @@ const todayKey = () => toDateKey(new Date());
 // Extract employee name from cell value, stripping trailing time suffixes like "12-2", "2-4", "4-6", "6-8"
 const extractName = (s) => s ? s.replace(/\s+\d+-\d+\s*$/,'').trim().toUpperCase() : '';
 
+// Sanitize a schedule object — ensures all required fields exist with defaults
+// Prevents white screen crashes from old/incomplete schedule data
+const sanitizeSched = (s) => {
+  if (!s) return null;
+  const empty3 = () => [{name:'X'},{name:'X'},{name:'X'}];
+  const emptyRec = () => [{r1:'X',r2:'X'},{r1:'X',r2:'X'},{r1:'X',r2:'X'}];
+  const emptyIpad = () => [{display:'X',split:null},{display:'X',split:null},{display:'X',split:null}];
+  const emptyMC = () => [{mc1:'X',mc2:'X',med3au1:'X'},{mc1:'X',mc2:'X',med3au1:'X'},{mc1:'X',mc2:'X',med3au1:'X'}];
+  const emptyAU = () => [{au2:'X',au3:'X',au4:'X',au2Split:null},{au2:'X',au3:'X',au4:'X',au2Split:null},{au2:'X',au3:'X',au4:'X',au2Split:null}];
+  const emptyVault = () => [{au:'RPH',med:'RPH'},{au:'RPH',med:'RPH'},{au:'RPH',med:'RPH'}];
+  return {
+    ...s,
+    lod: s.lod || empty3(),
+    reception: s.reception || emptyRec(),
+    ipad: s.ipad || emptyIpad(),
+    medCheckout: s.medCheckout || emptyMC(),
+    auCheckout: s.auCheckout || emptyAU(),
+    vault: s.vault || emptyVault(),
+    cleaning: s.cleaning || [{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'}],
+    lunches: s.lunches || [],
+    breaks: s.breaks || [],
+    deposits: s.deposits || [{time:'9:00 AM - 12:00 PM',person:''}],
+    stats: s.stats || {vB1:0,vB2:0,vB3:0,rB1:0,rB2:0,rB3:0,rgB1:0,rgB2:0,rgB3:0},
+    fullTitle: s.fullTitle || (s.dayTitle||'') + ' ' + (s.dateStr||''),
+    weekNum: s.weekNum || 1,
+    dayNum: s.dayNum || 1,
+    isSunday: s.isSunday || false,
+    date: s.date || new Date().toISOString(),
+    dateStr: s.dateStr || '',
+  };
+};
+
 // ============== SCHEDULING ENGINE ==============
 const Engine = {
   parse(seg) {
@@ -521,7 +553,9 @@ const Header = ({ children, color }) => {
 };
 
 // ============== SCHEDULE DISPLAY ==============
-const ScheduleDisplay = ({ sched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps }) => {
+const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps }) => {
+  const sched = sanitizeSched(rawSched);
+  if (!sched) return null;
   if (!sched) return null;
   const sh = showShapes ? shapes : null;
   const hl = highlightEmps || new Set();
@@ -868,7 +902,8 @@ const CleaningLogs = ({ logs, onView, allScheds, onClearLog }) => {
 };
 
 // ============== COVERAGE ALERT ==============
-const CoverageAlert = ({ sched, staffReqs }) => {
+const CoverageAlert = ({ sched: rawSched, staffReqs }) => {
+  const sched = sanitizeSched(rawSched);
   if (!sched) return null;
   const sun = sched.isSunday;
   const st = sched.stats;
@@ -921,7 +956,8 @@ const CoverageAlert = ({ sched, staffReqs }) => {
 };
 
 // ============== SCHEDULE VALIDATOR - Cross-references master vs daily ==============
-const ScheduleValidator = ({ sched, emps }) => {
+const ScheduleValidator = ({ sched: rawSched, emps }) => {
+  const sched = sanitizeSched(rawSched);
   if (!sched || !emps || emps.length === 0) return null;
   
   const date = new Date(sched.date);
@@ -1340,7 +1376,7 @@ const App = () => {
   const todaySched = useMemo(() => {
     const d = new Date();
     if (getESTHour() >= 20) d.setDate(d.getDate()+1);
-    return allScheds[toDateKey(d)] || null;
+    return sanitizeSched(allScheds[toDateKey(d)]) || null;
   }, [allScheds]);
   
   const genAll = () => {
@@ -1414,7 +1450,7 @@ const App = () => {
   
   const autoFillEmpty = () => {
     if (!scheds[selDay]) return;
-    const cur = scheds[selDay];
+    const cur = sanitizeSched(scheds[selDay]);
     const date = new Date(cur.date);
     
     // Generate a fresh schedule using the same method as genSingle for correct week/day
@@ -1653,8 +1689,8 @@ const App = () => {
       if (idx >= 0) {
         setSelDay(idx);
       } else {
-        // Load from allScheds into scheds
-        const ns = [...scheds, allScheds[key]];
+        // Load from allScheds into scheds (sanitize to fill missing fields)
+        const ns = [...scheds, sanitizeSched(allScheds[key])];
         ns.sort((a,b) => new Date(a.date) - new Date(b.date));
         setScheds(ns);
         setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === key));
@@ -1782,7 +1818,7 @@ const App = () => {
                     {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
                     <button onClick={autoFillEmpty} className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600">✨ Auto-fill Empty</button>
                     <button onClick={undo} disabled={undoHistory.length===0} className="px-3 py-1 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">↶ Undo</button>
-                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=JSON.parse(JSON.stringify(scheds[selDay]));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});if(s.deposits)s.deposits.forEach(d=>{d.person='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
+                    <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=sanitizeSched(JSON.parse(JSON.stringify(scheds[selDay])));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});if(s.deposits)s.deposits.forEach(d=>{d.person='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
                   </div>
                 </div>
                 <ScheduleDisplay sched={scheds[selDay]} emps={sorted} shapes={shapes} onUpdate={updSched} editable={true} onSign={setCleanModal} showShapes={true} cleanLogs={cleanLogs} highlightEmps={highlightEmps}/>
@@ -1814,7 +1850,7 @@ const App = () => {
                       </tr>
                     </thead>
                     <tbody>{sorted.map((emp,idx) => {
-                      const cur = scheds[selDay];
+                      const cur = sanitizeSched(scheds[selDay]);
                       let onSched = false;
                       if (cur) {
                         const all = [...cur.lod.map(l=>l.name),...cur.reception.flatMap(r=>[r.r1,r.r2]),...cur.ipad.map(i=>i.display),...cur.medCheckout.flatMap(m=>[m.mc1,m.mc2,m.med3au1]),...cur.auCheckout.flatMap(a=>[a.au2,a.au3,a.au4]),...cur.vault.flatMap(v=>[v.au,v.med]),...cur.cleaning.map(c=>c.name),...cur.lunches.map(l=>l.name),...cur.breaks.filter(b=>b.name).map(b=>b.name)].map(n=>n?n.toUpperCase():'');
@@ -2014,7 +2050,26 @@ const App = () => {
   );
 };
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('Schedule crash:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return React.createElement('div', {className:'min-h-screen flex items-center justify-center bg-slate-50 p-8'},
+        React.createElement('div', {className:'bg-white rounded-xl p-8 max-w-md card-shadow text-center'},
+          React.createElement('div', {className:'text-4xl mb-4'}, '⚠️'),
+          React.createElement('h2', {className:'text-xl font-bold mb-2'}, 'Something went wrong'),
+          React.createElement('p', {className:'text-gray-600 mb-4'}, 'The schedule display encountered an error. This usually happens with older schedule data.'),
+          React.createElement('button', {className:'btn-primary px-6 py-2 text-white rounded-lg font-bold', onClick:()=>{this.setState({hasError:false,error:null});window.location.reload();}}, 'Reload Page')
+        )
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(ErrorBoundary, null, React.createElement(App)));
 </script>
 </body>
 </html>
