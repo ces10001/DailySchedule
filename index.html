@@ -99,26 +99,38 @@ const extractName = (s) => s ? s.replace(/\s+\d+-\d+\s*$/,'').trim().toUpperCase
 
 // Sanitize a schedule object — ensures all required fields exist with defaults
 // Prevents white screen crashes from old/incomplete schedule data
+// Firebase drops empty arrays and null values, so we must restore them
 const sanitizeSched = (s) => {
-  if (!s) return null;
+  if (!s || typeof s !== 'object') return null;
   const empty3 = () => [{name:'X'},{name:'X'},{name:'X'}];
-  const emptyRec = () => [{r1:'X',r2:'X'},{r1:'X',r2:'X'},{r1:'X',r2:'X'}];
-  const emptyIpad = () => [{display:'X',split:null},{display:'X',split:null},{display:'X',split:null}];
-  const emptyMC = () => [{mc1:'X',mc2:'X',med3au1:'X'},{mc1:'X',mc2:'X',med3au1:'X'},{mc1:'X',mc2:'X',med3au1:'X'}];
-  const emptyAU = () => [{au2:'X',au3:'X',au4:'X',au2Split:null},{au2:'X',au3:'X',au4:'X',au2Split:null},{au2:'X',au3:'X',au4:'X',au2Split:null}];
-  const emptyVault = () => [{au:'RPH',med:'RPH'},{au:'RPH',med:'RPH'},{au:'RPH',med:'RPH'}];
+  const emptyRec = () => [{r1:'X',r2:'X',time:''},{r1:'X',r2:'X',time:''},{r1:'X',r2:'X',time:''}];
+  const emptyIpad = () => [{display:'X',split:null,time:''},{display:'X',split:null,time:''},{display:'X',split:null,time:''}];
+  const emptyMC = () => [{mc1:'X',mc2:'X',med3au1:'X',time:''},{mc1:'X',mc2:'X',med3au1:'X',time:''},{mc1:'X',mc2:'X',med3au1:'X',time:''}];
+  const emptyAU = () => [{au2:'X',au3:'X',au4:'X',au2Split:null,time:''},{au2:'X',au3:'X',au4:'X',au2Split:null,time:''},{au2:'X',au3:'X',au4:'X',au2Split:null,time:''}];
+  const emptyVault = () => [{au:'RPH',med:'RPH',time:''},{au:'RPH',med:'RPH',time:''},{au:'RPH',med:'RPH',time:''}];
+  
+  // Deep-fix arrays: ensure each item has all required fields
+  const fixArr = (arr, defaults) => {
+    if (!arr || !Array.isArray(arr)) return defaults();
+    return arr.map((item, i) => {
+      const def = defaults()[i] || defaults()[0];
+      if (!item || typeof item !== 'object') return def;
+      return { ...def, ...item };
+    });
+  };
+  
   return {
     ...s,
-    lod: s.lod || empty3(),
-    reception: s.reception || emptyRec(),
-    ipad: s.ipad || emptyIpad(),
-    medCheckout: s.medCheckout || emptyMC(),
-    auCheckout: s.auCheckout || emptyAU(),
-    vault: s.vault || emptyVault(),
-    cleaning: s.cleaning || [{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'}],
-    lunches: s.lunches || [],
-    breaks: s.breaks || [],
-    deposits: s.deposits || [{time:'9:00 AM - 12:00 PM',person:''}],
+    lod: fixArr(s.lod, empty3),
+    reception: fixArr(s.reception, emptyRec),
+    ipad: fixArr(s.ipad, emptyIpad),
+    medCheckout: fixArr(s.medCheckout, emptyMC),
+    auCheckout: fixArr(s.auCheckout, emptyAU),
+    vault: fixArr(s.vault, emptyVault),
+    cleaning: s.cleaning && Array.isArray(s.cleaning) ? s.cleaning : [{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'},{task:'',name:'X'}],
+    lunches: s.lunches && Array.isArray(s.lunches) ? s.lunches : [],
+    breaks: s.breaks && Array.isArray(s.breaks) ? s.breaks : [],
+    deposits: s.deposits && Array.isArray(s.deposits) ? s.deposits : [{time:'9:00 AM - 12:00 PM',person:''}],
     stats: s.stats || {vB1:0,vB2:0,vB3:0,rB1:0,rB2:0,rB3:0,rgB1:0,rgB2:0,rgB3:0},
     fullTitle: s.fullTitle || (s.dayTitle||'') + ' ' + (s.dateStr||''),
     weekNum: s.weekNum || 1,
@@ -961,9 +973,11 @@ const ScheduleValidator = ({ sched: rawSched, emps }) => {
   if (!sched || !emps || emps.length === 0) return null;
   
   const date = new Date(sched.date);
+  date.setHours(12,0,0,0);
   const sun = sched.isSunday;
   const wk = sched.weekNum;
-  const dy = sched.dayNum;
+  // Use actual day of week from date, not stored dayNum (which may be wrong on old schedules)
+  const dy = date.getDay() === 0 ? 7 : date.getDay(); // 1=Mon...7=Sun
   
   // Collect all names appearing in each block of daily schedule
   const getNamesInBlock = (blockIdx) => {
@@ -1092,6 +1106,27 @@ const ScheduleValidator = ({ sched: rawSched, emps }) => {
     });
   });
   
+  // Reverse check: flag employees on the daily schedule who are NOT scheduled in the master for this day
+  const allDailyNames = new Set();
+  [0, 1, 2].forEach(bIdx => getNamesInBlock(bIdx).forEach(n => allDailyNames.add(n)));
+  sched.lunches.forEach(l => { if (l.name && l.name !== '') allDailyNames.add(l.name.toUpperCase()); });
+  sched.cleaning.forEach(c => { if (c.name && c.name !== 'X') allDailyNames.add(extractName(c.name)); });
+  
+  allDailyNames.forEach(upName => {
+    const emp = emps.find(e => e.name.toUpperCase() === upName);
+    if (!emp) return; // Unknown name — could be manually typed, skip
+    if (Engine.onPTO(emp, date)) return; // Already flagged by PTO check above
+    const shift = wk === 1 ? emp.week1?.[dy] : emp.week2?.[dy];
+    if (!shift || shift === '' || shift.toUpperCase() === 'OFF') {
+      issues.push({
+        name: emp.name,
+        shift: 'OFF',
+        issue: 'Not scheduled this day (master shows OFF) — manually added',
+        severity: 'notice'
+      });
+    }
+  });
+  
   if (issues.length === 0) return (
     <div className="bg-emerald-50 border-2 border-emerald-500 rounded-lg p-3 mt-3">
       <p className="font-bold text-emerald-800 text-sm">✓ Cross-Reference: All schedules match master</p>
@@ -1103,7 +1138,7 @@ const ScheduleValidator = ({ sched: rawSched, emps }) => {
       <p className="font-bold text-amber-800 text-sm mb-2">⚠️ Schedule Validation ({issues.length} issue{issues.length>1?'s':''})</p>
       <div className="space-y-1 max-h-48 overflow-y-auto">
         {issues.map((x, i) => (
-          <div key={i} className={'text-xs p-2 rounded ' + (x.severity === 'error' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800')}>
+          <div key={i} className={'text-xs p-2 rounded ' + (x.severity === 'error' ? 'bg-red-100 text-red-800' : x.severity === 'notice' ? 'bg-orange-100 text-orange-800' : 'bg-amber-100 text-amber-800')}>
             <span className="font-bold">{x.name}:</span> {x.issue}
           </div>
         ))}
@@ -1287,8 +1322,13 @@ const App = () => {
         setEmps(d.employees || []);
         setW1(d.week1Start || '');
         setW2(d.week2Start || '');
-        setScheds(d.schedules || []);
-        setAllScheds(d.allSchedules || {});
+        // Sanitize every schedule from Firebase (Firebase drops empty arrays like lunches:[])
+        const rawScheds = d.schedules || [];
+        setScheds(rawScheds.map(s => sanitizeSched(s)).filter(Boolean));
+        const rawAll = d.allSchedules || {};
+        const sanAll = {};
+        Object.entries(rawAll).forEach(([k,v]) => { const s = sanitizeSched(v); if (s) sanAll[k] = s; });
+        setAllScheds(sanAll);
         setGenerated(d.generatedDays || {});
         setCleanLogs(d.cleaningLogs || {});
         if (d.staffReqs) setStaffReqs(d.staffReqs);
@@ -1299,7 +1339,7 @@ const App = () => {
     } else {
       // No Firebase — use localStorage
       const d = localStorage.getItem('pharmacy-scheduler-v3');
-      if (d) { try { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds(p.schedules||[]); setAllScheds(p.allSchedules||{}); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); if(p.staffReqs) setStaffReqs(p.staffReqs); } catch(e){} }
+      if (d) { try { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds((p.schedules||[]).map(s=>sanitizeSched(s)).filter(Boolean)); const sa={}; Object.entries(p.allSchedules||{}).forEach(([k,v])=>{const s=sanitizeSched(v);if(s)sa[k]=s;}); setAllScheds(sa); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); if(p.staffReqs) setStaffReqs(p.staffReqs); } catch(e){} }
       dataLoaded.current = true;
     }
   }, []);
