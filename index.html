@@ -1399,22 +1399,12 @@ if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL) {
 const BreakSignUp = ({ emps, breakSignups, setBreakSignups }) => {
   const today = todayKey();
   const [viewDate, setViewDate] = useState(today);
-  const signups = breakSignups[viewDate] || [];
+  const signups = breakSignups[viewDate] || {};
   
-  const addRow = () => {
-    const updated = [...signups, { name: '', station: '', time: '', coveredBy: '' }];
-    setBreakSignups({...breakSignups, [viewDate]: updated});
-  };
-  
-  const updateRow = (idx, field, val) => {
-    const updated = [...signups];
-    updated[idx] = {...updated[idx], [field]: val};
-    setBreakSignups({...breakSignups, [viewDate]: updated});
-  };
-  
-  const removeRow = (idx) => {
-    const updated = signups.filter((_,i) => i !== idx);
-    setBreakSignups({...breakSignups, [viewDate]: updated});
+  const updateSlot = (time, field, val) => {
+    const current = signups[time] || { name: '', station: '', coveredBy: '' };
+    const updated = {...current, [field]: val};
+    setBreakSignups({...breakSignups, [viewDate]: {...signups, [time]: updated}});
   };
   
   const empNames = emps.map(e => e.name).sort();
@@ -1433,50 +1423,45 @@ const BreakSignUp = ({ emps, breakSignups, setBreakSignups }) => {
           <p className="font-bold">If you work over 7.5 hours, you have a scheduled 30 min break and you are entitled to one unscheduled 15 min break.</p>
         </div>
         
-        <table className="w-full text-sm border-collapse mb-4">
-          <thead>
-            <tr className="bg-gray-800 text-white">
-              <th className="px-3 py-2 text-left font-bold">NAME</th>
-              <th className="px-3 py-2 text-left font-bold">STATION</th>
-              <th className="px-3 py-2 text-left font-bold">TIME</th>
-              <th className="px-3 py-2 text-left font-bold">COVERED BY</th>
-              <th className="px-2 py-2 w-8"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {signups.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-gray-400">No breaks signed up yet. Click "Add Break" below.</td></tr>}
-            {signups.map((row, i) => (
-              <tr key={i} className="border-b hover:bg-gray-50">
-                <td className="px-2 py-1.5">
-                  <select value={row.name} onChange={e=>updateRow(i,'name',e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
-                    <option value="">— Select —</option>
-                    {empNames.map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </td>
-                <td className="px-2 py-1.5">
-                  <input value={row.station} onChange={e=>updateRow(i,'station',e.target.value)} placeholder="e.g. Reception, AU3" className="w-full px-2 py-1 border rounded text-sm"/>
-                </td>
-                <td className="px-2 py-1.5">
-                  <select value={row.time} onChange={e=>updateRow(i,'time',e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
-                    <option value="">— Time —</option>
-                    {BREAK_TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </td>
-                <td className="px-2 py-1.5">
-                  <select value={row.coveredBy} onChange={e=>updateRow(i,'coveredBy',e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
-                    <option value="">— Select —</option>
-                    {empNames.map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </td>
-                <td className="px-1 py-1.5 text-center">
-                  <button onClick={()=>removeRow(i)} className="text-red-400 hover:text-red-600 text-lg" title="Remove">✕</button>
-                </td>
+        <div className="overflow-hidden rounded-lg border border-gray-300">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-gray-800 text-white">
+                <th className="px-3 py-2 text-left font-bold w-28">TIME</th>
+                <th className="px-3 py-2 text-left font-bold">NAME</th>
+                <th className="px-3 py-2 text-left font-bold">STATION</th>
+                <th className="px-3 py-2 text-left font-bold">COVERED BY</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        <button onClick={addRow} className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700">+ Add Break</button>
+            </thead>
+            <tbody>
+              {BREAK_TIME_OPTIONS.map((time, i) => {
+                const row = signups[time] || {};
+                const filled = row.name && row.name !== '';
+                return (
+                  <tr key={i} className={'border-b border-gray-200 '+(filled?'bg-emerald-50':'hover:bg-gray-50')}>
+                    <td className="px-3 py-1.5 font-bold text-gray-700 whitespace-nowrap">{time}</td>
+                    <td className="px-2 py-1">
+                      <select value={row.name||''} onChange={e=>updateSlot(time,'name',e.target.value)} className="w-full px-2 py-1 border rounded text-sm bg-white">
+                        <option value=""></option>
+                        {empNames.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1">
+                      <input value={row.station||''} onChange={e=>updateSlot(time,'station',e.target.value)} placeholder="Station" className="w-full px-2 py-1 border rounded text-sm"/>
+                    </td>
+                    <td className="px-2 py-1">
+                      <select value={row.coveredBy||''} onChange={e=>updateSlot(time,'coveredBy',e.target.value)} className="w-full px-2 py-1 border rounded text-sm bg-white">
+                        <option value=""></option>
+                        <option value="X">X</option>
+                        {empNames.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
