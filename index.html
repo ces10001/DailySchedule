@@ -1849,14 +1849,24 @@ const App = () => {
   };
   
   const updSched = (s) => {
-    const key = toDateKey(new Date(s.date));
+    // Recalculate stats on every edit so Coverage Alert stays current
+    const cf = n => !n || n === 'X' ? 0 : n.includes('/') ? 2 : 1;
+    const san = sanitizeSched(s);
+    san.stats = {
+      vB1: cf(san.vault[0].au)+cf(san.vault[0].med), vB2: cf(san.vault[1].au)+cf(san.vault[1].med), vB3: cf(san.vault[2].au)+cf(san.vault[2].med),
+      rB1: cf(san.reception[0].r1)+cf(san.reception[0].r2), rB2: cf(san.reception[1].r1)+cf(san.reception[1].r2), rB3: cf(san.reception[2].r1)+cf(san.reception[2].r2),
+      rgB1: cf(san.medCheckout[0].mc1)+cf(san.medCheckout[0].mc2)+cf(san.medCheckout[0].med3au1)+cf(san.auCheckout[0].au2)+cf(san.auCheckout[0].au3)+cf(san.auCheckout[0].au4),
+      rgB2: cf(san.medCheckout[1].mc1)+cf(san.medCheckout[1].mc2)+cf(san.medCheckout[1].med3au1)+cf(san.auCheckout[1].au2)+cf(san.auCheckout[1].au3)+cf(san.auCheckout[1].au4),
+      rgB3: cf(san.medCheckout[2].mc1)+cf(san.medCheckout[2].mc2)+cf(san.medCheckout[2].med3au1)+cf(san.auCheckout[2].au2)+cf(san.auCheckout[2].au3)+cf(san.auCheckout[2].au4)
+    };
+    const key = toDateKey(new Date(san.date));
     setScheds(prev => {
       const ns = [...prev];
       const idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
-      if (idx >= 0) ns[idx] = s;
+      if (idx >= 0) ns[idx] = san;
       return ns;
     });
-    setAllScheds(prev => ({...prev, [key]: s}));
+    setAllScheds(prev => ({...prev, [key]: san}));
     setDirty(true);
   };
   
@@ -2206,7 +2216,7 @@ const App = () => {
                 <h2 className="text-lg font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
                 <button onClick={()=>window.print()} className="px-3 py-1.5 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🖨️ Print</button>
               </div>
-              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} onUpdate={(updated)=>{const key=toDateKey(new Date(updated.date));setAllScheds(prev=>({...prev,[key]:updated}));setScheds(prev=>{const ns=[...prev];const idx=ns.findIndex(x=>toDateKey(new Date(x.date))===key);if(idx>=0)ns[idx]=updated;return ns;});}} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
+              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} onUpdate={updSched} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
             </> : <div className="text-center py-12 bg-white rounded-lg card-shadow">
               <span className="text-5xl mb-4 block">📅</span>
               <p className="text-gray-500 mb-4">No schedule for today.</p>
