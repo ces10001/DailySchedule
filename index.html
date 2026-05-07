@@ -355,45 +355,85 @@ const Engine = {
     
     // Position assignments
     let u1=[], u2=[], u3=[];
+    
+    // === SUPERVISOR LOCK: Pre-assign supervisors to same position across all blocks ===
+    const supLock = { rec1: [null,null,null], rec2: [null,null,null], vaultAU: [null,null,null], vaultMed: [null,null,null], reg: {} };
+    const supervisors = emps.filter(e => e.supervisor && !this.onPTO(e, date) && this.avail(e, wk, dy, 1, date, sun));
+    
+    supervisors.forEach(sup => {
+      // Determine primary role priority: vault > reception > registers
+      if (sup.vault) {
+        // Lock to vault — prefer AU Left (first vault slot)
+        const taken = [supLock.vaultAU[0], supLock.vaultMed[0]].filter(Boolean).map(n=>n);
+        if (!supLock.vaultMed[0]) {
+          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.vaultMed[b] = sup.name;
+        } else if (!supLock.vaultAU[0]) {
+          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.vaultAU[b] = sup.name;
+        }
+      } else if (sup.reception) {
+        if (!supLock.rec1[0]) {
+          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.rec1[b] = sup.name;
+        } else if (!supLock.rec2[0]) {
+          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.rec2[b] = sup.name;
+        }
+      } else if (sup.registers) {
+        // Lock to a register — assign to med3au1 (first priority register)
+        const regSlots = ['med3au1','au2','au3','au4','mc2','mc1'];
+        const usedSlots = Object.keys(supLock.reg);
+        const slot = regSlots.find(s => !usedSlots.includes(s));
+        if (slot) {
+          supLock.reg[slot] = [null,null,null];
+          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.reg[slot][b] = sup.name;
+        }
+      }
+      // Add supervisor to ALL block used lists so normal fill skips them
+      u1.push(sup.name); u2.push(sup.name); u3.push(sup.name);
+    });
+    
     const lod1 = this.findRole(emps, wk, dy, 1, 'LOD', u1, date, sun, false); u1.push(lod1);
     const lod2 = this.findRole(emps, wk, dy, 2, 'LOD', u2, date, sun, false); u2.push(lod2);
     const lod3 = this.findRole(emps, wk, dy, 3, 'LOD', u3, date, sun, false); u3.push(lod3);
     
-    const r1 = this.findRole(emps, wk, dy, 1, 'REC', [...u1], date, sun, true); u1.push(r1);
-    const r2 = this.findRole(emps, wk, dy, 1, 'REC', [...u1], date, sun, true); u1.push(r2);
-    const r1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REC', [...u2], [r1,lod2], date, sun); u2.push(r1b2);
-    const r2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REC', [...u2], [r2,lod2], date, sun); u2.push(r2b2);
-    const r1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r1,r1b2,lod3], date, sun); u3.push(r1b3);
-    const r2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r2,r2b2,lod3], date, sun); u3.push(r2b3);
+    // Reception — use supervisor overrides if set
+    let r1 = supLock.rec1[0] || this.findRole(emps, wk, dy, 1, 'REC', [...u1], date, sun, true); u1.push(r1);
+    let r2 = supLock.rec2[0] || this.findRole(emps, wk, dy, 1, 'REC', [...u1], date, sun, true); u1.push(r2);
+    const r1b2 = supLock.rec1[1] || this.findRoleRotate(emps, wk, dy, 2, 'REC', [...u2], [r1,lod2], date, sun); u2.push(r1b2);
+    const r2b2 = supLock.rec2[1] || this.findRoleRotate(emps, wk, dy, 2, 'REC', [...u2], [r2,lod2], date, sun); u2.push(r2b2);
+    const r1b3 = supLock.rec1[2] || this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r1,r1b2,lod3], date, sun); u3.push(r1b3);
+    const r2b3 = supLock.rec2[2] || this.findRoleRotate(emps, wk, dy, 3, 'REC', [...u3], [r2,r2b2,lod3], date, sun); u3.push(r2b3);
     
-    // Vault FIRST (after LOD/reception) — vault must be filled before registers consume vault-qualified people
-    let vU1=[...u1,lod1]; const vAU1 = this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = this.findVault(emps, wk, dy, 1, vU1, date, sun);
-    let vU2=[...u2,lod2]; const vAU2 = this.findVault(emps, wk, dy, 2, vU2, date, sun); vU2.push(vAU2); const vMed2 = this.findVault(emps, wk, dy, 2, vU2, date, sun);
-    let vU3=[...u3,lod3]; const vAU3 = this.findVault(emps, wk, dy, 3, vU3, date, sun); vU3.push(vAU3); const vMed3 = this.findVault(emps, wk, dy, 3, vU3, date, sun);
+    // Vault — use supervisor overrides if set
+    let vU1=[...u1,lod1]; const vAU1 = supLock.vaultAU[0] || this.findVault(emps, wk, dy, 1, vU1, date, sun); vU1.push(vAU1); const vMed1 = supLock.vaultMed[0] || this.findVault(emps, wk, dy, 1, vU1, date, sun);
+    let vU2=[...u2,lod2]; const vAU2 = supLock.vaultAU[1] || this.findVault(emps, wk, dy, 2, vU2, date, sun); vU2.push(vAU2); const vMed2 = supLock.vaultMed[1] || this.findVault(emps, wk, dy, 2, vU2, date, sun);
+    let vU3=[...u3,lod3]; const vAU3 = supLock.vaultAU[2] || this.findVault(emps, wk, dy, 3, vU3, date, sun); vU3.push(vAU3); const vMed3 = supLock.vaultMed[2] || this.findVault(emps, wk, dy, 3, vU3, date, sun);
     
     // Registers AFTER vault — exclude vault people from register pool
     const vaultPeople = [vAU1,vMed1,vAU2,vMed2,vAU3,vMed3].filter(n=>n&&n!=='X'&&n!=='RPH');
     let uR1=[r1,r2,lod1,...vaultPeople], uR2=[r1b2,r2b2,lod2,...vaultPeople], uR3=[r1b3,r2b3,lod3,...vaultPeople];
-    const rg3b1 = lod1!=='X' ? lod1 : this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg3b1);
-    const a1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a1);
-    const a2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a2);
-    const a3 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a3);
-    const rg2 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg2);
-    const rg1 = this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
+    // Add supervisors to register used lists too
+    supervisors.forEach(s => { uR1.push(s.name); uR2.push(s.name); uR3.push(s.name); });
     
-    const rg3b2 = lod2!=='X' ? lod2 : this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg3b1], date, sun); uR2.push(rg3b2);
-    let a1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
-    const a2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a2], date, sun); uR2.push(a2b2);
-    const a3b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a3], date, sun); uR2.push(a3b2);
-    const rg2b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun); uR2.push(rg2b2);
-    const rg1b2 = this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun);
+    const supReg = supLock.reg;
+    const rg3b1 = supReg.med3au1?.[0] || (lod1!=='X' ? lod1 : this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false)); uR1.push(rg3b1);
+    const a1 = supReg.au2?.[0] || this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a1);
+    const a2 = supReg.au3?.[0] || this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a2);
+    const a3 = supReg.au4?.[0] || this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(a3);
+    const rg2 = supReg.mc2?.[0] || this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false); uR1.push(rg2);
+    const rg1 = supReg.mc1?.[0] || this.findRole(emps, wk, dy, 1, 'REG', uR1, date, sun, false);
     
-    const rg3b3 = lod3!=='X' ? lod3 : this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg3b1,rg3b2], date, sun); uR3.push(rg3b3);
-    let a1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
-    const a2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a2,a2b2], date, sun); uR3.push(a2b3);
-    const a3b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a3,a3b2], date, sun); uR3.push(a3b3);
-    const rg2b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg2,rg2b2], date, sun); uR3.push(rg2b3);
-    const rg1b3 = this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun);
+    const rg3b2 = supReg.med3au1?.[1] || (lod2!=='X' ? lod2 : this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg3b1], date, sun)); uR2.push(rg3b2);
+    let a1b2 = supReg.au2?.[1] || this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a1], date, sun); uR2.push(a1b2);
+    const a2b2 = supReg.au3?.[1] || this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a2], date, sun); uR2.push(a2b2);
+    const a3b2 = supReg.au4?.[1] || this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [a3], date, sun); uR2.push(a3b2);
+    const rg2b2 = supReg.mc2?.[1] || this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg2], date, sun); uR2.push(rg2b2);
+    const rg1b2 = supReg.mc1?.[1] || this.findRoleRotate(emps, wk, dy, 2, 'REG', uR2, [rg1], date, sun);
+    
+    const rg3b3 = supReg.med3au1?.[2] || (lod3!=='X' ? lod3 : this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg3b1,rg3b2], date, sun)); uR3.push(rg3b3);
+    let a1b3 = supReg.au2?.[2] || this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a1,a1b2], date, sun); uR3.push(a1b3);
+    const a2b3 = supReg.au3?.[2] || this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a2,a2b2], date, sun); uR3.push(a2b3);
+    const a3b3 = supReg.au4?.[2] || this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [a3,a3b2], date, sun); uR3.push(a3b3);
+    const rg2b3 = supReg.mc2?.[2] || this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg2,rg2b2], date, sun); uR3.push(rg2b3);
+    const rg1b3 = supReg.mc1?.[2] || this.findRoleRotate(emps, wk, dy, 3, 'REG', uR3, [rg1,rg1b2], date, sun);
     
     // iPad AFTER registers — gets whoever is left
     let ip1, ip2a, ip2b, ip3a, ip3b, ipD1, ipD2, ipD3, ipT1, ipT2, ipT3;
@@ -850,7 +890,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
               <div className="schedule-cell bg-blue-100 font-bold text-xs py-0.5">PERSON</div>
               {(sched.deposits||[{time:'9:00 AM - 12:00 PM',person:''}]).map((dep,i) => <React.Fragment key={i}>
                 <div className="schedule-cell text-xs py-0.5">{editable ? <input type="text" value={dep.time} onChange={e=>{const d=JSON.parse(JSON.stringify(sched));if(!d.deposits)d.deposits=[{time:'9:00 AM - 12:00 PM',person:''}];d.deposits[i].time=e.target.value;upd('deposits',d.deposits);}} className="w-full bg-transparent text-xs border-0 p-0 text-center" placeholder="Time"/> : dep.time}</div>
-                <div className="schedule-cell text-xs py-0.5">{editable ? <input type="text" value={dep.person} onChange={e=>{const d=JSON.parse(JSON.stringify(sched));if(!d.deposits)d.deposits=[{time:'9:00 AM - 12:00 PM',person:''}];d.deposits[i].person=e.target.value;upd('deposits',d.deposits);}} className="w-full bg-transparent text-xs border-0 p-0 text-center font-bold" placeholder="Name"/> : <span className="font-bold">{dep.person}</span>}</div>
+                <div className="schedule-cell text-xs py-0.5">{editable ? <select value={dep.person||''} onChange={e=>{const d=JSON.parse(JSON.stringify(sched));if(!d.deposits)d.deposits=[{time:'9:00 AM - 12:00 PM',person:''}];d.deposits[i].person=e.target.value;upd('deposits',d.deposits);}} className="w-full bg-transparent text-xs border-0 p-0 text-center font-bold cursor-pointer"><option value=""></option>{emps.map(emp=><option key={emp.name} value={emp.name}>{emp.name}</option>)}</select> : <span className="font-bold">{dep.person}</span>}</div>
               </React.Fragment>)}
             </div>
           </div>
@@ -862,13 +902,13 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
         {DOWNTIME_AREAS.map(area => {
           const areaData = sched.downtime?.[area] || {};
           const tasks = DOWNTIME_TASKS[area] || [];
-          const allDone = tasks.every((_, i) => areaData[i]?.completedAt);
+          const allDone = tasks.every((t, i) => t.startsWith('**') || areaData['t'+i]?.completedAt);
           return (
             <div key={area} className={'rounded-lg border-2 p-3 '+(allDone?'border-emerald-400 bg-emerald-50':'border-gray-300 bg-white')}>
               <h4 className="font-black text-sm mb-2">{area} CLEANING</h4>
               <div className="space-y-1.5">
                 {tasks.map((t, i) => {
-                  const taskLog = areaData[i];
+                  const taskLog = areaData['t'+i];
                   const done = !!taskLog?.completedAt;
                   const isReminder = t.startsWith('**');
                   if (isReminder) return <div key={i} className="text-xs font-bold text-amber-700 py-0.5">{t}</div>;
@@ -882,7 +922,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
                           const updated = JSON.parse(JSON.stringify(sched));
                           if (!updated.downtime) updated.downtime = {};
                           if (!updated.downtime[area]) updated.downtime[area] = {};
-                          updated.downtime[area][i] = { initials: initials.toUpperCase(), completedAt: new Date().toISOString() };
+                          updated.downtime[area]['t'+i] = { initials: initials.toUpperCase(), completedAt: new Date().toISOString() };
                           updated.manuallyEdited = true; updated.editedAt = new Date().toISOString();
                           if (onUpdate) onUpdate(updated);
                         }}/>
@@ -1078,7 +1118,7 @@ const CleaningLogs = ({ logs, onView, allScheds, onClearLog, breakSignups, onCle
               {DOWNTIME_AREAS.map(area => {
                 const areaData = dt[area] || {};
                 const tasks = DOWNTIME_TASKS[area] || [];
-                const signedTasks = tasks.map((t,i) => ({task: t, log: areaData[i], idx: i})).filter(x => x.log?.completedAt);
+                const signedTasks = tasks.map((t,i) => ({task: t, log: areaData['t'+i], idx: i})).filter(x => x.log?.completedAt);
                 if (signedTasks.length === 0) return null;
                 return <div key={area} className="mb-3">
                   <p className="font-bold text-sm text-gray-700 mb-1">{area} CLEANING</p>
@@ -1089,7 +1129,7 @@ const CleaningLogs = ({ logs, onView, allScheds, onClearLog, breakSignups, onCle
                         <span className="text-emerald-700 font-medium">✓ {st.log.initials} — {formatEST(st.log.completedAt)}</span>
                         <button onClick={()=>{if(confirm('Clear "'+st.task+'" sign-off?')){
                           const updated = JSON.parse(JSON.stringify(sanSched));
-                          if (updated.downtime?.[area]) { delete updated.downtime[area][st.idx]; }
+                          if (updated.downtime?.[area]) { delete updated.downtime[area]['t'+st.idx]; }
                           onUpdateSched?.(schedKey, updated);
                         }}} className="text-red-400 hover:text-red-600" title="Clear this entry">✕</button>
                       </div>
@@ -1406,7 +1446,7 @@ const LoginModal = ({ onLogin, onClose }) => {
 };
 
 const EmpForm = ({ emp, onSave, onCancel }) => {
-  const [f, setF] = useState(emp || { name:'', vault:false, reception:false, lod:false, ipad:false, registers:false, noBreak:false, ptoText:'', notes:'', week1:{1:'',2:'',3:'',4:'',5:'',6:'',7:''}, week2:{1:'',2:'',3:'',4:'',5:'',6:'',7:''} });
+  const [f, setF] = useState(emp || { name:'', vault:false, reception:false, lod:false, ipad:false, registers:false, noBreak:false, supervisor:false, ptoText:'', notes:'', week1:{1:'',2:'',3:'',4:'',5:'',6:'',7:''}, week2:{1:'',2:'',3:'',4:'',5:'',6:'',7:''} });
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   return (
     <div className="bg-white p-4 rounded-lg card-shadow">
@@ -1420,6 +1460,7 @@ const EmpForm = ({ emp, onSave, onCancel }) => {
       </div>
       <div className="flex flex-wrap gap-4 mb-3">{['vault','reception','lod','ipad','registers'].map(r=><label key={r} className="flex items-center gap-2"><input type="checkbox" checked={f[r]} onChange={e=>setF({...f,[r]:e.target.checked})} className="w-4 h-4"/><span className="text-sm capitalize">{r}</span></label>)}
         <label className="flex items-center gap-2"><input type="checkbox" checked={f.noBreak||false} onChange={e=>setF({...f,noBreak:e.target.checked})} className="w-4 h-4"/><span className="text-sm text-gray-600">No break needed</span></label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={f.supervisor||false} onChange={e=>setF({...f,supervisor:e.target.checked})} className="w-4 h-4"/><span className="text-sm text-amber-700 font-medium">Supervisor (stays on same position all day)</span></label>
       </div>
       <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 1</label><div className="grid grid-cols-7 gap-1">{days.map((d,i)=>{const cv=f.week1[i+1]||'';const sl=i===6?SUNDAY_SLOTS:TIME_SLOTS;const hm=sl.some(s=>s.v===cv);return <div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{d}</div><select value={cv} onChange={e=>setF({...f,week1:{...f.week1,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{!hm&&cv&&<option value={cv}>{cv}</option>}{sl.map((s,j)=><option key={j} value={s.v}>{s.l}</option>)}</select></div>;})}</div></div>
       <div className="mb-3"><label className="block text-xs font-medium mb-1">Week 2</label><div className="grid grid-cols-7 gap-1">{days.map((d,i)=>{const cv=f.week2[i+1]||'';const sl=i===6?SUNDAY_SLOTS:TIME_SLOTS;const hm=sl.some(s=>s.v===cv);return <div key={i}><div className="text-[10px] text-gray-500 text-center mb-1">{d}</div><select value={cv} onChange={e=>setF({...f,week2:{...f.week2,[i+1]:e.target.value}})} className="w-full px-1 py-1 text-[10px] border rounded">{!hm&&cv&&<option value={cv}>{cv}</option>}{sl.map((s,j)=><option key={j} value={s.v}>{s.l}</option>)}</select></div>;})}</div></div>
@@ -1572,10 +1613,31 @@ const App = () => {
   const [selDay, setSelDay] = useState(0);
   
   // Clamp selDay when scheds array changes
+  const initialNav = React.useRef(false);
   useEffect(() => {
     if (scheds.length === 0) return;
     if (selDay < 0 || selDay >= scheds.length) setSelDay(Math.max(0, scheds.length - 1));
-  }, [scheds.length]);
+    // On first data load, jump to today (or closest future day)
+    if (!initialNav.current) {
+      initialNav.current = true;
+      const todayStr = todayKey();
+      // If today's schedule is in allScheds but not scheds, load it
+      if (allScheds[todayStr] && !scheds.some(s => toDateKey(new Date(s.date)) === todayStr)) {
+        const ns = [...scheds, sanitizeSched(allScheds[todayStr])];
+        ns.sort((a,b) => new Date(a.date) - new Date(b.date));
+        setScheds(ns);
+        setSelDay(ns.findIndex(x => toDateKey(new Date(x.date)) === todayStr));
+        return;
+      }
+      let bestIdx = 0;
+      for (let i = 0; i < scheds.length; i++) {
+        const k = toDateKey(new Date(scheds[i].date));
+        if (k === todayStr) { bestIdx = i; break; }
+        if (k > todayStr && (bestIdx === 0 || k < toDateKey(new Date(scheds[bestIdx].date)))) bestIdx = i;
+      }
+      setSelDay(bestIdx);
+    }
+  }, [scheds.length, Object.keys(allScheds).length]);
   const [editEmp, setEditEmp] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [logged, setLogged] = useState(false);
@@ -1634,7 +1696,7 @@ const App = () => {
         setBreakSignups(d.breakSignups || {});
         if (d.staffReqs) setStaffReqs(d.staffReqs);
         dataLoaded.current = true;
-        setTimeout(() => { fromFB.current = false; }, 100);
+        setTimeout(() => { fromFB.current = false; }, 700);
       });
       return () => fbDB.off();
     } else {
@@ -1650,6 +1712,8 @@ const App = () => {
     if (!dataLoaded.current || fromFB.current) return;
     if (writeTimer.current) clearTimeout(writeTimer.current);
     writeTimer.current = setTimeout(() => {
+      // Double-check fromFB at execution time (not just schedule time)
+      if (fromFB.current) return;
       const data = { employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, breakSignups, staffReqs };
       if (fbDB) {
         fbDB.set(data).catch(e => {
@@ -1786,9 +1850,13 @@ const App = () => {
   
   const updSched = (s) => {
     const key = toDateKey(new Date(s.date));
-    const idx = scheds.findIndex(x => toDateKey(new Date(x.date)) === key);
-    if (idx >= 0) { const ns = [...scheds]; ns[idx] = s; setScheds(ns); }
-    setAllScheds({...allScheds, [key]: s});
+    setScheds(prev => {
+      const ns = [...prev];
+      const idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
+      if (idx >= 0) ns[idx] = s;
+      return ns;
+    });
+    setAllScheds(prev => ({...prev, [key]: s}));
     setDirty(true);
   };
   
@@ -2034,7 +2102,7 @@ const App = () => {
             updatedCount++;
           } else {
             // New employee
-            const newEmp = { name, vault:chk(r[1]), reception:chk(r[2]), lod:chk(r[3]), ipad:chk(r[4]), registers:chk(r[5]), ptoText:r[6]||'', notes:r[7]||'', noBreak:false, week1:{1:'',2:'',3:'',4:'',5:'',6:'',7:''}, week2:{1:'',2:'',3:'',4:'',5:'',6:'',7:''} };
+            const newEmp = { name, vault:chk(r[1]), reception:chk(r[2]), lod:chk(r[3]), ipad:chk(r[4]), registers:chk(r[5]), ptoText:r[6]||'', notes:r[7]||'', noBreak:false, supervisor:false, week1:{1:'',2:'',3:'',4:'',5:'',6:'',7:''}, week2:{1:'',2:'',3:'',4:'',5:'',6:'',7:''} };
             newEmp[wk==='1'?'week1':'week2'] = weekData;
             updated.push(newEmp);
             addedCount++;
@@ -2077,27 +2145,8 @@ const App = () => {
   };
   
   const cleanSubmit = (log) => {
-    if (DOWNTIME_AREAS.includes(log.task)) {
-      // Store downtime logs on the schedule itself
-      const key = todayKey();
-      // Update in allScheds
-      const s = allScheds[key];
-      if (s) {
-        const updated = {...s, downtime: {...(s.downtime||{}), [log.task]: log}};
-        setAllScheds({...allScheds, [key]: updated});
-        // Also update in scheds array if loaded
-        setScheds(prev => {
-          const ns = [...prev];
-          const idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
-          if (idx >= 0) ns[idx] = {...ns[idx], downtime: {...(ns[idx].downtime||{}), [log.task]: log}};
-          return ns;
-        });
-      }
-    } else {
-      // Regular cleaning areas → store in cleanLogs
-      const key = todayKey();
-      setCleanLogs({...cleanLogs, [key]: [...(cleanLogs[key]||[]), log]});
-    }
+    const key = todayKey();
+    setCleanLogs({...cleanLogs, [key]: [...(cleanLogs[key]||[]), log]});
   };
   
   const dateForDay = (wk, dy) => {
@@ -2254,7 +2303,6 @@ const App = () => {
                   <span className="text-sm font-medium text-gray-600">Editing: {scheds[selDay].fullTitle}</span>
                   <div className="flex gap-2">
                     {dirty && <button onClick={save} className="px-4 py-1 bg-amber-500 text-white rounded text-sm font-medium hover:bg-amber-600">💾 Save</button>}
-                    <button onClick={autoFillEmpty} className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600">✨ Auto-fill Empty</button>
                     <button onClick={undo} disabled={undoHistory.length===0} className="px-3 py-1 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">↶ Undo</button>
                     <button onClick={()=>{if(confirm('Clear this day\'s schedule? All positions will be reset to empty (X).')){pushUndo('clearDay',JSON.parse(JSON.stringify(scheds[selDay])));const s=sanitizeSched(JSON.parse(JSON.stringify(scheds[selDay])));s.lod.forEach(l=>l.name='X');s.reception.forEach(r=>{r.r1='X';r.r2='X';});s.ipad.forEach(i=>{i.display='X';i.split=null;});s.medCheckout.forEach(m=>{m.mc1='X';m.mc2='X';m.med3au1='X';});s.auCheckout.forEach(a=>{a.au2='X';a.au3='X';a.au4='X';a.au2Split=null;});s.vault.forEach(v=>{v.au='RPH';v.med='RPH';});s.cleaning.forEach(c=>c.name='X');s.lunches.forEach(l=>{l.name='';l.cover='';});s.breaks.forEach(b=>{b.name='';b.cover='';});if(s.deposits)s.deposits.forEach(d=>{d.person='';});s.manuallyEdited=true;s.editedAt=new Date().toISOString();updSched(s);showToast('Day cleared — click Undo to restore');}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>
                   </div>
@@ -2265,10 +2313,6 @@ const App = () => {
               {emps.length>0 && <div className="bg-white rounded-lg card-shadow overflow-hidden">
                 <div className="bg-gray-800 text-white px-4 py-2 flex justify-between items-center">
                   <h3 className="font-bold text-sm">Master Schedule ({emps.length} Employees)</h3>
-                  <div className="flex items-center gap-3 text-[10px]">
-                    <span className="text-gray-500">Wk 1:</span><input type="date" value={w1} onChange={e=>{setW1(e.target.value);const d=new Date(e.target.value+'T12:00:00');d.setDate(d.getDate()+7);setW2(d.toISOString().split('T')[0]);}} className="px-1 py-0.5 text-[10px] border rounded"/>
-                    <span className="text-gray-500">Wk 2:</span><input type="date" value={w2} onChange={e=>setW2(e.target.value)} className="px-1 py-0.5 text-[10px] border rounded"/>
-                  </div>
                   <div className="flex items-center gap-3">
                     {pinnedEmps.length > 0 && <button onClick={()=>setPinnedEmps([])} className="px-2 py-0.5 bg-red-500 text-white rounded text-[10px] hover:bg-red-600">Clear {pinnedEmps.length} highlight{pinnedEmps.length>1?'s':''}</button>}
                     {scheds.length>0&&scheds[selDay] && <span className="text-emerald-300 text-xs">🟢 = Scheduled &nbsp; Click name = highlight on schedule</span>}
@@ -2318,6 +2362,7 @@ const App = () => {
                             style={isPinned ? {outlineColor: pinColor, backgroundColor: pinColor+'22'} : {}}>
                             <span className="w-2.5 h-2.5 rounded-full inline-block mr-1.5 flex-shrink-0" style={{backgroundColor: pinColor}}/>{emp.name}
                             {emp.noBreak && <span className="ml-1 text-[8px] bg-gray-200 text-gray-600 px-1 rounded" title="No break needed">NB</span>}
+                            {emp.supervisor && <span className="ml-1 text-[8px] bg-amber-200 text-amber-700 px-1 rounded" title="Supervisor - stays on same position">SUP</span>}
                           </div>
                         </td>
                         <td className="px-1 py-1 text-center">{emp.vault && <div className="w-3 h-3 mx-auto rounded bg-emerald-500"/>}</td>
@@ -2376,19 +2421,20 @@ const App = () => {
               <div className="space-y-6">
                 <div className="border-l-4 border-emerald-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Tabs Overview</h3>
-                  <p className="text-sm text-gray-700 mb-2">There are 5 tabs across the top:</p>
+                  <p className="text-sm text-gray-700 mb-2">There are 6 tabs across the top:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>Daily Schedule</strong> — the public view anyone can see without logging in. Shows today's schedule (or tomorrow's after 8 PM). Designed for a shared pharmacy screen.</li>
+                    <li><strong>15 Min Break Sign-Up</strong> — public sign-up sheet for 15-minute breaks. Shows today only. Employees pick their name, station, time, and who's covering.</li>
                     <li><strong>Employee Master Schedule</strong> — the main workspace. Manage employees, set shifts, generate daily schedules, and make edits. Requires login.</li>
                     <li><strong>Staffing Summary</strong> — monthly calendar showing which days are fully staffed (green) or short (red). Click any day for a breakdown.</li>
-                    <li><strong>Cleaning Logs</strong> — monthly view of cleaning completions. Green = all 5 areas done, amber = partial.</li>
+                    <li><strong>Cleaning/Break Logs</strong> — supervisor view of cleaning completions and break sign-ups by day. Click a day to see details.</li>
                     <li><strong>How to Use</strong> — you're here!</li>
                   </ul>
                 </div>
 
                 <div className="border-l-4 border-blue-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Logging In</h3>
-                  <p className="text-sm text-gray-700">Click <strong>🔐 Login</strong> (top right) with your supervisor credentials to unlock all features. Without logging in, only the Daily Schedule is visible.</p>
+                  <p className="text-sm text-gray-700">Click <strong>🔐 Login</strong> (top right) with your supervisor credentials to unlock all features. Without logging in, only the Daily Schedule and 15 Min Break Sign-Up tabs are visible.</p>
                 </div>
 
                 <div className="border-l-4 border-indigo-500 pl-4">
@@ -2406,7 +2452,7 @@ const App = () => {
                   <h3 className="font-bold text-lg mb-2">Editing the Master Schedule</h3>
                   <p className="text-sm text-gray-700 mb-2">The master table shows all employees, their roles, and weekly shifts. <strong>Week 1</strong> = blue columns, <strong>Week 2</strong> = green columns.</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>Change a shift</strong> — click any shift cell to pick a new time or OFF</li>
+                    <li><strong>Change a shift</strong> — click any shift cell to pick a new time or OFF. Custom times from Excel are preserved.</li>
                     <li><strong>Edit an employee</strong> — click <strong>Edit</strong> to change name, roles, or PTO</li>
                     <li><strong>Remove an employee</strong> — click the <strong>✕</strong> next to Edit</li>
                     <li><strong>PTO format</strong> — <code className="bg-gray-100 px-1 rounded">3/1</code> for one day, <code className="bg-gray-100 px-1 rounded">3/1-3/5</code> for a range, comma-separate multiples</li>
@@ -2417,18 +2463,20 @@ const App = () => {
                   <h3 className="font-bold text-lg mb-2">Generating Schedules</h3>
                   <p className="text-sm text-gray-700 mb-2">There are two ways to generate a daily schedule:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
-                    <li><strong>Click any day on the calendar</strong> — if no schedule exists, a popup asks you to choose <strong>Week 1</strong> or <strong>Week 2</strong> to determine which master schedule to use</li>
-                    <li><strong>Use the date picker</strong> — pick a date and click <strong>Generate Day</strong>, then choose Week 1 or Week 2</li>
+                    <li><strong>Click any day on the calendar</strong> — if no schedule exists, a popup asks you to choose <strong>Week 1</strong> or <strong>Week 2</strong></li>
+                    <li><strong>Use the date range picker</strong> — set From/To dates, click Generate, then choose Week 1 or Week 2 to generate multiple days at once</li>
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">If a schedule already exists for that day, clicking the calendar shows it immediately without regenerating. The scheduler auto-assigns employees based on roles, availability, and shift times.</p>
+                  <p className="text-sm text-gray-700 mt-2">If a schedule already exists for that day, clicking the calendar shows it immediately. Each calendar day shows a <strong>W1</strong> or <strong>W2</strong> badge so you know which master schedule was used.</p>
                 </div>
 
                 <div className="border-l-4 border-teal-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Editing a Daily Schedule</h3>
-                  <p className="text-sm text-gray-700 mb-2">Click any day button at the top to view and edit it:</p>
+                  <p className="text-sm text-gray-700 mb-2">The app defaults to today's schedule when you open it. Click any day on the calendar to switch. You can:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>Click any name cell</strong> — opens a dropdown to reassign. Employees with conflicts show a ⚠️ warning.</li>
-                    <li><strong>✨ Auto-fill Empty</strong> — fills empty positions automatically and assigns unplaced employees to open register slots</li>
+                    <li><strong>Edit lunch times</strong> — click the time field to type a new time</li>
+                    <li><strong>Edit break times</strong> — click the time field for a dropdown (15-min intervals from 10 AM to 6 PM)</li>
+                    <li><strong>Edit deposits</strong> — click the person field for an employee dropdown</li>
                     <li><strong>↶ Undo</strong> — reverts the last action (up to 10 steps)</li>
                     <li><strong>🗑️ Clear Day</strong> — resets all positions to start fresh</li>
                     <li><strong>💾 Save</strong> — confirms your changes</li>
@@ -2444,7 +2492,7 @@ const App = () => {
                 <div className="border-l-4 border-pink-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Employee Highlighting</h3>
                   <p className="text-sm text-gray-700 mb-2"><strong>Hover</strong> over any name in the master table — their positions in the daily schedule light up with their color.</p>
-                  <p className="text-sm text-gray-700"><strong>Click</strong> to pin a highlight so it stays. Click again to unpin. Pin multiple employees at once. Use <strong>Clear highlights</strong> to remove all.</p>
+                  <p className="text-sm text-gray-700"><strong>Click</strong> anywhere in the name cell to pin a highlight. Click again to unpin. Pin multiple employees at once. Use <strong>Clear highlights</strong> to remove all.</p>
                 </div>
 
                 <div className="border-l-4 border-red-500 pl-4">
@@ -2452,35 +2500,50 @@ const App = () => {
                   <p className="text-sm text-gray-700 mb-2">On the left panel:</p>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>⚠️ Coverage Needed</strong> — warns when a shift is understaffed, showing which positions are short</li>
-                    <li><strong>Schedule Validation</strong> — flags employees who are scheduled but not assigned, or in conflicting positions</li>
+                    <li><strong>Schedule Validation</strong> — flags employees who are scheduled but not assigned, in conflicting positions, or manually added on a day they're normally off (shown in orange)</li>
                   </ul>
                   <p className="text-sm text-gray-700 mt-2">Green ✓ means everything checks out.</p>
                 </div>
 
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">Staffing Summary</h3>
-                  <p className="text-sm text-gray-700 mb-2">Monthly overview — green = fully staffed, red = shortages. Click any day for details. You can adjust minimum staffing numbers at the top of this tab.</p>
+                <div className="border-l-4 border-emerald-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">Daily Schedule (Public View)</h3>
+                  <p className="text-sm text-gray-700 mb-2">This is what everyone sees — no login needed. It auto-switches to tomorrow after 8 PM. The schedule title shows the day and which week's master was used (e.g. "FRIDAY 5/9 (Wk 1)").</p>
+                  <p className="text-sm text-gray-700 mb-2"><strong>Cleaning:</strong> Staff click <strong>Sign</strong> on their assigned cleaning task, check off each item, enter initials, and submit. Completed tasks show a green ✓.</p>
+                  <p className="text-sm text-gray-700"><strong>Downtime Cleaning:</strong> Below the main schedule, the 2PM-4PM and 6PM-7PM cleaning blocks each have individual Sign buttons per task. Staff sign off one task at a time as they complete it.</p>
                 </div>
 
-                <div className="border-l-4 border-emerald-500 pl-4">
-                  <h3 className="font-bold text-lg mb-2">Public Daily View & Cleaning</h3>
-                  <p className="text-sm text-gray-700 mb-2">The <strong>Daily Schedule</strong> tab is what everyone sees — no login needed. It auto-switches to tomorrow after 8 PM.</p>
-                  <p className="text-sm text-gray-700">Staff click <strong>Sign</strong> on their cleaning task, check off items, enter initials, and submit. Completed tasks show a green ✓. Supervisors can view all completions in the <strong>Cleaning Logs</strong> tab.</p>
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">15 Min Break Sign-Up</h3>
+                  <p className="text-sm text-gray-700 mb-2">A public tab (no login needed) where employees sign up for their 15-minute break. Shows today only — resets each new day.</p>
+                  <p className="text-sm text-gray-700 mb-2">The full schedule shows every 15-minute slot from 10:00 AM to 6:00 PM. For each slot, employees pick their name, station (AU2, MED3, Reception, etc.), and who is covering. "X" is available if no one is covering.</p>
+                  <p className="text-sm text-gray-700">Supervisors can review past days' break sign-ups in the <strong>Cleaning/Break Logs</strong> tab.</p>
+                </div>
+
+                <div className="border-l-4 border-orange-500 pl-4">
+                  <h3 className="font-bold text-lg mb-2">Cleaning/Break Logs (Supervisor)</h3>
+                  <p className="text-sm text-gray-700 mb-2">Monthly calendar view. Each day shows cleaning completion count and break sign-up count. Click any day to see:</p>
+                  <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
+                    <li><strong>Cleaning Log</strong> — which areas were signed off, by whom, and when. Missing areas shown in red with assigned cleaner's name.</li>
+                    <li><strong>Downtime Cleaning</strong> — individual task sign-offs for 2PM-4PM and 6PM-7PM blocks.</li>
+                    <li><strong>15 Min Break Sign-Up</strong> — table of who took breaks, when, at what station, and who covered.</li>
+                  </ul>
+                  <p className="text-sm text-gray-700 mt-2">Supervisors can clear individual cleaning entries (✕), individual downtime entries (✕), or all break sign-ups for a day (🗑️ Clear Breaks).</p>
                 </div>
 
                 <div className="border-l-4 border-violet-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Calendar & Printing</h3>
-                  <p className="text-sm text-gray-700 mb-2">The mini-calendar shows which days have schedules at a glance. Green ✓ = created, red ✗ = missing, blue ring = today. Click any day to jump to it.</p>
-                  <p className="text-sm text-gray-700">Click <strong>🖨️ Print</strong> on the Daily Schedule to print — all buttons hide automatically.</p>
+                  <p className="text-sm text-gray-700 mb-2">The mini-calendar shows which days have schedules at a glance. Green ✓ = created (with timestamp), W1/W2 badge = which week was used, red ✗ = past day missing. Blue ring = today. Click any day to view or generate.</p>
+                  <p className="text-sm text-gray-700">Click <strong>🖨️ Print</strong> on the Daily Schedule to print in landscape — all colors preserved, buttons hidden automatically.</p>
                 </div>
 
                 <div className="border-l-4 border-yellow-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Troubleshooting</h3>
                   <ul className="text-sm text-gray-700 list-disc ml-5 space-y-1">
                     <li><strong>Duplicate names</strong> — a warning banner appears. Rename one (e.g. "ARIFA K" / "ARIFA M").</li>
-                    <li><strong>Generate not working</strong> — make sure week dates are set and employees are loaded.</li>
-                    <li><strong>Wrong employees on a schedule</strong> — regenerate the day. Check master schedule shifts are correct.</li>
+                    <li><strong>Generate not working</strong> — make sure employees are loaded first.</li>
+                    <li><strong>Wrong employees on a schedule</strong> — regenerate the day. Check master schedule shifts are correct for that day.</li>
                     <li><strong>Changes not showing on another device</strong> — check internet and refresh the page.</li>
+                    <li><strong>Cleaning/downtime sign-offs disappeared</strong> — refresh the page. All data is synced to Firebase and persists unless manually cleared by a supervisor.</li>
                   </ul>
                 </div>
               </div>
