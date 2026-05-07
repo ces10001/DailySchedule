@@ -136,6 +136,7 @@ const BREAK_TIME_OPTIONS = (() => {
   }
   return opts;
 })();
+const STATION_OPTIONS = ['','AU2','AU3','AU4','MED1','MED2','MED3','Vault','Reception 1','Reception 2','iPad'];
 const DOWNTIME_TASKS = {
   '2PM-4PM DOWNTIME': [
     'Spot check kitchen & bathrooms (refills)',
@@ -970,10 +971,14 @@ const StaffingSummary = ({ scheds, allScheds, onSelect, staffReqs, setStaffReqs 
           </div>
         </div>
       </div>
+      <div className="flex gap-2 mb-4">
+        <button onClick={()=>setViewMode('cleaning')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(viewMode==='cleaning'?'bg-emerald-600 text-white':'bg-gray-100 hover:bg-gray-200')}>Cleaning Logs</button>
+        <button onClick={()=>setViewMode('breaks')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(viewMode==='breaks'?'bg-blue-600 text-white':'bg-gray-100 hover:bg-gray-200')}>15-Min Break Log</button>
+      </div>
       <div className="bg-white rounded-lg card-shadow p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <button onClick={()=>{if(month===0){setMonth(11);setYear(year-1);}else setMonth(month-1);}} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
-          <h3 className="font-bold text-xl">{months[month]} {year}</h3>
+          <h3 className="font-bold text-xl">{viewMode==='cleaning'?'Cleaning':'Break Sign-Up'} — {months[month]} {year}</h3>
           <button onClick={()=>{if(month===11){setMonth(0);setYear(year+1);}else setMonth(month+1);}} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
         </div>
         <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d}>{d}</div>)}</div>
@@ -993,16 +998,20 @@ const StaffingSummary = ({ scheds, allScheds, onSelect, staffReqs, setStaffReqs 
 };
 
 // ============== CLEANING LOGS ==============
-const CleaningLogs = ({ logs, onView, allScheds, onClearLog }) => {
+const CleaningLogs = ({ logs, onView, allScheds, onClearLog, breakSignups }) => {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
   const [selDay, setSelDay] = useState(null);
+  const [viewMode, setViewMode] = useState('cleaning');
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const dim = new Date(year, month+1, 0).getDate(), fd = new Date(year, month, 1).getDay();
   const days = [...Array(fd).fill(null), ...Array.from({length:dim},(_,i)=>i+1)];
   const getLogs = d => d ? logs[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || [] : [];
   const getSched = d => d ? allScheds?.[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] : null;
+  const getBreaks = d => d ? breakSignups?.[year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')] || {} : {};
+  const breakCount = d => { const b = getBreaks(d); return Object.values(b).filter(v => v && v.name).length; };
+  const selBreaks = selDay ? getBreaks(selDay) : {};
   const selLogs = selDay ? getLogs(selDay) : [];
   const selSched = selDay ? getSched(selDay) : null;
   const missing = selDay ? CLEANING_AREAS.filter(a => !selLogs.some(l=>l.task===a)) : [];
@@ -1016,22 +1025,57 @@ const CleaningLogs = ({ logs, onView, allScheds, onClearLog }) => {
   
   return (
     <div className="fade-in">
+      <div className="flex gap-2 mb-4">
+        <button onClick={()=>setViewMode('cleaning')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(viewMode==='cleaning'?'bg-emerald-600 text-white':'bg-gray-100 hover:bg-gray-200')}>Cleaning Logs</button>
+        <button onClick={()=>setViewMode('breaks')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(viewMode==='breaks'?'bg-blue-600 text-white':'bg-gray-100 hover:bg-gray-200')}>15-Min Break Log</button>
+      </div>
       <div className="bg-white rounded-lg card-shadow p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <button onClick={()=>{if(month===0){setMonth(11);setYear(year-1);}else setMonth(month-1);}} className="p-2 hover:bg-gray-100 rounded text-xl">←</button>
-          <h3 className="font-bold text-xl">{months[month]} {year}</h3>
+          <h3 className="font-bold text-xl">{viewMode==='cleaning'?'Cleaning':'Break Sign-Up'} — {months[month]} {year}</h3>
           <button onClick={()=>{if(month===11){setMonth(0);setYear(year+1);}else setMonth(month+1);}} className="p-2 hover:bg-gray-100 rounded text-xl">→</button>
         </div>
         <div className="grid grid-cols-7 gap-2 text-center font-medium text-gray-500 mb-2">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d}>{d}</div>)}</div>
         <div className="grid grid-cols-7 gap-2">{days.map((d,i) => {
-          const dl = getLogs(d), cnt = new Set(dl.map(l=>l.task)).size, all = cnt===5, part = cnt>0&&cnt<5;
           const isT = d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
+          if (viewMode === 'breaks') {
+            const bc = breakCount(d);
+            return <div key={i} onClick={()=>d&&setSelDay(d)} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer '+(!d?'bg-gray-50 border-transparent':'hover:bg-gray-50 ')+(bc>0?'bg-blue-50 border-blue-300':'border-gray-200 ')+(selDay===d?'ring-2 ring-blue-500':'')+(isT?' border-blue-500 border-2':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{bc>0 && <div className="text-xs mt-1 text-blue-600">{bc} break{bc!==1?'s':''}</div>}</>}</div>;
+          }
+          const dl = getLogs(d), cnt = new Set(dl.map(l=>l.task)).size, all = cnt===5, part = cnt>0&&cnt<5;
           return <div key={i} onClick={()=>d&&setSelDay(d)} className={'p-2 min-h-[70px] rounded-lg border cursor-pointer '+(!d?'bg-gray-50 border-transparent':'hover:bg-gray-50 ')+(all?'bg-emerald-50 border-emerald-300':part?'bg-amber-50 border-amber-300':'border-gray-200 ')+(selDay===d?'ring-2 ring-blue-500':'')+(isT?' border-blue-500 border-2':'')}>{d && <><div className={'font-bold '+(isT?'text-blue-600':'')}>{d}</div>{cnt>0 && <div className={'text-xs mt-1 '+(all?'text-emerald-600':'text-amber-600')}>{cnt}/5</div>}{cnt===0&&isT && <div className="text-xs mt-1 text-red-500">⚠️</div>}</>}</div>;
         })}</div>
       </div>
-      {selDay && <div className="bg-white rounded-lg card-shadow p-6">
+      {selDay && viewMode === 'breaks' && <div className="bg-white rounded-lg card-shadow p-6">
+        <h3 className="font-bold text-lg mb-4">Break Sign-Ups — {months[month]} {selDay}, {year}</h3>
+        {Object.keys(selBreaks).filter(t => selBreaks[t]?.name).length === 0 
+          ? <p className="text-gray-500">No breaks signed up for this day.</p>
+          : <div className="overflow-hidden rounded-lg border border-gray-300">
+              <table className="w-full text-sm">
+                <thead><tr className="bg-gray-800 text-white">
+                  <th className="px-3 py-2 text-left font-bold">TIME</th>
+                  <th className="px-3 py-2 text-left font-bold">NAME</th>
+                  <th className="px-3 py-2 text-left font-bold">STATION</th>
+                  <th className="px-3 py-2 text-left font-bold">COVERED BY</th>
+                </tr></thead>
+                <tbody>{Object.entries(selBreaks).filter(([_,v]) => v?.name).sort(([a],[b]) => {
+                  const toMin = t => { const [time, p] = t.split(' '); const [h,m] = time.split(':'); let hr = parseInt(h); if (p==='PM'&&hr<12) hr+=12; if (p==='AM'&&hr===12) hr=0; return hr*60+parseInt(m); };
+                  return toMin(a) - toMin(b);
+                }).map(([time, row]) => (
+                  <tr key={time} className="border-b">
+                    <td className="px-3 py-2 font-bold">{time}</td>
+                    <td className="px-3 py-2">{row.name}</td>
+                    <td className="px-3 py-2">{row.station || '—'}</td>
+                    <td className="px-3 py-2">{row.coveredBy || '—'}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+        }
+      </div>}
+      {selDay && viewMode === 'cleaning' && <div className="bg-white rounded-lg card-shadow p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-lg">Cleaning Log - {months[month]} {selDay}, {year}</h3>
+          <h3 className="font-bold text-lg">Cleaning Log — {months[month]} {selDay}, {year}</h3>
           {selLogs.length > 0 && <button onClick={()=>{if(confirm('Clear all cleaning logs for this day?')){const key=year+'-'+String(month+1).padStart(2,'0')+'-'+String(selDay).padStart(2,'0');const nl={...logs};delete nl[key];onClearLog?.(nl);}}} className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600">🗑️ Clear Day</button>}
         </div>
         {selLogs.length === 0 ? <p className="text-gray-500">No tasks logged.</p> : <div className="space-y-3">{selLogs.map((l,i)=>{
@@ -1419,7 +1463,7 @@ const BreakSignUp = ({ emps, breakSignups, setBreakSignups }) => {
         
         <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-4 text-sm text-amber-900">
           <p className="font-bold mb-2">Break Rules:</p>
-          <p className="mb-2">Do not schedule your break within an hour after you arrive and within an hour before you leave. This includes not scheduling a break an hour before/after your 30 minute. Please let LOD/Supervisor know when leaving.</p>
+          <p className="mb-2">Do not schedule your break within an hour after you arrive and within an hour before you leave. This includes not scheduling a break an hour before/after your 30 minute break. Please let LOD/Supervisor know when leaving.</p>
           <p className="font-bold">If you work over 7.5 hours, you have a scheduled 30 min break and you are entitled to one unscheduled 15 min break.</p>
         </div>
         
@@ -1447,7 +1491,9 @@ const BreakSignUp = ({ emps, breakSignups, setBreakSignups }) => {
                       </select>
                     </td>
                     <td className="px-2 py-1">
-                      <input value={row.station||''} onChange={e=>updateSlot(time,'station',e.target.value)} placeholder="Station" className="w-full px-2 py-1 border rounded text-sm"/>
+                      <select value={row.station||''} onChange={e=>updateSlot(time,'station',e.target.value)} className="w-full px-2 py-1 border rounded text-sm bg-white">
+                        {STATION_OPTIONS.map(s => <option key={s} value={s}>{s || ''}</option>)}
+                      </select>
                     </td>
                     <td className="px-2 py-1">
                       <select value={row.coveredBy||''} onChange={e=>updateSlot(time,'coveredBy',e.target.value)} className="w-full px-2 py-1 border rounded text-sm bg-white">
@@ -2276,7 +2322,7 @@ const App = () => {
         
         {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay} staffReqs={staffReqs} setStaffReqs={setStaffReqs}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
         
-        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds} onClearLog={setCleanLogs}/>}
+        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds} onClearLog={setCleanLogs} breakSignups={breakSignups}/>}
         
         {tab === 'help' && logged && (
           <div className="fade-in max-w-4xl mx-auto">
