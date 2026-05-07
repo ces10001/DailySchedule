@@ -118,8 +118,7 @@ const CLEANING_TASKS = {
     'Clean & put dishes away',
     'Refill soap & paper towels',
     'Throw away unwanted food & drinks',
-    'Sweep',
-    '** FRIDGE CLEAN OUT EVERY SATURDAY OR SUNDAY **'
+    'Sweep'
   ]
 };
 const DOWNTIME_AREAS = ['2PM-4PM DOWNTIME','6PM-7PM CLOSING'];
@@ -145,7 +144,8 @@ const DOWNTIME_TASKS = {
     'Remove boxes',
     'Sweep and swiffer dispensary area',
     'Pick up trash in parking lot',
-    '** CLEAN SWIFFER MOP AFTER USE **'
+    '** CLEAN SWIFFER MOP AFTER USE **',
+    '** FRIDGE CLEAN OUT EVERY SATURDAY OR SUNDAY **'
   ],
   '6PM-7PM CLOSING': [
     'Garbage (including boxes)',
@@ -164,7 +164,7 @@ const SUNDAY_SLOTS = [{v:'',l:'OFF'},{v:'9:30 AM - 6:15 PM',l:'9:30 AM - 6:15 PM
 
 // ============== UTILITIES ==============
 const formatEST = (iso) => new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit',hour12:true});
-const getESTHour = () => parseInt(new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false}));
+const getESTTime = () => { const d = new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'numeric',hour12:false}); const [h,m] = d.split(':'); return parseInt(h) + parseInt(m)/60; };
 const formatTime = (h) => { const hr = Math.floor(h), m = Math.round((h-hr)*60), sfx = hr >= 12 ? ' PM' : ' AM', dh = hr > 12 ? hr-12 : (hr === 0 ? 12 : hr); return m === 0 ? dh+':00'+sfx : dh+':'+String(m).padStart(2,'0')+sfx; };
 const toDateKey = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const todayKey = () => toDateKey(new Date());
@@ -358,35 +358,38 @@ const Engine = {
     
     // === SUPERVISOR LOCK: Pre-assign supervisors to same position across all blocks ===
     const supLock = { rec1: [null,null,null], rec2: [null,null,null], vaultAU: [null,null,null], vaultMed: [null,null,null], reg: {} };
-    const supervisors = emps.filter(e => e.supervisor && !this.onPTO(e, date) && this.avail(e, wk, dy, 1, date, sun));
+    // Find supervisors working today (check ANY block, not just block 1)
+    const supervisors = emps.filter(e => e.supervisor && !this.onPTO(e, date) && 
+      (this.avail(e, wk, dy, 1, date, sun) || this.avail(e, wk, dy, 2, date, sun) || this.avail(e, wk, dy, 3, date, sun)));
     
     supervisors.forEach(sup => {
+      // Determine which blocks this supervisor covers
+      const supBlocks = [0,1,2].filter(b => this.avail(sup, wk, dy, b+1, date, sun));
+      if (supBlocks.length === 0) return;
+      
       // Determine primary role priority: vault > reception > registers
       if (sup.vault) {
-        // Lock to vault — prefer AU Left (first vault slot)
-        const taken = [supLock.vaultAU[0], supLock.vaultMed[0]].filter(Boolean).map(n=>n);
-        if (!supLock.vaultMed[0]) {
-          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.vaultMed[b] = sup.name;
-        } else if (!supLock.vaultAU[0]) {
-          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.vaultAU[b] = sup.name;
+        if (!supLock.vaultMed[supBlocks[0]]) {
+          supBlocks.forEach(b => supLock.vaultMed[b] = sup.name);
+        } else if (!supLock.vaultAU[supBlocks[0]]) {
+          supBlocks.forEach(b => supLock.vaultAU[b] = sup.name);
         }
       } else if (sup.reception) {
-        if (!supLock.rec1[0]) {
-          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.rec1[b] = sup.name;
-        } else if (!supLock.rec2[0]) {
-          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.rec2[b] = sup.name;
+        if (!supLock.rec1[supBlocks[0]]) {
+          supBlocks.forEach(b => supLock.rec1[b] = sup.name);
+        } else if (!supLock.rec2[supBlocks[0]]) {
+          supBlocks.forEach(b => supLock.rec2[b] = sup.name);
         }
       } else if (sup.registers) {
-        // Lock to a register — assign to med3au1 (first priority register)
         const regSlots = ['med3au1','au2','au3','au4','mc2','mc1'];
         const usedSlots = Object.keys(supLock.reg);
         const slot = regSlots.find(s => !usedSlots.includes(s));
         if (slot) {
           supLock.reg[slot] = [null,null,null];
-          for (let b=0; b<3; b++) if (this.avail(sup, wk, dy, b+1, date, sun)) supLock.reg[slot][b] = sup.name;
+          supBlocks.forEach(b => supLock.reg[slot][b] = sup.name);
         }
       }
-      // Add supervisor to ALL block used lists so normal fill skips them
+      // Add supervisor to ALL block used lists so normal fill skips them entirely
       u1.push(sup.name); u2.push(sup.name); u3.push(sup.name);
     });
     
@@ -525,7 +528,28 @@ const Engine = {
         {au2:a1b2,au3:a2b2,au4:a3b2,time:t2S+' - '+t2E,au2Split:a1b2Split},
         {au2:a1b3,au3:a2b3,au4:a3b3,time:t3S+' - '+t3E,au2Split:a1b3Split}
       ],
-      vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:t1S+' - '+t1E},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:t2S+' - '+t2E},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:t3S+' - '+t3E}],
+      // Adjust vault block times for supervisors whose shifts don't match standard block times
+      const fmtH = (h) => { const hr = Math.floor(h); const mn = Math.round((h - hr) * 60); const ampm = hr >= 12 ? 'PM' : 'AM'; const hr12 = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr; return hr12 + ':' + String(mn).padStart(2,'0') + ' ' + ampm; };
+      const adjustVaultTime = (person, defaultTime) => {
+        if (!person || person === 'RPH' || person === 'X') return defaultTime;
+        const emp = emps.find(e => e.name === person);
+        if (!emp || !emp.supervisor) return defaultTime;
+        const sc = wk === 1 ? emp.week1?.[dy]||'' : emp.week2?.[dy]||'';
+        if (!sc) return defaultTime;
+        const parsed = this.parse(sc);
+        const endH = parsed?.e || 0;
+        const parts = defaultTime.split(' - ');
+        const defParsed = this.parse(parts[1]);
+        const defEnd = defParsed?.s || defParsed?.e || 0;
+        if (endH > 0 && endH !== defEnd) return parts[0] + ' - ' + fmtH(endH);
+        return defaultTime;
+      };
+      const vT1 = t1S+' - '+t1E, vT2 = t2S+' - '+t2E, vT3 = t3S+' - '+t3E;
+      const vT1F = adjustVaultTime(vMed1, vT1) !== vT1 ? adjustVaultTime(vMed1, vT1) : adjustVaultTime(vAU1, vT1);
+      const vT2F = adjustVaultTime(vMed2, vT2) !== vT2 ? adjustVaultTime(vMed2, vT2) : adjustVaultTime(vAU2, vT2);
+      const vT3F = adjustVaultTime(vMed3, vT3) !== vT3 ? adjustVaultTime(vMed3, vT3) : adjustVaultTime(vAU3, vT3);
+      
+      vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:vT1F},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:vT2F},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:vT3F}],
       vaultOpen: sun ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
       lunches, breaks, deposits: [{time:'9:00 AM - 12:00 PM', person:''}], 
       downtime: {'2PM-4PM DOWNTIME': null, '6PM-7PM CLOSING': null},
@@ -745,9 +769,8 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
     chk(sched.vault[blockIdx]?.med, 'vault', 'vault.'+blockIdx+'.med');
     
     if (inCats.size === 0) return null;
-    // Determine if adding to currentCat would conflict
-    // Allowed: LOD+register (by design)
-    // Conflict: reception+register, ipad+reception, ipad+register, vault+anything
+    // Check for duplicate: same person already somewhere in this block
+    // (Even if same category — e.g. already on AU3, trying to put on MED3)
     const vaultConflict = (currentCat === 'vault' && (inCats.has('register') || inCats.has('reception') || inCats.has('ipad'))) ||
       (inCats.has('vault') && (currentCat === 'register' || currentCat === 'reception' || currentCat === 'ipad'));
     const wouldConflict = vaultConflict ||
@@ -757,7 +780,9 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
       (currentCat === 'reception' && inCats.has('ipad')) ||
       (currentCat === 'ipad' && inCats.has('register')) ||
       (currentCat === 'register' && inCats.has('ipad'));
-    if (wouldConflict) return 'Already on ' + [...inCats].join(' + ') + ' this block';
+    // Also flag if person is already on SAME category (duplicate in block)
+    const sameCatDupe = inCats.has(currentCat) && currentCat !== 'lod';
+    if (wouldConflict || sameCatDupe) return 'Already on ' + [...inCats].join(' + ') + ' this block';
     return null;
   };
   
@@ -900,7 +925,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
       </div>
       
       {/* Downtime Cleaning Blocks */}
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="mt-3 grid grid-cols-2 gap-3 no-print">
         {DOWNTIME_AREAS.map(area => {
           const areaData = sched.downtime?.[area] || {};
           const tasks = DOWNTIME_TASKS[area] || [];
@@ -937,7 +962,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
           );
         })}
       </div>
-      <p className="text-[10px] text-red-700 font-bold text-center mt-2">** LET LOD, SUPERVISOR, OR RPH KNOW YOU ARE STEPPING OFF THE FLOOR TO CLEAN DURING DOWNTIME **</p>
+      <p className="text-[10px] text-red-700 font-bold text-center mt-2 no-print">** LET LOD, SUPERVISOR, OR RPH KNOW YOU ARE STEPPING OFF THE FLOOR TO CLEAN DURING DOWNTIME **</p>
       
       {editable && sched.manuallyEdited && <div className="mt-2 text-xs text-amber-600">⚠️ Edited {formatEST(sched.editedAt)}</div>}
     </div>
@@ -1306,38 +1331,62 @@ const ScheduleValidator = ({ sched: rawSched, emps }) => {
     }
   });
   
-  // Check for actual conflicts (not LOD+register or split iPad+register which are by design)
+  // Check for actual conflicts AND duplicates (same person in multiple positions)
   [0, 1, 2].forEach(bIdx => {
-    // Track which categories each person appears in
+    // Track which categories each person appears in AND count total appearances
     const personCats = {};
-    const addCat = (n, cat) => { if (n && n !== 'X' && n !== 'RPH') {
+    const personCount = {};
+    const personPositions = {};
+    const addCat = (n, cat, pos) => { if (n && n !== 'X' && n !== 'RPH') {
       if (n.includes(' / ')) {
         n.split(' / ').forEach(p => {
           const nm = extractName(p);
           if (!personCats[nm]) personCats[nm] = new Set();
           personCats[nm].add(cat);
+          personCount[nm] = (personCount[nm] || 0) + 1;
+          if (!personPositions[nm]) personPositions[nm] = [];
+          personPositions[nm].push(pos);
         });
       } else {
         const nm = extractName(n);
         if (!personCats[nm]) personCats[nm] = new Set();
         personCats[nm].add(cat);
+        personCount[nm] = (personCount[nm] || 0) + 1;
+        if (!personPositions[nm]) personPositions[nm] = [];
+        personPositions[nm].push(pos);
       }
     }};
-    addCat(sched.lod[bIdx]?.name, 'lod');
-    addCat(sched.reception[bIdx]?.r1, 'reception'); addCat(sched.reception[bIdx]?.r2, 'reception');
-    addCat(sched.ipad[bIdx]?.display, 'ipad');
-    addCat(sched.medCheckout[bIdx]?.mc1, 'register'); addCat(sched.medCheckout[bIdx]?.mc2, 'register'); addCat(sched.medCheckout[bIdx]?.med3au1, 'register');
-    addCat(sched.auCheckout[bIdx]?.au2, 'register'); addCat(sched.auCheckout[bIdx]?.au3, 'register'); addCat(sched.auCheckout[bIdx]?.au4, 'register');
-    addCat(sched.vault[bIdx]?.au, 'vault'); addCat(sched.vault[bIdx]?.med, 'vault');
+    addCat(sched.lod[bIdx]?.name, 'lod', 'LOD');
+    addCat(sched.reception[bIdx]?.r1, 'reception', 'Reception 1'); addCat(sched.reception[bIdx]?.r2, 'reception', 'Reception 2');
+    addCat(sched.ipad[bIdx]?.display, 'ipad', 'iPad');
+    addCat(sched.medCheckout[bIdx]?.mc1, 'register', 'MC1'); addCat(sched.medCheckout[bIdx]?.mc2, 'register', 'MC2'); addCat(sched.medCheckout[bIdx]?.med3au1, 'register', 'MED3/AU1');
+    addCat(sched.auCheckout[bIdx]?.au2, 'register', 'AU2'); addCat(sched.auCheckout[bIdx]?.au3, 'register', 'AU3'); addCat(sched.auCheckout[bIdx]?.au4, 'register', 'AU4');
+    addCat(sched.vault[bIdx]?.au, 'vault', 'AU Vault'); addCat(sched.vault[bIdx]?.med, 'vault', 'Med Vault');
     
     Object.entries(personCats).forEach(([name, cats]) => {
-      // LOD + register is OK by design
-      // iPad + register is OK if it's a split (both appear in the split cell)
+      // First: check for DUPLICATE assignment (same person in 2+ positions in same block)
+      if (personCount[name] > 1) {
+        // LOD + register is OK by design
+        // Split iPad + AU2 register is OK by design
+        const positions = personPositions[name];
+        const isLodReg = cats.has('lod') && cats.size <= 2 && (cats.has('register') || cats.has('lod'));
+        const hasSplitIpadReg = cats.has('ipad') && cats.has('register') && 
+          (sched.ipad[bIdx]?.display?.includes(' / ') || sched.auCheckout[bIdx]?.au2?.includes(' / '));
+        
+        if (!isLodReg && !hasSplitIpadReg) {
+          issues.push({
+            name,
+            shift: '',
+            issue: 'Appears in ' + personCount[name] + ' positions in block ' + (bIdx+1) + ': ' + positions.join(', '),
+            severity: 'error'
+          });
+          return; // Skip further checks for this person since we already flagged them
+        }
+      }
+      
+      // Second: check for cross-category conflicts
       const hasSplitIpadReg = cats.has('ipad') && cats.has('register') && 
         (sched.ipad[bIdx]?.display?.includes(' / ') || sched.auCheckout[bIdx]?.au2?.includes(' / '));
-      
-      // Flag: reception+register, ipad+reception, non-split ipad+register,
-      // AND vault+anything else (vault person should only be on vault)
       const vaultConflict = cats.has('vault') && (cats.has('register') || cats.has('reception') || cats.has('ipad'));
       const hasConflict = vaultConflict ||
         (cats.has('reception') && cats.has('register')) ||
@@ -1500,7 +1549,7 @@ const Calendar = ({ generated, onClick, allScheds }) => {
         const times = [generated?.[getKey(d)], s?.editedAt, s?.generatedAt].filter(Boolean);
         const lastTime = times.length > 0 ? times.sort().pop() : null;
         const past = isPast(d) && !has;
-        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(has?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className="flex items-center justify-between"><span className={'font-bold '+(isT?'text-blue-600':'')}>{d}</span>{s && s.weekNum ? <span className={'text-[9px] font-bold px-1 rounded '+(s.weekNum===1?'bg-blue-200 text-blue-800':'bg-green-200 text-green-800')}>W{s.weekNum}</span> : null}</div>{has && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
+        return <div key={i} onClick={()=>d&&onClick(new Date(year,month,d,12,0,0))} className={'p-1 min-h-[55px] text-xs rounded border cursor-pointer hover:bg-gray-50 '+(!d?'bg-gray-50 border-transparent':'')+(has?' bg-emerald-100 border-emerald-400':past?' bg-red-50 border-red-300':' border-gray-200')+(isT?' ring-2 ring-blue-500':'')}>{d && <><div className="flex items-center justify-between"><span className={'font-bold '+(isT?'text-blue-600':'')}>{d}</span><span className="flex items-center gap-0.5">{s?.manuallyEdited && <span className="text-[8px]" title="Manually edited">✏️</span>}{s && s.weekNum ? <span className={'text-[9px] font-bold px-1 rounded '+(s.weekNum===1?'bg-blue-200 text-blue-800':'bg-green-200 text-green-800')}>W{s.weekNum}</span> : null}</span></div>{has && lastTime ? <div className="text-[7px] text-emerald-700 mt-0.5" title={lastTime}>✓ {new Date(lastTime).toLocaleString('en-US',{timeZone:'America/New_York',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}).replace(',','')}</div> : past ? <div className="text-[8px] text-red-500 mt-0.5">✗</div> : null}</>}</div>;
       })}</div>
     </div>
   );
@@ -1764,7 +1813,7 @@ const App = () => {
   useEffect(() => {
     const check = () => {
       if (tab !== 'schedule') return;
-      if (getESTHour() >= 20) {
+      if (getESTTime() >= 20.25) {
         const tmr = new Date(); tmr.setDate(tmr.getDate()+1);
         const key = toDateKey(tmr);
         if (allScheds[key]) {
@@ -1785,7 +1834,7 @@ const App = () => {
   
   const todaySched = useMemo(() => {
     const d = new Date();
-    if (getESTHour() >= 20) d.setDate(d.getDate()+1);
+    if (getESTTime() >= 20.25) d.setDate(d.getDate()+1);
     return sanitizeSched(allScheds[toDateKey(d)]) || null;
   }, [allScheds]);
   
@@ -2042,7 +2091,7 @@ const App = () => {
           <div className="fade-in">
             {todaySched ? <>
               <div className="no-print flex items-center justify-between mb-2">
-                <h2 className="text-lg font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
+                <h2 className="text-lg font-bold">{getESTTime()>=20.25?"Tomorrow's":"Today's"} Schedule</h2>
                 <button onClick={()=>window.print()} className="px-3 py-1.5 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🖨️ Print</button>
               </div>
               <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} onUpdate={updSched} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
@@ -2267,7 +2316,6 @@ const App = () => {
                     <li><strong>Employee Master Schedule</strong> — the main workspace. Manage employees, set shifts, generate daily schedules, and make edits. Requires login.</li>
                     <li><strong>Staffing Summary</strong> — monthly calendar showing which days are fully staffed (green) or short (red). Click any day for a breakdown.</li>
                     <li><strong>Cleaning/Break Logs</strong> — supervisor view of cleaning completions and break sign-ups by day. Click a day to see details.</li>
-                    <li><strong>How to Use</strong> — you're here!</li>
                   </ul>
                 </div>
 
@@ -2346,7 +2394,7 @@ const App = () => {
 
                 <div className="border-l-4 border-emerald-500 pl-4">
                   <h3 className="font-bold text-lg mb-2">Daily Schedule (Public View)</h3>
-                  <p className="text-sm text-gray-700 mb-2">This is what everyone sees — no login needed. It auto-switches to tomorrow after 8 PM. The schedule title shows the day and which week's master was used (e.g. "FRIDAY 5/9 (Wk 1)").</p>
+                  <p className="text-sm text-gray-700 mb-2">This is what everyone sees — no login needed. It auto-switches to tomorrow after 8:15 PM. The schedule title shows the day and which week's master was used (e.g. "FRIDAY 5/9 (Wk 1)").</p>
                   <p className="text-sm text-gray-700 mb-2"><strong>Cleaning:</strong> Staff click <strong>Sign</strong> on their assigned cleaning task, check off each item, enter initials, and submit. Completed tasks show a green ✓.</p>
                   <p className="text-sm text-gray-700"><strong>Downtime Cleaning:</strong> Below the main schedule, the 2PM-4PM and 6PM-7PM cleaning blocks each have individual Sign buttons per task. Staff sign off one task at a time as they complete it.</p>
                 </div>
@@ -2382,7 +2430,7 @@ const App = () => {
                     <li><strong>Generate not working</strong> — make sure employees are loaded first.</li>
                     <li><strong>Wrong employees on a schedule</strong> — regenerate the day. Check master schedule shifts are correct for that day.</li>
                     <li><strong>Changes not showing on another device</strong> — check internet and refresh the page.</li>
-                    <li><strong>Cleaning/downtime sign-offs disappeared</strong> — refresh the page. All data is synced to Firebase and persists unless manually cleared by a supervisor.</li>
+                    <li><strong>Cleaning/downtime sign-offs disappeared</strong> — refresh the page. All data syncs automatically and persists unless manually cleared by a supervisor.</li>
                   </ul>
                 </div>
               </div>
