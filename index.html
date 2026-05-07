@@ -747,8 +747,10 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
     if (inCats.size === 0) return null;
     // Determine if adding to currentCat would conflict
     // Allowed: LOD+register (by design)
-    // Conflict: reception+register, ipad+reception, ipad+register (unless split which we can't easily tell here)
-    const wouldConflict = 
+    // Conflict: reception+register, ipad+reception, ipad+register, vault+anything
+    const vaultConflict = (currentCat === 'vault' && (inCats.has('register') || inCats.has('reception') || inCats.has('ipad'))) ||
+      (inCats.has('vault') && (currentCat === 'register' || currentCat === 'reception' || currentCat === 'ipad'));
+    const wouldConflict = vaultConflict ||
       (currentCat === 'reception' && inCats.has('register')) ||
       (currentCat === 'register' && inCats.has('reception')) ||
       (currentCat === 'ipad' && inCats.has('reception')) ||
@@ -1334,8 +1336,11 @@ const ScheduleValidator = ({ sched: rawSched, emps }) => {
       const hasSplitIpadReg = cats.has('ipad') && cats.has('register') && 
         (sched.ipad[bIdx]?.display?.includes(' / ') || sched.auCheckout[bIdx]?.au2?.includes(' / '));
       
-      // Only flag: reception+register, ipad+reception, or non-split ipad+register
-      const hasConflict = (cats.has('reception') && cats.has('register')) ||
+      // Flag: reception+register, ipad+reception, non-split ipad+register,
+      // AND vault+anything else (vault person should only be on vault)
+      const vaultConflict = cats.has('vault') && (cats.has('register') || cats.has('reception') || cats.has('ipad'));
+      const hasConflict = vaultConflict ||
+        (cats.has('reception') && cats.has('register')) ||
         (cats.has('ipad') && cats.has('reception')) ||
         (cats.has('ipad') && cats.has('register') && !hasSplitIpadReg);
       
@@ -1895,7 +1900,7 @@ const App = () => {
   };
   
   const exportData = () => {
-    const data = { employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, staffReqs, exportedAt: new Date().toISOString() };
+    const data = { employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, breakSignups, staffReqs, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1906,182 +1911,6 @@ const App = () => {
     showToast('Backup exported');
   };
   
-  const autoFillEmpty = () => {
-    if (!scheds[selDay]) return;
-    const cur = sanitizeSched(scheds[selDay]);
-    const date = new Date(cur.date);
-    
-    // Generate a fresh schedule using the schedule's stored weekNum
-    date.setHours(12,0,0,0);
-    const dow = date.getDay() === 0 ? 7 : date.getDay();
-    const fresh = Engine.buildDay(sorted, cur.weekNum || 1, dow, date, dow === 7, 0);
-    if (!fresh) { showToast('Could not generate reference schedule', 'error'); return; }
-    
-    const filled = JSON.parse(JSON.stringify(cur));
-    let filledCount = 0;
-    let extrasCount = 0;
-    
-    // === Pass 1: Fill all empty positions from fresh engine build ===
-    
-    // LOD
-    fresh.lod.forEach((l, i) => { if (filled.lod[i].name === 'X' && l.name !== 'X') { filled.lod[i].name = l.name; filledCount++; } });
-    
-    // Reception
-    fresh.reception.forEach((r, i) => {
-      if (filled.reception[i].r1 === 'X' && r.r1 !== 'X') { filled.reception[i].r1 = r.r1; filledCount++; }
-      if (filled.reception[i].r2 === 'X' && r.r2 !== 'X') { filled.reception[i].r2 = r.r2; filledCount++; }
-    });
-    
-    // iPad
-    fresh.ipad.forEach((ip, i) => {
-      if (filled.ipad[i].display === 'X' && ip.display !== 'X') { filled.ipad[i].display = ip.display; filled.ipad[i].split = ip.split; filledCount++; }
-    });
-    
-    // Registers (MED3/AU1, AU2-4, MC1-2)
-    fresh.medCheckout.forEach((m, i) => {
-      if (filled.medCheckout[i].med3au1 === 'X' && m.med3au1 !== 'X') { filled.medCheckout[i].med3au1 = m.med3au1; filledCount++; }
-      if (filled.medCheckout[i].mc2 === 'X' && m.mc2 !== 'X') { filled.medCheckout[i].mc2 = m.mc2; filledCount++; }
-      if (filled.medCheckout[i].mc1 === 'X' && m.mc1 !== 'X') { filled.medCheckout[i].mc1 = m.mc1; filledCount++; }
-    });
-    fresh.auCheckout.forEach((a, i) => {
-      if (filled.auCheckout[i].au2 === 'X' && a.au2 !== 'X') { filled.auCheckout[i].au2 = a.au2; filled.auCheckout[i].au2Split = a.au2Split; filledCount++; }
-      if (filled.auCheckout[i].au3 === 'X' && a.au3 !== 'X') { filled.auCheckout[i].au3 = a.au3; filledCount++; }
-      if (filled.auCheckout[i].au4 === 'X' && a.au4 !== 'X') { filled.auCheckout[i].au4 = a.au4; filledCount++; }
-    });
-    
-    // Vault
-    fresh.vault.forEach((v, i) => {
-      if ((filled.vault[i].au === 'RPH' || filled.vault[i].au === 'X') && v.au !== 'RPH' && v.au !== 'X') { filled.vault[i].au = v.au; filledCount++; }
-      if ((filled.vault[i].med === 'RPH' || filled.vault[i].med === 'X') && v.med !== 'RPH' && v.med !== 'X') { filled.vault[i].med = v.med; filledCount++; }
-    });
-    
-    // Lunches - fill empty name slots from fresh
-    fresh.lunches.forEach((l, i) => {
-      if (i < filled.lunches.length && (!filled.lunches[i].name || filled.lunches[i].name === '') && l.name && l.name !== '') {
-        filled.lunches[i].name = l.name;
-        filled.lunches[i].time = l.time;
-        filledCount++;
-      }
-    });
-    // If fresh has more lunches than filled
-    if (fresh.lunches.length > filled.lunches.length) {
-      for (let i = filled.lunches.length; i < fresh.lunches.length; i++) {
-        if (fresh.lunches[i].name) {
-          filled.lunches.push({ ...fresh.lunches[i] });
-          filledCount++;
-        }
-      }
-    }
-    
-    // Breaks - fill empty name slots from fresh
-    fresh.breaks.forEach((b, i) => {
-      if (i < filled.breaks.length && (!filled.breaks[i].name || filled.breaks[i].name === '') && b.name && b.name !== '') {
-        filled.breaks[i].name = b.name;
-        filled.breaks[i].time = b.time;
-        filledCount++;
-      }
-    });
-    
-    // Cleaning - fill X slots from fresh
-    fresh.cleaning.forEach((c, i) => {
-      if (i < filled.cleaning.length && filled.cleaning[i].name === 'X' && c.name !== 'X') {
-        filled.cleaning[i].name = c.name;
-        filledCount++;
-      }
-    });
-    
-    // === Pass 2: Fill remaining empty register slots with extras (scheduled but unassigned) ===
-    const getAllNames = (s) => {
-      const names = new Set();
-      const add = (n) => { if (n && n !== 'X' && n !== 'RPH' && n !== '') {
-        if (n.includes(' / ')) n.split(' / ').forEach(p => names.add(extractName(p)));
-        else names.add(extractName(n));
-      }};
-      [0,1,2].forEach(b => {
-        add(s.lod[b].name);
-        add(s.reception[b].r1); add(s.reception[b].r2);
-        add(s.ipad[b].display);
-        add(s.medCheckout[b].mc1); add(s.medCheckout[b].mc2); add(s.medCheckout[b].med3au1);
-        add(s.auCheckout[b].au2); add(s.auCheckout[b].au3); add(s.auCheckout[b].au4);
-        add(s.vault[b].au); add(s.vault[b].med);
-      });
-      s.lunches.forEach(l => add(l.name));
-      s.breaks.forEach(b => add(b.name));
-      s.cleaning.forEach(c => add(c.name));
-      return names;
-    };
-    
-    const assignedNames = getAllNames(filled);
-    
-    // Determine correct week/day for checking employee schedules
-    const fwk = fresh.weekNum;
-    const fdy = fresh.dayNum;
-    
-    const extras = sorted.filter(emp => {
-      if (Engine.onPTO(emp, date)) return false;
-      if (Engine.vaultOnly(emp)) return false;
-      // Check ACTUAL schedule for this day using same week/day as fresh build
-      const shift = Engine.sched(emp, fwk, fdy);
-      if (!shift || shift.toUpperCase() === 'OFF') return false;
-      return !assignedNames.has(emp.name.toUpperCase());
-    });
-    
-    const sun = cur.isSunday;
-    extras.forEach(emp => {
-      const shift = Engine.sched(emp, fwk, fdy);
-      const { s: st, e: en } = Engine.parse(shift);
-      if (st < 0) return;
-      
-      const blocks = [];
-      if (sun) {
-        if (st <= 10 && en >= 12) blocks.push(0);
-        if (st <= 12 && en >= 15) blocks.push(1);
-        if (st <= 15 && en >= 18.25) blocks.push(2);
-      } else {
-        if (st <= 9 && en >= 12) blocks.push(0);
-        if (st <= 12 && en >= 16.25) blocks.push(1);
-        if (st <= 16 && en >= 20.25) blocks.push(2);
-      }
-      
-      const regSlots = [
-        ['medCheckout', 'med3au1'],
-        ['auCheckout', 'au2'], ['auCheckout', 'au3'], ['auCheckout', 'au4'],
-        ['medCheckout', 'mc2'], ['medCheckout', 'mc1']
-      ];
-      for (const bIdx of blocks) {
-        let placed = false;
-        for (const [group, field] of regSlots) {
-          if (filled[group][bIdx][field] === 'X') {
-            filled[group][bIdx][field] = emp.name;
-            extrasCount++;
-            placed = true;
-            break;
-          }
-        }
-        if (placed) break;
-      }
-    });
-    
-    // Recalculate stats
-    const cf = n => !n || n === 'X' ? 0 : n.includes('/') ? 2 : 1;
-    filled.stats = {
-      vB1: cf(filled.vault[0].au)+cf(filled.vault[0].med), vB2: cf(filled.vault[1].au)+cf(filled.vault[1].med), vB3: cf(filled.vault[2].au)+cf(filled.vault[2].med),
-      rB1: cf(filled.reception[0].r1)+cf(filled.reception[0].r2), rB2: cf(filled.reception[1].r1)+cf(filled.reception[1].r2), rB3: cf(filled.reception[2].r1)+cf(filled.reception[2].r2),
-      rgB1: cf(filled.medCheckout[0].mc1)+cf(filled.medCheckout[0].mc2)+cf(filled.medCheckout[0].med3au1)+cf(filled.auCheckout[0].au2)+cf(filled.auCheckout[0].au3)+cf(filled.auCheckout[0].au4),
-      rgB2: cf(filled.medCheckout[1].mc1)+cf(filled.medCheckout[1].mc2)+cf(filled.medCheckout[1].med3au1)+cf(filled.auCheckout[1].au2)+cf(filled.auCheckout[1].au3)+cf(filled.auCheckout[1].au4),
-      rgB3: cf(filled.medCheckout[2].mc1)+cf(filled.medCheckout[2].mc2)+cf(filled.medCheckout[2].med3au1)+cf(filled.auCheckout[2].au2)+cf(filled.auCheckout[2].au3)+cf(filled.auCheckout[2].au4)
-    };
-    
-    const total = filledCount + extrasCount;
-    if (total === 0) { showToast('No empty positions could be filled', 'warning'); return; }
-    filled.manuallyEdited = true;
-    filled.editedAt = new Date().toISOString();
-    pushUndo('editSched', cur);
-    updSched(filled);
-    let msg = 'Filled ' + filledCount + ' position' + (filledCount!==1?'s':'');
-    if (extrasCount > 0) msg += ' + ' + extrasCount + ' extra' + (extrasCount!==1?'s':'');
-    showToast(msg);
-  };
   
   const upload = (e) => {
     const file = e.target.files[0]; if (!file) return;
