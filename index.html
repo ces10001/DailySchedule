@@ -631,6 +631,20 @@ const Header = ({ children, color }) => {
 };
 
 // ============== SCHEDULE DISPLAY ==============
+// Inline sign button for individual downtime tasks
+const DowntimeSignBtn = ({ onSign }) => {
+  const [open, setOpen] = useState(false);
+  const [initials, setInitials] = useState('');
+  if (!open) return <button onClick={()=>setOpen(true)} className="px-2 py-0.5 bg-emerald-600 text-white text-[9px] rounded hover:bg-emerald-700 font-medium whitespace-nowrap">Sign</button>;
+  return (
+    <div className="flex items-center gap-1">
+      <input value={initials} onChange={e=>setInitials(e.target.value.slice(0,4))} onKeyDown={e=>{if(e.key==='Enter'&&initials.trim()){onSign(initials.trim());setOpen(false);}}} placeholder="Init" className="w-12 px-1 py-0.5 text-[10px] border rounded uppercase text-center" autoFocus maxLength={4}/>
+      <button onClick={()=>{if(initials.trim()){onSign(initials.trim());setOpen(false);}}} disabled={!initials.trim()} className="px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] rounded disabled:opacity-40">✓</button>
+      <button onClick={()=>{setOpen(false);setInitials('');}} className="px-1 py-0.5 bg-gray-200 text-[9px] rounded">✕</button>
+    </div>
+  );
+};
+
 const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, onSign, showShapes, cleanLogs, highlightEmps }) => {
   const sched = sanitizeSched(rawSched);
   if (!sched) return null;
@@ -832,32 +846,42 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
       {/* Downtime Cleaning Blocks */}
       <div className="mt-3 grid grid-cols-2 gap-3">
         {DOWNTIME_AREAS.map(area => {
-          const log = sched.downtime?.[area];
-          const complete = !!log?.completedAt;
+          const areaData = sched.downtime?.[area] || {};
+          const tasks = DOWNTIME_TASKS[area] || [];
+          const allDone = tasks.every((_, i) => areaData[i]?.completedAt);
           return (
-            <div key={area} className={'rounded-lg border-2 p-3 '+(complete?'border-emerald-400 bg-emerald-50':'border-gray-300 bg-white')}>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-bold text-xs">{area}</h4>
-                {complete ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] text-emerald-700">{log.initials} — {new Date(log.completedAt).toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit',hour12:true})}</span>
-                    <div className="w-6 h-6 bg-emerald-500 rounded flex items-center justify-center"><span className="text-white font-bold text-xs">✓</span></div>
-                  </div>
-                ) : (
-                  <button onClick={()=>onSign?.(area)} className="px-2 py-1 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700 font-medium">Sign</button>
-                )}
-              </div>
-              <div className="text-[10px] text-gray-600 space-y-0.5">
-                {DOWNTIME_TASKS[area].map((t,i) => {
-                  const isDone = log?.tasks?.[i];
-                  return <div key={i} className={isDone?'line-through text-gray-400':''}>{t.startsWith('**') ? <strong className="text-amber-700">{t}</strong> : t}</div>;
+            <div key={area} className={'rounded-lg border-2 p-3 '+(allDone?'border-emerald-400 bg-emerald-50':'border-gray-300 bg-white')}>
+              <h4 className="font-black text-sm mb-2">{area} CLEANING</h4>
+              <div className="space-y-1.5">
+                {tasks.map((t, i) => {
+                  const taskLog = areaData[i];
+                  const done = !!taskLog?.completedAt;
+                  const isReminder = t.startsWith('**');
+                  if (isReminder) return <div key={i} className="text-xs font-bold text-amber-700 py-0.5">{t}</div>;
+                  return (
+                    <div key={i} className={'flex items-center justify-between gap-2 py-1 border-b border-gray-100 '+(done?'opacity-60':'')}>
+                      <span className={'text-xs '+(done?'line-through text-gray-400':'text-gray-800')}>{t}</span>
+                      {done ? (
+                        <span className="text-[9px] text-emerald-700 whitespace-nowrap font-medium">✓ {taskLog.initials}</span>
+                      ) : (
+                        <DowntimeSignBtn onSign={(initials) => {
+                          const updated = JSON.parse(JSON.stringify(sched));
+                          if (!updated.downtime) updated.downtime = {};
+                          if (!updated.downtime[area]) updated.downtime[area] = {};
+                          updated.downtime[area][i] = { initials: initials.toUpperCase(), completedAt: new Date().toISOString() };
+                          updated.manuallyEdited = true; updated.editedAt = new Date().toISOString();
+                          if (onUpdate) onUpdate(updated);
+                        }}/>
+                      )}
+                    </div>
+                  );
                 })}
               </div>
             </div>
           );
         })}
       </div>
-      <p className="text-[9px] text-red-700 font-bold text-center mt-2">** LET LOD, SUPERVISOR, OR RPH KNOW YOU ARE STEPPING OFF THE FLOOR TO CLEAN DURING DOWNTIME **</p>
+      <p className="text-[10px] text-red-700 font-bold text-center mt-2">** LET LOD, SUPERVISOR, OR RPH KNOW YOU ARE STEPPING OFF THE FLOOR TO CLEAN DURING DOWNTIME **</p>
       
       {editable && sched.manuallyEdited && <div className="mt-2 text-xs text-amber-600">⚠️ Edited {formatEST(sched.editedAt)}</div>}
     </div>
@@ -1956,7 +1980,7 @@ const App = () => {
                 <h2 className="text-lg font-bold">{getESTHour()>=20?"Tomorrow's":"Today's"} Schedule</h2>
                 <button onClick={()=>window.print()} className="px-3 py-1.5 bg-gray-800 text-white rounded-lg font-medium text-sm hover:bg-gray-900">🖨️ Print</button>
               </div>
-              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
+              <ScheduleDisplay sched={todaySched} emps={sorted} shapes={shapes} onSign={setCleanModal} onUpdate={(updated)=>{const key=toDateKey(new Date(updated.date));setAllScheds(prev=>({...prev,[key]:updated}));setScheds(prev=>{const ns=[...prev];const idx=ns.findIndex(x=>toDateKey(new Date(x.date))===key);if(idx>=0)ns[idx]=updated;return ns;});}} editable={false} showShapes={false} cleanLogs={cleanLogs}/>
             </> : <div className="text-center py-12 bg-white rounded-lg card-shadow">
               <span className="text-5xl mb-4 block">📅</span>
               <p className="text-gray-500 mb-4">No schedule for today.</p>
