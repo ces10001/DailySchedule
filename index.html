@@ -123,6 +123,19 @@ const CLEANING_TASKS = {
   ]
 };
 const DOWNTIME_AREAS = ['2PM-4PM DOWNTIME','6PM-7PM CLOSING'];
+// 15-min break time options from 10 AM to 6 PM in 15-minute intervals
+const BREAK_TIME_OPTIONS = (() => {
+  const opts = [];
+  for (let h = 10; h <= 18; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      if (h === 18 && m > 0) break;
+      const hr = h > 12 ? h - 12 : h;
+      const sfx = h >= 12 ? ' PM' : ' AM';
+      opts.push(hr + ':' + String(m).padStart(2,'0') + sfx);
+    }
+  }
+  return opts;
+})();
 const DOWNTIME_TASKS = {
   '2PM-4PM DOWNTIME': [
     'Spot check kitchen & bathrooms (refills)',
@@ -808,7 +821,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
               <div className="schedule-cell bg-green-100 font-bold text-xs py-0.5">COVER</div>
               {sched.lunches.map((l,i) => <React.Fragment key={i}>
                 <NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.name',v)} hl={hl} allShapes={shapes}/>
-                <div className="schedule-cell text-xs py-0.5">{l.time}</div>
+                {editable ? <div className="schedule-cell text-xs py-0.5"><input type="text" value={l.time} onChange={e=>upd('lunches.'+i+'.time',e.target.value)} className="w-full text-xs bg-transparent border-0 p-0 text-center" placeholder="Time"/></div> : <div className="schedule-cell text-xs py-0.5">{l.time}</div>}
                 <NameCell name={l.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('lunches.'+i+'.cover',v)} hl={hl} allShapes={shapes}/>
               </React.Fragment>)}
             </div>
@@ -824,7 +837,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
                 const bColor = bHl && shapes?.[b.name.toUpperCase()]?.color;
                 return <React.Fragment key={i}>
                 <NameCell name={b.name||''} shapes={shapes} editable={editable} emps={emps} onUpdate={v=>upd('breaks.'+i+'.name',v)} hl={hl} allShapes={shapes}/>
-                <div className="schedule-cell text-xs py-0.5">{b.time}</div>
+                {editable ? <div className="schedule-cell text-xs py-0.5"><select value={b.time} onChange={e=>upd('breaks.'+i+'.time',e.target.value)} className="w-full text-xs bg-transparent border-0 cursor-pointer p-0 text-center">{BREAK_TIME_OPTIONS.map((t,j)=><option key={j} value={t}>{t}</option>)}</select></div> : <div className="schedule-cell text-xs py-0.5">{b.time}</div>}
                 <NameCell name={b.cover||''} shapes={null} editable={editable} emps={emps} onUpdate={v=>upd('breaks.'+i+'.cover',v)} hl={hl} allShapes={shapes}/>
               </React.Fragment>; })}
             </div>
@@ -1382,6 +1395,93 @@ if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL) {
   } catch(e) { console.error('Firebase init failed:', e); }
 }
 
+// ============== BREAK SIGN-UP ==============
+const BreakSignUp = ({ emps, breakSignups, setBreakSignups }) => {
+  const today = todayKey();
+  const [viewDate, setViewDate] = useState(today);
+  const signups = breakSignups[viewDate] || [];
+  
+  const addRow = () => {
+    const updated = [...signups, { name: '', station: '', time: '', coveredBy: '' }];
+    setBreakSignups({...breakSignups, [viewDate]: updated});
+  };
+  
+  const updateRow = (idx, field, val) => {
+    const updated = [...signups];
+    updated[idx] = {...updated[idx], [field]: val};
+    setBreakSignups({...breakSignups, [viewDate]: updated});
+  };
+  
+  const removeRow = (idx) => {
+    const updated = signups.filter((_,i) => i !== idx);
+    setBreakSignups({...breakSignups, [viewDate]: updated});
+  };
+  
+  const empNames = emps.map(e => e.name).sort();
+  
+  return (
+    <div className="max-w-4xl mx-auto fade-in">
+      <div className="bg-white rounded-xl card-shadow p-6">
+        <div className="text-center mb-4">
+          <h2 className="text-2xl font-black mb-1">15-Minute Break Sign-Up</h2>
+          <input type="date" value={viewDate} onChange={e=>setViewDate(e.target.value)} className="px-3 py-1 border rounded-lg text-sm"/>
+        </div>
+        
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-4 text-sm text-amber-900">
+          <p className="font-bold mb-2">Break Rules:</p>
+          <p className="mb-2">Do not schedule your break within an hour after you arrive and within an hour before you leave. This includes not scheduling a break an hour before/after your 30 minute. Please let LOD/Supervisor know when leaving.</p>
+          <p className="font-bold">If you work over 7.5 hours, you have a scheduled 30 min break and you are entitled to one unscheduled 15 min break.</p>
+        </div>
+        
+        <table className="w-full text-sm border-collapse mb-4">
+          <thead>
+            <tr className="bg-gray-800 text-white">
+              <th className="px-3 py-2 text-left font-bold">NAME</th>
+              <th className="px-3 py-2 text-left font-bold">STATION</th>
+              <th className="px-3 py-2 text-left font-bold">TIME</th>
+              <th className="px-3 py-2 text-left font-bold">COVERED BY</th>
+              <th className="px-2 py-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {signups.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-gray-400">No breaks signed up yet. Click "Add Break" below.</td></tr>}
+            {signups.map((row, i) => (
+              <tr key={i} className="border-b hover:bg-gray-50">
+                <td className="px-2 py-1.5">
+                  <select value={row.name} onChange={e=>updateRow(i,'name',e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
+                    <option value="">— Select —</option>
+                    {empNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <input value={row.station} onChange={e=>updateRow(i,'station',e.target.value)} placeholder="e.g. Reception, AU3" className="w-full px-2 py-1 border rounded text-sm"/>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select value={row.time} onChange={e=>updateRow(i,'time',e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
+                    <option value="">— Time —</option>
+                    {BREAK_TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select value={row.coveredBy} onChange={e=>updateRow(i,'coveredBy',e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
+                    <option value="">— Select —</option>
+                    {empNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </td>
+                <td className="px-1 py-1.5 text-center">
+                  <button onClick={()=>removeRow(i)} className="text-red-400 hover:text-red-600 text-lg" title="Remove">✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        
+        <button onClick={addRow} className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700">+ Add Break</button>
+      </div>
+    </div>
+  );
+};
+
 // ============== MAIN APP ==============
 const App = () => {
   const [tab, setTab] = useState('schedule');
@@ -1390,6 +1490,7 @@ const App = () => {
   const [allScheds, setAllScheds] = useState({});
   const [generated, setGenerated] = useState({});
   const [cleanLogs, setCleanLogs] = useState({});
+  const [breakSignups, setBreakSignups] = useState({});
   const [w1, setW1] = useState('');
   const [w2, setW2] = useState('');
   const [singleDate, setSingleDate] = useState('');
@@ -1456,6 +1557,7 @@ const App = () => {
         setAllScheds(sanAll);
         setGenerated(d.generatedDays || {});
         setCleanLogs(d.cleaningLogs || {});
+        setBreakSignups(d.breakSignups || {});
         if (d.staffReqs) setStaffReqs(d.staffReqs);
         dataLoaded.current = true;
         setTimeout(() => { fromFB.current = false; }, 100);
@@ -1464,7 +1566,7 @@ const App = () => {
     } else {
       // No Firebase — use localStorage
       const d = localStorage.getItem('pharmacy-scheduler-v3');
-      if (d) { try { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds((p.schedules||[]).map(s=>sanitizeSched(s)).filter(Boolean)); const sa={}; Object.entries(p.allSchedules||{}).forEach(([k,v])=>{const s=sanitizeSched(v);if(s)sa[k]=s;}); setAllScheds(sa); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); if(p.staffReqs) setStaffReqs(p.staffReqs); } catch(e){} }
+      if (d) { try { const p = JSON.parse(d); setEmps(p.employees||[]); setW1(p.week1Start||''); setW2(p.week2Start||''); setScheds((p.schedules||[]).map(s=>sanitizeSched(s)).filter(Boolean)); const sa={}; Object.entries(p.allSchedules||{}).forEach(([k,v])=>{const s=sanitizeSched(v);if(s)sa[k]=s;}); setAllScheds(sa); setGenerated(p.generatedDays||{}); setCleanLogs(p.cleaningLogs||{}); setBreakSignups(p.breakSignups||{}); if(p.staffReqs) setStaffReqs(p.staffReqs); } catch(e){} }
       dataLoaded.current = true;
     }
   }, []);
@@ -1474,7 +1576,7 @@ const App = () => {
     if (!dataLoaded.current || fromFB.current) return;
     if (writeTimer.current) clearTimeout(writeTimer.current);
     writeTimer.current = setTimeout(() => {
-      const data = { employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, staffReqs };
+      const data = { employees:emps, week1Start:w1, week2Start:w2, schedules:scheds, allSchedules:allScheds, generatedDays:generated, cleaningLogs:cleanLogs, breakSignups, staffReqs };
       if (fbDB) {
         fbDB.set(data).catch(e => {
           console.error('Firebase write error:', e);
@@ -1483,7 +1585,7 @@ const App = () => {
       }
       try { localStorage.setItem('pharmacy-scheduler-v3', JSON.stringify(data)); } catch(e) {}
     }, 500);
-  }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs, staffReqs]);
+  }, [emps, w1, w2, scheds, allScheds, generated, cleanLogs, breakSignups, staffReqs]);
   
   const highlightEmps = useMemo(() => {
     const set = new Set(pinnedEmps.map(n => n.toUpperCase()));
@@ -1960,6 +2062,7 @@ const App = () => {
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
               <button onClick={()=>setTab('schedule')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='schedule'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Daily Schedule</button>
+              <button onClick={()=>setTab('breaks')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='breaks'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Break Sign-Up</button>
               {logged && <>
                 <button onClick={()=>setTab('employees')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='employees'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Employee Master Schedule</button>
                 <button onClick={()=>setTab('summary')} className={'px-4 py-2 rounded-lg font-medium text-sm '+(tab==='summary'?'tab-active':'bg-gray-100 hover:bg-gray-200')}>Staffing Summary</button>
@@ -1987,6 +2090,10 @@ const App = () => {
               {logged ? <button onClick={()=>setTab('employees')} className="btn-primary px-6 py-2 text-white rounded-lg">Go to Master Schedule →</button> : <p className="text-sm text-gray-400">Contact supervisor to generate schedules.</p>}
             </div>}
           </div>
+        )}
+        
+        {tab === 'breaks' && (
+          <BreakSignUp emps={sorted} breakSignups={breakSignups} setBreakSignups={setBreakSignups}/>
         )}
         
         {tab === 'employees' && logged && (
