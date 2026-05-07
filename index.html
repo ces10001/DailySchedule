@@ -72,11 +72,73 @@ const { useState, useEffect, useMemo } = React;
 const COLORS = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#F43F5E','#0EA5E9','#A855F7','#22C55E','#EAB308','#E11D48','#7C3AED','#0D9488','#DC2626','#2563EB','#16A34A'];
 const CLEANING_AREAS = ['RECEPTION','DISPENSARY','VACUUM','BATHROOMS','KITCHEN'];
 const CLEANING_TASKS = {
-  RECEPTION: ['Wipe down front counter','Clean glass doors','Sweep and mop floor','Empty trash','Organize displays','Sanitize touchscreens'],
-  DISPENSARY: ['Wipe down counters','Clean screens/keyboards','Organize bins','Restock supplies','Clean printers','Sanitize stations'],
-  VACUUM: ['Vacuum carpeted areas','Vacuum behind counters','Vacuum break room','Empty vacuum','Check for clogs'],
-  BATHROOMS: ['Sanitize toilets','Clean sinks/mirrors','Refill supplies','Empty trash','Mop floors'],
-  KITCHEN: ['Wash dishes','Wipe counters','Clean microwave','Clean fridge','Empty trash','Mop floor']
+  RECEPTION: [
+    'Wipe counters, phone, keyboard, mouse',
+    'Wipe computers (front & back)',
+    'Wipe ID scanner, inner button boxes',
+    'Wipe intercom monitor',
+    'Wipe glass, doorknobs, kiosk area',
+    'Tidy up/restock info tables (wipe if needed)',
+    'Tidy up consult room (remove trash)',
+    'Sweep & swiffer reception',
+    '** CLEAN SWIFFER MOP AFTER USE **'
+  ],
+  DISPENSARY: [
+    'Wipe Med, AU, delivery registers',
+    'Wipe RPh & LOD desk',
+    'Wipe preorder cabinets',
+    'Wipe display cases (dust as needed)',
+    'Wipe fridge (dust as needed)',
+    'Wipe ATM',
+    'Wipe delivery room (remove trash/boxes)',
+    'Restock stations (receipt paper, bags, etc)'
+  ],
+  VACUUM: [
+    'Vestibule & reception lobby',
+    'Dispensary waiting area',
+    'Consultation room',
+    'Dispensary floor',
+    'Back hallways',
+    'Delivery room',
+    '** EMPTY VACUUM AFTER USE **'
+  ],
+  BATHROOMS: [
+    'Wipe toilet (seat, base, sides)',
+    'Wipe sink, mirror, doorknobs',
+    'Wipe/restock toilet paper dispenser',
+    'Wipe/restock paper towel dispenser',
+    'Refill soap dispenser',
+    'Sweep & mop bathrooms & kitchen'
+  ],
+  KITCHEN: [
+    'Wipe counter, table, chairs, cabinets',
+    'Wipe coffee machine, fridge',
+    'Wipe in/out microwave',
+    'Restock utensil drawer (forks, spoons, etc)',
+    'Clean & put dishes away',
+    'Refill soap & paper towels',
+    'Throw away unwanted food & drinks',
+    'Sweep',
+    '** FRIDGE CLEAN OUT EVERY SATURDAY OR SUNDAY **'
+  ]
+};
+const DOWNTIME_AREAS = ['2PM-4PM DOWNTIME','6PM-7PM CLOSING'];
+const DOWNTIME_TASKS = {
+  '2PM-4PM DOWNTIME': [
+    'Spot check kitchen & bathrooms (refills)',
+    'Restock supplies & merch',
+    'Wipe surfaces & glass (dust as needed)',
+    'Remove boxes',
+    'Sweep and swiffer dispensary area',
+    'Pick up trash in parking lot',
+    '** CLEAN SWIFFER MOP AFTER USE **'
+  ],
+  '6PM-7PM CLOSING': [
+    'Garbage (including boxes)',
+    'Empty Hippa',
+    'Delivery & consult room spot check',
+    'Restock supplies (as needed)'
+  ]
 };
 const TIME_SLOTS = [
   {v:'',l:'OFF'},{v:'8:30 AM - 12:00 PM',l:'8:30 AM - 12:00 PM'},{v:'8:45 AM - 12:00 PM',l:'8:45 AM - 12:00 PM'},
@@ -131,6 +193,7 @@ const sanitizeSched = (s) => {
     lunches: s.lunches && Array.isArray(s.lunches) ? s.lunches : [],
     breaks: s.breaks && Array.isArray(s.breaks) ? s.breaks : [],
     deposits: s.deposits && Array.isArray(s.deposits) ? s.deposits : [{time:'9:00 AM - 12:00 PM',person:''}],
+    downtime: s.downtime || {'2PM-4PM DOWNTIME': null, '6PM-7PM CLOSING': null},
     stats: s.stats || {vB1:0,vB2:0,vB3:0,rB1:0,rB2:0,rB3:0,rgB1:0,rgB2:0,rgB3:0},
     fullTitle: s.fullTitle || (s.dayTitle||'') + ' ' + (s.dateStr||''),
     weekNum: s.weekNum || 1,
@@ -410,7 +473,9 @@ const Engine = {
       ],
       vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:t1S+' - '+t1E},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:t2S+' - '+t2E},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:t3S+' - '+t3E}],
       vaultOpen: sun ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
-      lunches, breaks, deposits: [{time:'9:00 AM - 12:00 PM', person:''}], stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
+      lunches, breaks, deposits: [{time:'9:00 AM - 12:00 PM', person:''}], 
+      downtime: {'2PM-4PM DOWNTIME': null, '6PM-7PM CLOSING': null},
+      stats, isSunday: sun, weekNum: wk, dayNum: dy, date: date.toISOString(), generatedAt: new Date().toISOString()
     };
   },
   genStandalone(emps, date, rot) { const d = new Date(date); d.setHours(12,0,0,0); const dow = d.getDay()===0?7:d.getDay(); return this.buildDay(emps, 1, dow, d, dow===7, rot||0); },
@@ -442,7 +507,7 @@ const Engine = {
 const CleaningModal = ({ task, onClose, onSubmit, log }) => {
   const [checked, setChecked] = useState(log?.tasks || {});
   const [initials, setInitials] = useState(log?.initials || '');
-  const tasks = CLEANING_TASKS[task] || [];
+  const tasks = CLEANING_TASKS[task] || DOWNTIME_TASKS[task] || [];
   const view = !!log, allDone = tasks.every((_, i) => checked[i]);
   const canSubmit = allDone && initials.trim().length > 0;
   const submit = () => {
@@ -456,7 +521,7 @@ const CleaningModal = ({ task, onClose, onSubmit, log }) => {
       <div className="bg-white rounded-xl p-6 w-full max-w-lg card-shadow fade-in max-h-[80vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">{task} {view && <span className="text-sm font-normal text-gray-500">- by {log.initials}</span>}</h2>
         {!view && <button onClick={() => { const c={}; tasks.forEach((_,i)=>c[i]=true); setChecked(c); }} className="mb-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">✓ Select All</button>}
-        <div className="space-y-2 mb-4">{tasks.map((t,i) => <label key={i} className="flex items-start gap-3 p-2 rounded hover:bg-gray-50"><input type="checkbox" checked={checked[i]||false} onChange={e=>!view&&setChecked({...checked,[i]:e.target.checked})} disabled={view} className="mt-1 w-5 h-5"/><span className="text-sm">{t}</span></label>)}</div>
+        <div className="space-y-2 mb-4">{tasks.map((t,i) => <label key={i} className={'flex items-start gap-3 p-2 rounded hover:bg-gray-50'+(t.startsWith('**')?' bg-amber-50':'')}><input type="checkbox" checked={checked[i]||false} onChange={e=>!view&&setChecked({...checked,[i]:e.target.checked})} disabled={view} className="mt-1 w-5 h-5"/><span className={'text-sm'+(t.startsWith('**')?' font-bold text-amber-700':'')}>{t}</span></label>)}</div>
         {!view && <div className="mb-4"><label className="block text-sm font-medium mb-1">Initials</label><input value={initials} onChange={e=>setInitials(e.target.value.slice(0,4))} className="w-full px-4 py-2 border rounded-lg uppercase" maxLength={4}/></div>}
         <div className="flex gap-2">
           {!view && (canSubmit 
@@ -763,6 +828,37 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
           </div>
         </div>
       </div>
+      
+      {/* Downtime Cleaning Blocks */}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {DOWNTIME_AREAS.map(area => {
+          const log = sched.downtime?.[area];
+          const complete = !!log?.completedAt;
+          return (
+            <div key={area} className={'rounded-lg border-2 p-3 '+(complete?'border-emerald-400 bg-emerald-50':'border-gray-300 bg-white')}>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-bold text-xs">{area}</h4>
+                {complete ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] text-emerald-700">{log.initials} — {new Date(log.completedAt).toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit',hour12:true})}</span>
+                    <div className="w-6 h-6 bg-emerald-500 rounded flex items-center justify-center"><span className="text-white font-bold text-xs">✓</span></div>
+                  </div>
+                ) : (
+                  <button onClick={()=>onSign?.(area)} className="px-2 py-1 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700 font-medium">Sign</button>
+                )}
+              </div>
+              <div className="text-[10px] text-gray-600 space-y-0.5">
+                {DOWNTIME_TASKS[area].map((t,i) => {
+                  const isDone = log?.tasks?.[i];
+                  return <div key={i} className={isDone?'line-through text-gray-400':''}>{t.startsWith('**') ? <strong className="text-amber-700">{t}</strong> : t}</div>;
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[9px] text-red-700 font-bold text-center mt-2">** LET LOD, SUPERVISOR, OR RPH KNOW YOU ARE STEPPING OFF THE FLOOR TO CLEAN DURING DOWNTIME **</p>
+      
       {editable && sched.manuallyEdited && <div className="mt-2 text-xs text-amber-600">⚠️ Edited {formatEST(sched.editedAt)}</div>}
     </div>
   );
@@ -1781,8 +1877,27 @@ const App = () => {
   };
   
   const cleanSubmit = (log) => {
-    const key = todayKey();
-    setCleanLogs({...cleanLogs, [key]: [...(cleanLogs[key]||[]), log]});
+    if (DOWNTIME_AREAS.includes(log.task)) {
+      // Store downtime logs on the schedule itself
+      const key = todayKey();
+      // Update in allScheds
+      const s = allScheds[key];
+      if (s) {
+        const updated = {...s, downtime: {...(s.downtime||{}), [log.task]: log}};
+        setAllScheds({...allScheds, [key]: updated});
+        // Also update in scheds array if loaded
+        setScheds(prev => {
+          const ns = [...prev];
+          const idx = ns.findIndex(x => toDateKey(new Date(x.date)) === key);
+          if (idx >= 0) ns[idx] = {...ns[idx], downtime: {...(ns[idx].downtime||{}), [log.task]: log}};
+          return ns;
+        });
+      }
+    } else {
+      // Regular cleaning areas → store in cleanLogs
+      const key = todayKey();
+      setCleanLogs({...cleanLogs, [key]: [...(cleanLogs[key]||[]), log]});
+    }
   };
   
   const dateForDay = (wk, dy) => {
