@@ -994,7 +994,7 @@ const StaffingSummary = ({ scheds, allScheds, onSelect, staffReqs, setStaffReqs 
 };
 
 // ============== CLEANING LOGS ==============
-const CleaningLogs = ({ logs, onView, allScheds, onClearLog, breakSignups, onClearBreaks }) => {
+const CleaningLogs = ({ logs, onView, allScheds, onClearLog, breakSignups, onClearBreaks, onUpdateSched }) => {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
@@ -1065,25 +1065,34 @@ const CleaningLogs = ({ logs, onView, allScheds, onClearLog, breakSignups, onCle
           
           {/* === DOWNTIME CLEANING SUB-SECTION === */}
           {selSched && (() => {
-            const dt = sanitizeSched(selSched)?.downtime || {};
+            const sanSched = sanitizeSched(selSched);
+            const dt = sanSched?.downtime || {};
             const hasDT = DOWNTIME_AREAS.some(area => {
               const ad = dt[area] || {};
               return Object.values(ad).some(v => v && v.completedAt);
             });
             if (!hasDT) return null;
+            const schedKey = getKey(selDay);
             return <div className="mt-4 pt-4 border-t">
-              <h4 className="font-bold text-sm mb-3">Downtime Cleaning</h4>
+              <h4 className="font-bold text-lg mb-3">Downtime Cleaning</h4>
               {DOWNTIME_AREAS.map(area => {
                 const areaData = dt[area] || {};
                 const tasks = DOWNTIME_TASKS[area] || [];
-                const signedTasks = tasks.map((t,i) => ({task: t, log: areaData[i]})).filter(x => x.log?.completedAt);
+                const signedTasks = tasks.map((t,i) => ({task: t, log: areaData[i], idx: i})).filter(x => x.log?.completedAt);
                 if (signedTasks.length === 0) return null;
                 return <div key={area} className="mb-3">
-                  <p className="font-bold text-xs text-gray-700 mb-1">{area} CLEANING</p>
+                  <p className="font-bold text-sm text-gray-700 mb-1">{area} CLEANING</p>
                   <div className="space-y-1">{signedTasks.map((st,j) => (
                     <div key={j} className="flex items-center justify-between text-xs p-2 bg-emerald-50 rounded">
                       <span>{st.task}</span>
-                      <span className="text-emerald-700 font-medium">✓ {st.log.initials} — {formatEST(st.log.completedAt)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-emerald-700 font-medium">✓ {st.log.initials} — {formatEST(st.log.completedAt)}</span>
+                        <button onClick={()=>{if(confirm('Clear "'+st.task+'" sign-off?')){
+                          const updated = JSON.parse(JSON.stringify(sanSched));
+                          if (updated.downtime?.[area]) { delete updated.downtime[area][st.idx]; }
+                          onUpdateSched?.(schedKey, updated);
+                        }}} className="text-red-400 hover:text-red-600" title="Clear this entry">✕</button>
+                      </div>
                     </div>
                   ))}</div>
                 </div>;
@@ -2356,7 +2365,7 @@ const App = () => {
         
         {tab === 'summary' && logged && (scheds.length>0 ? <StaffingSummary scheds={scheds} allScheds={allScheds} onSelect={setSelDay} staffReqs={staffReqs} setStaffReqs={setStaffReqs}/> : <div className="text-center py-12 bg-white rounded-lg card-shadow"><p className="text-gray-500">Generate schedules first.</p></div>)}
         
-        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds} onClearLog={setCleanLogs} breakSignups={breakSignups} onClearBreaks={setBreakSignups}/>}
+        {tab === 'cleaning' && logged && <CleaningLogs logs={cleanLogs} onView={setViewLog} allScheds={allScheds} onClearLog={setCleanLogs} breakSignups={breakSignups} onClearBreaks={setBreakSignups} onUpdateSched={(key,sched)=>{setAllScheds(prev=>({...prev,[key]:sched}));setScheds(prev=>{const ns=[...prev];const idx=ns.findIndex(x=>toDateKey(new Date(x.date))===key);if(idx>=0)ns[idx]=sched;return ns;});}}/>}
         
         {tab === 'help' && logged && (
           <div className="fade-in max-w-4xl mx-auto">
