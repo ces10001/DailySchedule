@@ -516,6 +516,27 @@ const Engine = {
     const cf = n => !n || n === 'X' ? 0 : n.includes('/') ? 2 : 1;
     const stats = { vB1: cf(vAU1)+cf(vMed1), vB2: cf(vAU2)+cf(vMed2), vB3: cf(vAU3)+cf(vMed3), rB1: cf(r1)+cf(r2), rB2: cf(r1b2)+cf(r2b2), rB3: cf(r1b3)+cf(r2b3), rgB1: cf(rg3b1)+cf(a1)+cf(a2)+cf(a3)+cf(rg1)+cf(rg2), rgB2: cf(rg3b2)+cf(a1b2)+cf(a2b2)+cf(a3b2)+cf(rg1b2)+cf(rg2b2), rgB3: cf(rg3b3)+cf(a1b3)+cf(a2b3)+cf(a3b3)+cf(rg1b3)+cf(rg2b3) };
     
+    // Adjust vault block times for supervisors whose shifts don't match standard block times
+    const fmtH = (h) => { const hr = Math.floor(h); const mn = Math.round((h - hr) * 60); const ampm = hr >= 12 ? 'PM' : 'AM'; const hr12 = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr; return hr12 + ':' + String(mn).padStart(2,'0') + ' ' + ampm; };
+    const adjustVaultTime = (person, defaultTime) => {
+      if (!person || person === 'RPH' || person === 'X') return defaultTime;
+      const emp = emps.find(e => e.name === person);
+      if (!emp || !emp.supervisor) return defaultTime;
+      const sc = wk === 1 ? emp.week1?.[dy]||'' : emp.week2?.[dy]||'';
+      if (!sc) return defaultTime;
+      const parsed = this.parse(sc);
+      const endH = parsed?.e || 0;
+      const parts = defaultTime.split(' - ');
+      const defParsed = this.parse(parts[1]);
+      const defEnd = defParsed?.s || defParsed?.e || 0;
+      if (endH > 0 && endH !== defEnd) return parts[0] + ' - ' + fmtH(endH);
+      return defaultTime;
+    };
+    const vT1 = t1S+' - '+t1E, vT2 = t2S+' - '+t2E, vT3 = t3S+' - '+t3E;
+    const vT1F = adjustVaultTime(vMed1, vT1) !== vT1 ? adjustVaultTime(vMed1, vT1) : adjustVaultTime(vAU1, vT1);
+    const vT2F = adjustVaultTime(vMed2, vT2) !== vT2 ? adjustVaultTime(vMed2, vT2) : adjustVaultTime(vAU2, vT2);
+    const vT3F = adjustVaultTime(vMed3, vT3) !== vT3 ? adjustVaultTime(vMed3, vT3) : adjustVaultTime(vAU3, vT3);
+
     return {
       dayTitle: title, dateStr, fullTitle: title+' '+dateStr+' (Wk '+wk+')', cleanTime, cleaning,
       times: { t1S, t1E, t2S, t2E, t3S, t3E },
@@ -528,27 +549,6 @@ const Engine = {
         {au2:a1b2,au3:a2b2,au4:a3b2,time:t2S+' - '+t2E,au2Split:a1b2Split},
         {au2:a1b3,au3:a2b3,au4:a3b3,time:t3S+' - '+t3E,au2Split:a1b3Split}
       ],
-      // Adjust vault block times for supervisors whose shifts don't match standard block times
-      const fmtH = (h) => { const hr = Math.floor(h); const mn = Math.round((h - hr) * 60); const ampm = hr >= 12 ? 'PM' : 'AM'; const hr12 = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr; return hr12 + ':' + String(mn).padStart(2,'0') + ' ' + ampm; };
-      const adjustVaultTime = (person, defaultTime) => {
-        if (!person || person === 'RPH' || person === 'X') return defaultTime;
-        const emp = emps.find(e => e.name === person);
-        if (!emp || !emp.supervisor) return defaultTime;
-        const sc = wk === 1 ? emp.week1?.[dy]||'' : emp.week2?.[dy]||'';
-        if (!sc) return defaultTime;
-        const parsed = this.parse(sc);
-        const endH = parsed?.e || 0;
-        const parts = defaultTime.split(' - ');
-        const defParsed = this.parse(parts[1]);
-        const defEnd = defParsed?.s || defParsed?.e || 0;
-        if (endH > 0 && endH !== defEnd) return parts[0] + ' - ' + fmtH(endH);
-        return defaultTime;
-      };
-      const vT1 = t1S+' - '+t1E, vT2 = t2S+' - '+t2E, vT3 = t3S+' - '+t3E;
-      const vT1F = adjustVaultTime(vMed1, vT1) !== vT1 ? adjustVaultTime(vMed1, vT1) : adjustVaultTime(vAU1, vT1);
-      const vT2F = adjustVaultTime(vMed2, vT2) !== vT2 ? adjustVaultTime(vMed2, vT2) : adjustVaultTime(vAU2, vT2);
-      const vT3F = adjustVaultTime(vMed3, vT3) !== vT3 ? adjustVaultTime(vMed3, vT3) : adjustVaultTime(vAU3, vT3);
-      
       vault: [{au:vAU1==='X'?'RPH':vAU1,med:vMed1==='X'?'RPH':vMed1,time:vT1F},{au:vAU2==='X'?'RPH':vAU2,med:vMed2==='X'?'RPH':vMed2,time:vT2F},{au:vAU3==='X'?'RPH':vAU3,med:vMed3==='X'?'RPH':vMed3,time:vT3F}],
       vaultOpen: sun ? '9:30 AM - 10:00 AM' : '8:00 AM - 9:00 AM',
       lunches, breaks, deposits: [{time:'9:00 AM - 12:00 PM', person:''}], 
