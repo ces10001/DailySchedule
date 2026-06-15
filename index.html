@@ -779,16 +779,16 @@ const BdayV1 = ({ nameStr, onClose }) => {
   const confetti = [{left:'5%',color:'#fff176',duration:'4.8s',delay:'0s'},{left:'13%',color:'#ff80ab',duration:'5.5s',delay:'-1.4s'},{left:'22%',color:'#7df9ff',duration:'4.2s',delay:'-0.7s'},{left:'31%',color:'#ffffff',duration:'6s',delay:'-2.3s'},{left:'42%',color:'#ffcf4d',duration:'4.7s',delay:'-1.9s'},{left:'54%',color:'#b388ff',duration:'5.2s',delay:'-0.4s'},{left:'67%',color:'#69f0ae',duration:'4.5s',delay:'-2.7s'},{left:'78%',color:'#ff8a80',duration:'5.8s',delay:'-1.1s'},{left:'88%',color:'#ffffff',duration:'4.9s',delay:'-3s'},{left:'96%',color:'#fff176',duration:'6.4s',delay:'-2s'}];
   const balloons = [{left:'3%',color:'#ff5fa2',delay:'-1s',duration:'7s'},{left:'92%',color:'#ffd166',delay:'-3s',duration:'8.5s'},{left:'86%',color:'#8ec5ff',delay:'-5s',duration:'7.8s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[28px] px-14 py-9 text-center text-white shadow-[0_12px_35px_rgba(150,50,180,0.35)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[28px] px-8 py-4 pb-5 text-center text-white shadow-[0_12px_35px_rgba(150,50,180,0.35)] no-print" style={{isolation:'isolate'}}>
       <style>{`@keyframes birthdayGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}@keyframes bounceTitle{0%,100%{transform:translateY(0) scale(1)}45%{transform:translateY(-8px) scale(1.03)}65%{transform:translateY(2px) scale(0.99)}}@keyframes emojiPop{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}50%{transform:translateY(-8px) rotate(8deg) scale(1.18)}}@keyframes wiggle{0%,100%{transform:rotate(-1deg)}50%{transform:rotate(1.5deg)}}@keyframes confettiFall{0%{transform:translateY(-30px) rotate(0deg)}100%{transform:translateY(260px) rotate(720deg)}}@keyframes balloonFloat{0%{transform:translateY(70px) translateX(0) rotate(-4deg);opacity:0}15%{opacity:1}50%{transform:translateY(-70px) translateX(18px) rotate(5deg)}100%{transform:translateY(-210px) translateX(-12px) rotate(-5deg);opacity:0}}`}</style>
       <div className="absolute inset-0" style={{zIndex:-1,background:'linear-gradient(120deg,#ff4fd8,#9b5cff,#ffcf4d,#ff6fb1,#7c4dff)',backgroundSize:'400% 400%',animation:'birthdayGradient 8s ease infinite'}}/>
       <button onClick={onClose} className="absolute right-4 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/75 bg-white/20 text-xl font-black text-white backdrop-blur-md hover:scale-110 hover:bg-white/30">×</button>
       {confetti.map((c,i) => <span key={'c'+i} className="pointer-events-none absolute top-[-18px] h-[18px] w-[10px] rounded-[3px] opacity-95" style={{zIndex:2,left:c.left,backgroundColor:c.color,animation:`confettiFall ${c.duration} linear infinite`,animationDelay:c.delay}}/>)}
       {balloons.map((b,i) => <span key={'b'+i} className="pointer-events-none absolute bottom-[-60px] h-[54px] w-[42px] rounded-[50%_50%_45%_45%]" style={{zIndex:2,left:b.left,backgroundColor:b.color,animation:`balloonFloat ${b.duration} ease-in-out infinite`,animationDelay:b.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-sm font-extrabold uppercase tracking-widest" style={{animation:'wiggle 2.6s ease-in-out infinite'}}><AE>🎉</AE> Party Mode Activated <AE delay="0.25s">🎈</AE></div>
-        <h1 className="m-0 text-[clamp(34px,6vw,72px)] font-black leading-none drop-shadow-2xl" style={{fontFamily:"'Comic Sans MS',system-ui",animation:'bounceTitle 2.2s ease-in-out infinite',textShadow:'0 4px 0 rgba(117,31,156,0.45)'}}><AE>🎂</AE> Happy Birthday, {nameStr}! <AE delay="0.5s">🥳</AE></h1>
-        <p className="mt-3 text-[clamp(16px,2.2vw,24px)] font-extrabold drop-shadow-lg">Wishing you confetti, cake, big smiles, and the best day ever <AE delay="0.75s">✨</AE></p>
+        
+        <h1 className="m-0 text-[clamp(22px,3.5vw,42px)] font-black leading-none drop-shadow-2xl" style={{fontFamily:"'Comic Sans MS',system-ui",animation:'bounceTitle 2.2s ease-in-out infinite',textShadow:'0 4px 0 rgba(117,31,156,0.45)'}}><AE>🎂</AE> Happy Birthday, {nameStr}! <AE delay="0.5s">🥳</AE></h1>
+        
       </div>
     </div>
   );
@@ -798,7 +798,7 @@ const BdayV1 = ({ nameStr, onClose }) => {
 const BdayV2 = ({ nameStr, onClose }) => {
   const stars = [{left:'8%',top:'25%',delay:'0s'},{left:'22%',top:'70%',delay:'0.6s'},{left:'45%',top:'18%',delay:'1.1s'},{left:'68%',top:'75%',delay:'0.3s'},{left:'85%',top:'30%',delay:'1.5s'},{left:'92%',top:'60%',delay:'0.8s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[28px] px-14 py-10 text-center text-[#fff8d6] shadow-[0_12px_35px_rgba(0,0,0,0.5)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[28px] px-8 py-4 pb-5 text-center text-[#fff8d6] shadow-[0_12px_35px_rgba(0,0,0,0.5)] no-print" style={{isolation:'isolate'}}>
       <style>{`@keyframes glamGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}@keyframes glamSweep{0%,18%{transform:translateX(-125%);opacity:0}34%{opacity:0.8}58%,100%{transform:translateX(125%);opacity:0}}@keyframes glamTitle{0%,100%{transform:scale(1)}45%{transform:scale(1.03)}65%{transform:scale(0.99)}}@keyframes glamStar{0%,100%{opacity:0.3;transform:scale(0.7) rotate(0deg)}50%{opacity:1;transform:scale(1.3) rotate(15deg)}}@keyframes glamConfetti{0%{transform:translateY(-30px) rotate(0deg);opacity:0}12%{opacity:0.9}100%{transform:translateY(280px) rotate(600deg);opacity:0}}`}</style>
       <div className="absolute inset-0" style={{zIndex:-1,background:"radial-gradient(circle at 20% 20%, rgba(255,215,0,0.2), transparent 25%), linear-gradient(135deg, #0a0a0a, #1a1a2e 40%, #16213e 70%, #0a0a0a)",backgroundSize:'160% 160%',animation:'glamGrad 10s ease-in-out infinite'}}/>
       <div className="absolute inset-0 z-[1]" style={{background:"linear-gradient(115deg, transparent 0%, rgba(255,215,0,0.06) 35%, rgba(255,248,200,0.3) 49%, rgba(255,215,0,0.06) 63%, transparent 100%)",animation:'glamSweep 5.5s ease-in-out infinite'}}/>
@@ -806,9 +806,9 @@ const BdayV2 = ({ nameStr, onClose }) => {
       {[{left:'6%',color:'#ffd700',d:'5.2s',dl:'0s'},{left:'18%',color:'#fff',d:'6.1s',dl:'-2s'},{left:'35%',color:'#ffd700',d:'4.8s',dl:'-1s'},{left:'52%',color:'#fff',d:'5.8s',dl:'-3.2s'},{left:'68%',color:'#ffd700',d:'5.4s',dl:'-4s'},{left:'82%',color:'#fff',d:'6.3s',dl:'-1.6s'},{left:'94%',color:'#ffd700',d:'5s',dl:'-2.8s'}].map((c,i) => <span key={i} className="pointer-events-none absolute top-[-20px] z-[2] h-4 w-2 rounded-[2px] opacity-90" style={{left:c.left,backgroundColor:c.color,animation:`glamConfetti ${c.d} linear infinite`,animationDelay:c.dl}}/>)}
       {stars.map((s,i) => <span key={i} className="pointer-events-none absolute z-[3] h-2 w-2 rounded-full bg-[#ffd700] shadow-[0_0_8px_#ffd700,0_0_18px_rgba(255,215,0,0.6)]" style={{left:s.left,top:s.top,animation:'glamStar 2.5s ease-in-out infinite',animationDelay:s.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#ffd700]/50 bg-[#ffd700]/10 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-[#ffd700] backdrop-blur-sm">🥂 VIP Celebration 🥂</div>
-        <h1 className="m-0 bg-[linear-gradient(180deg,#fff8d6,#ffd700_40%,#b8860b_70%,#fff0a0)] bg-clip-text text-[clamp(34px,6vw,72px)] font-black leading-none text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'glamTitle 2.4s ease-in-out infinite'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
-        <p className="mt-3 text-[clamp(16px,2.2vw,24px)] font-bold text-[#fff8d6]/90 drop-shadow-lg">A toast to you — may this year shine brighter than gold ✨</p>
+        
+        <h1 className="m-0 bg-[linear-gradient(180deg,#fff8d6,#ffd700_40%,#b8860b_70%,#fff0a0)] bg-clip-text text-[clamp(22px,3.5vw,42px)] font-black leading-none text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'glamTitle 2.4s ease-in-out infinite'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
+        
       </div>
     </div>
   );
@@ -816,7 +816,7 @@ const BdayV2 = ({ nameStr, onClose }) => {
 
 // V3: Retro Rainbow (disco/groovy vibes)
 const BdayV3 = ({ nameStr, onClose }) => (
-  <div className="relative w-full overflow-hidden rounded-b-[28px] px-14 py-10 text-center text-white shadow-[0_12px_35px_rgba(80,0,120,0.35)] no-print" style={{isolation:'isolate'}}>
+  <div className="relative w-full overflow-hidden rounded-b-[28px] px-8 py-4 pb-5 text-center text-white shadow-[0_12px_35px_rgba(80,0,120,0.35)] no-print" style={{isolation:'isolate'}}>
     <style>{`@keyframes retroGrad{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}@keyframes retroBounce{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}@keyframes retroSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}@keyframes retroStripe{0%{background-position:0 0}100%{background-position:0 60px}}`}</style>
     <div className="absolute inset-0" style={{zIndex:-1,background:'linear-gradient(120deg,#ff6b6b,#ffd93d,#6bcb77,#4d96ff,#9b59b6,#ff6b6b)',backgroundSize:'600% 100%',animation:'retroGrad 6s linear infinite'}}/>
     <div className="absolute inset-0" style={{zIndex:0,background:'repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(255,255,255,0.08) 28px, rgba(255,255,255,0.08) 30px)',animation:'retroStripe 2s linear infinite'}}/>
@@ -824,9 +824,9 @@ const BdayV3 = ({ nameStr, onClose }) => (
     {/* Disco ball */}
     <span className="pointer-events-none absolute right-[8%] top-4 z-[3] h-16 w-16 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.6)]" style={{background:"conic-gradient(from 0deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6, #ff6b6b)",animation:'retroSpin 4s linear infinite'}}><span className="absolute inset-1 rounded-full bg-white/30"/></span>
     <div className="relative z-10">
-      <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-sm font-black uppercase tracking-widest backdrop-blur-sm">🪩 Groovy Birthday Bash 🕺</div>
-      <h1 className="m-0 text-[clamp(34px,6vw,72px)] font-black leading-none" style={{fontFamily:"'Trebuchet MS',system-ui",animation:'retroBounce 2s ease-in-out infinite',textShadow:'3px 3px 0 #9b59b6, 6px 6px 0 rgba(0,0,0,0.2)'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
-      <p className="mt-3 text-[clamp(16px,2.2vw,24px)] font-black drop-shadow-lg">Get your groove on — it's YOUR day to shine! 🌈</p>
+      
+      <h1 className="m-0 text-[clamp(22px,3.5vw,42px)] font-black leading-none" style={{fontFamily:"'Trebuchet MS',system-ui",animation:'retroBounce 2s ease-in-out infinite',textShadow:'3px 3px 0 #9b59b6, 6px 6px 0 rgba(0,0,0,0.2)'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
+      
     </div>
   </div>
 );
@@ -835,7 +835,7 @@ const BdayV3 = ({ nameStr, onClose }) => (
 const BdayV4 = ({ nameStr, onClose }) => {
   const palms = [{left:'3%',delay:'0s'},{left:'88%',delay:'-1.5s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[28px] px-14 py-10 text-center text-white shadow-[0_12px_35px_rgba(0,80,120,0.35)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[28px] px-8 py-4 pb-5 text-center text-white shadow-[0_12px_35px_rgba(0,80,120,0.35)] no-print" style={{isolation:'isolate'}}>
       <style>{`@keyframes tropGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}@keyframes tropTitle{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}@keyframes waveMove{0%,100%{transform:translateX(-8px)}50%{transform:translateX(8px)}}@keyframes tropFloat{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}@keyframes tropBubble{0%{transform:translateY(20px) scale(0.7);opacity:0}20%{opacity:0.8}100%{transform:translateY(-200px) scale(1.1);opacity:0}}`}</style>
       <div className="absolute inset-0" style={{zIndex:-1,background:"radial-gradient(circle at 80% 20%, rgba(255,220,100,0.3), transparent 30%), linear-gradient(135deg, #0077b6, #00b4d8 35%, #48cae4 65%, #90e0ef)",backgroundSize:'160% 160%',animation:'tropGrad 10s ease-in-out infinite'}}/>
       <button onClick={onClose} className="absolute right-4 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/70 bg-white/15 text-xl font-black text-white backdrop-blur-md hover:scale-110 hover:bg-white/25">×</button>
@@ -846,9 +846,9 @@ const BdayV4 = ({ nameStr, onClose }) => {
       {/* Palm emojis */}
       {palms.map((p,i) => <span key={i} className="pointer-events-none absolute bottom-2 z-[4] text-[40px]" style={{left:p.left,animation:'tropFloat 4s ease-in-out infinite',animationDelay:p.delay}}>🌴</span>)}
       <div className="relative z-10">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-sm font-black uppercase tracking-widest backdrop-blur-sm">🏖️ Beach Birthday Vibes 🌺</div>
-        <h1 className="m-0 text-[clamp(34px,6vw,72px)] font-black leading-none drop-shadow-2xl" style={{animation:'tropTitle 3s ease-in-out infinite',textShadow:'0 3px 0 rgba(0,60,100,0.4)'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
-        <p className="mt-3 text-[clamp(16px,2.2vw,24px)] font-bold drop-shadow-lg">Waves of happiness, sunshine, and tropical birthday energy 🌊</p>
+        
+        <h1 className="m-0 text-[clamp(22px,3.5vw,42px)] font-black leading-none drop-shadow-2xl" style={{animation:'tropTitle 3s ease-in-out infinite',textShadow:'0 3px 0 rgba(0,60,100,0.4)'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
+        
       </div>
     </div>
   );
@@ -858,7 +858,7 @@ const BdayV4 = ({ nameStr, onClose }) => {
 const BdayV5 = ({ nameStr, onClose }) => {
   const cosmicStars = [{left:'5%',top:'20%',delay:'0s'},{left:'15%',top:'70%',delay:'0.4s'},{left:'30%',top:'30%',delay:'1s'},{left:'50%',top:'75%',delay:'0.6s'},{left:'65%',top:'20%',delay:'1.3s'},{left:'80%',top:'65%',delay:'0.2s'},{left:'92%',top:'35%',delay:'1.7s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[28px] px-14 py-10 text-center text-white shadow-[0_12px_35px_rgba(40,0,80,0.5)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[28px] px-8 py-4 pb-5 text-center text-white shadow-[0_12px_35px_rgba(40,0,80,0.5)] no-print" style={{isolation:'isolate'}}>
       <style>{`@keyframes cosmicGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}@keyframes cosmicTitle{0%,100%{transform:scale(1) translateY(0)}45%{transform:scale(1.03) translateY(-5px)}65%{transform:scale(0.99) translateY(1px)}}@keyframes cosmicStar{0%,100%{opacity:0.3;transform:scale(0.6)}50%{opacity:1;transform:scale(1.4)}}@keyframes shootingStar{0%{transform:translateX(-50px) translateY(50px) rotate(-45deg);opacity:0}10%{opacity:1}30%{opacity:1}100%{transform:translateX(400px) translateY(-200px) rotate(-45deg);opacity:0}}@keyframes nebulaFloat{0%,100%{transform:scale(1);opacity:0.3}50%{transform:scale(1.1);opacity:0.5}}`}</style>
       <div className="absolute inset-0" style={{zIndex:-1,background:"radial-gradient(circle at 30% 40%, rgba(100,0,200,0.4), transparent 35%), radial-gradient(circle at 70% 60%, rgba(0,100,200,0.3), transparent 30%), linear-gradient(135deg, #0a001a, #1a0044 35%, #000033 65%, #0a001a)",backgroundSize:'160% 160%',animation:'cosmicGrad 12s ease-in-out infinite'}}/>
       <button onClick={onClose} className="absolute right-4 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border-2 border-purple-300/50 bg-white/10 text-xl font-black text-purple-100 backdrop-blur-md hover:scale-110 hover:bg-white/20">×</button>
@@ -870,9 +870,9 @@ const BdayV5 = ({ nameStr, onClose }) => {
       {/* Shooting star */}
       <span className="pointer-events-none absolute left-[10%] top-[30%] z-[4] h-[2px] w-[60px] rounded-full bg-[linear-gradient(90deg,transparent,white,transparent)]" style={{animation:'shootingStar 4s ease-in infinite'}}/>
       <div className="relative z-10">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-purple-400/40 bg-purple-900/30 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-purple-200 backdrop-blur-sm">🚀 Cosmic Celebration 🌟</div>
-        <h1 className="m-0 text-[clamp(34px,6vw,72px)] font-black leading-none" style={{animation:'cosmicTitle 2.5s ease-in-out infinite',textShadow:'0 0 20px rgba(150,100,255,0.8), 0 0 40px rgba(100,0,200,0.4), 0 4px 0 rgba(50,0,100,0.5)'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
-        <p className="mt-3 text-[clamp(16px,2.2vw,24px)] font-bold text-purple-100/90 drop-shadow-lg">The whole galaxy is celebrating you today — shine on! 🌌</p>
+        
+        <h1 className="m-0 text-[clamp(22px,3.5vw,42px)] font-black leading-none" style={{animation:'cosmicTitle 2.5s ease-in-out infinite',textShadow:'0 0 20px rgba(150,100,255,0.8), 0 0 40px rgba(100,0,200,0.4), 0 4px 0 rgba(50,0,100,0.5)'}}>🎂 Happy Birthday, {nameStr}! 🥳</h1>
+        
       </div>
     </div>
   );
@@ -896,7 +896,7 @@ const ChristmasBanner = ({ onClose }) => {
   ];
   const stars = [{left:'11%',top:'38%',delay:'0s'},{left:'24%',top:'72%',delay:'0.8s'},{left:'72%',top:'34%',delay:'1.2s'},{left:'88%',top:'68%',delay:'0.45s'},{left:'48%',top:'22%',delay:'1.6s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[30px] px-14 py-12 text-center text-[#fff8dc] shadow-[0_16px_42px_rgba(70,0,0,0.35)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[30px] px-8 py-5 pb-6 text-center text-[#fff8dc] shadow-[0_16px_42px_rgba(70,0,0,0.35)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes christmasGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes magicalGlow{0%,100%{opacity:0.45}50%{opacity:0.85}}
@@ -920,9 +920,9 @@ const ChristmasBanner = ({ onClose }) => {
       {/* Stars */}
       {stars.map((s,i) => <span key={'st'+i} className="pointer-events-none absolute z-[4] h-2 w-2 rounded-full bg-[#fff2a8] shadow-[0_0_8px_#fff2a8,0_0_18px_#ffd85a,0_0_30px_rgba(255,216,90,0.75)]" style={{left:s.left,top:s.top,animation:'starTwinkle 2.2s ease-in-out infinite',animationDelay:s.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-3 inline-block text-[clamp(46px,7vw,86px)]" style={{animation:'treePulse 2.4s ease-in-out infinite'}}>🎄</div>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'treePulse 2.4s ease-in-out infinite'}}>🎄</div>
         <h1 className="m-0 font-serif text-[clamp(38px,7vw,86px)] font-extrabold leading-none tracking-wide text-[#fff4c2]" style={{animation:'titleWarmGlow 3s ease-in-out infinite'}}>Merry Christmas!</h1>
-        <p className="mx-auto mt-4 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-bold text-[#fff8dc]/95 drop-shadow-lg">Wishing you warmth, wonder, sparkling lights, and a little holiday magic ✨</p>
+        
       </div>
     </div>
   );
@@ -933,7 +933,7 @@ const HalloweenBanner = ({ onClose }) => {
   const bats = [{left:'-8%',top:'26%',duration:'9s',delay:'0s',anim:'batFly'},{left:'-12%',top:'48%',duration:'11s',delay:'-4s',anim:'batFlySmall'},{left:'-10%',top:'15%',duration:'12.5s',delay:'-7s',anim:'batFlyTiny'}];
   const stars = [{left:'14%',top:'24%',delay:'0s'},{left:'27%',top:'70%',delay:'0.7s'},{left:'66%',top:'27%',delay:'1.2s'},{left:'88%',top:'62%',delay:'0.35s'},{left:'51%',top:'16%',delay:'1.6s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-16 text-center text-[#fff0c9] shadow-[0_16px_42px_rgba(0,0,0,0.45)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-6 text-center text-[#fff0c9] shadow-[0_16px_42px_rgba(0,0,0,0.45)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes hauntedGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes eerieSparkle{0%,100%{opacity:0.35}50%{opacity:0.75}}
@@ -962,9 +962,9 @@ const HalloweenBanner = ({ onClose }) => {
       <span className="pointer-events-none absolute bottom-[-34px] left-[-10%] right-[-10%] z-[3] h-[110px] blur-2xl" style={{background:"radial-gradient(ellipse at 15% 70%, rgba(255,255,255,0.24), transparent 55%), radial-gradient(ellipse at 44% 62%, rgba(218,190,255,0.22), transparent 58%), radial-gradient(ellipse at 78% 72%, rgba(255,185,120,0.18), transparent 54%)",animation:'fogRoll 6s ease-in-out infinite'}}/>
       <span className="pointer-events-none absolute bottom-[-56px] left-[-10%] right-[-10%] z-[3] h-[130px] blur-2xl" style={{background:"radial-gradient(ellipse at 15% 70%, rgba(255,255,255,0.24), transparent 55%), radial-gradient(ellipse at 44% 62%, rgba(218,190,255,0.22), transparent 58%), radial-gradient(ellipse at 78% 72%, rgba(255,185,120,0.18), transparent 54%)",opacity:0.5,animation:'fogRoll 9s ease-in-out infinite',animationDelay:'-3s'}}/>
       <div className="relative z-10">
-        <div className="mb-3 inline-block text-[clamp(50px,8vw,96px)]" style={{animation:'pumpkinGlow 2.4s ease-in-out infinite'}}>🎃</div>
-        <h1 className="m-0 text-[clamp(40px,7vw,92px)] font-black leading-[0.95] tracking-wide text-[#ffd27a]" style={{fontFamily:"'Trebuchet MS','Comic Sans MS',system-ui,sans-serif",animation:'spookyBounce 2.8s ease-in-out infinite',textShadow:'0 3px 0 #451052, 0 7px 0 rgba(0,0,0,0.22), 0 0 18px rgba(255,120,0,0.85), 0 0 34px rgba(169,73,255,0.55)'}}>Happy Halloween!</h1>
-        <p className="mx-auto mt-6 max-w-3xl text-[clamp(15px,2vw,22px)] font-extrabold text-[#fff0c9]/90 drop-shadow-lg">Floating ghosts, silly bats, glowing pumpkins, and a little haunted-house magic 👻</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'pumpkinGlow 2.4s ease-in-out infinite'}}>🎃</div>
+        <h1 className="m-0 text-[clamp(24px,4vw,48px)] font-black leading-[0.95] tracking-wide text-[#ffd27a]" style={{fontFamily:"'Trebuchet MS','Comic Sans MS',system-ui,sans-serif",animation:'spookyBounce 2.8s ease-in-out infinite',textShadow:'0 3px 0 #451052, 0 7px 0 rgba(0,0,0,0.22), 0 0 18px rgba(255,120,0,0.85), 0 0 34px rgba(169,73,255,0.55)'}}>Happy Halloween!</h1>
+        
       </div>
     </div>
   );
@@ -976,7 +976,7 @@ const VeteransDayBanner = ({ onClose }) => {
   const sparks = [{left:'14%',top:'58%',delay:'0s'},{left:'32%',top:'30%',delay:'0.8s'},{left:'58%',top:'76%',delay:'1.5s'},{left:'79%',top:'24%',delay:'0.45s'}];
   const starClip = "polygon(50% 0%, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%)";
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-[72px] text-center text-[#fff7d8] shadow-[0_16px_42px_rgba(4,12,34,0.46)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-8 text-center text-[#fff7d8] shadow-[0_16px_42px_rgba(4,12,34,0.46)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes veteransGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes reverentFlagWave{0%,100%{transform:skewY(-0.6deg) scaleX(1);opacity:0.58}50%{transform:skewY(0.7deg) scaleX(1.02);opacity:0.82}}
@@ -1003,14 +1003,13 @@ const VeteransDayBanner = ({ onClose }) => {
       {/* Reverent Sparks */}
       {sparks.map((sp,i) => <span key={'vdsp'+i} className="pointer-events-none absolute z-[7] h-[9px] w-[9px] rounded-full bg-[#fff2b0] shadow-[0_0_8px_#fff2b0,0_0_18px_rgba(255,215,100,0.82),0_0_30px_rgba(255,255,255,0.26)]" style={{left:sp.left,top:sp.top,animation:'reverentSparkle 2.8s ease-in-out infinite',animationDelay:sp.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-[#ffe28c]/70 bg-[#06132f]/50 px-5 py-2.5 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.13em] text-[#ffe8a6] backdrop-blur-sm" style={{animation:'vdServiceBadge 3.2s ease-in-out infinite'}}>★ Thank You for Your Service ★</div>
         {/* Medal Emblem */}
-        <div className="relative mx-auto mb-3.5 h-[106px] w-[76px]" style={{animation:'medalFloat 3.2s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,218,120,0.55)) drop-shadow(0 8px 16px rgba(0,0,0,0.28))'}}>
-          <span className="absolute left-[18px] top-0 h-[54px] w-10 shadow-[inset_0_-8px_12px_rgba(0,0,0,0.18)]" style={{background:"linear-gradient(90deg, #b61d2b 0 28%, #f8f8f8 28% 42%, #1d3f82 42% 58%, #f8f8f8 58% 72%, #b61d2b 72% 100%)",clipPath:"polygon(0 0, 100% 0, 88% 100%, 50% 78%, 12% 100%)"}}/>
-          <span className="absolute bottom-0 left-1/2 h-[58px] w-[58px] -translate-x-1/2 shadow-[0_0_18px_rgba(255,215,100,0.68),inset_0_-6px_10px_rgba(100,60,8,0.24)]" style={{background:"linear-gradient(180deg, #fff7c8 0%, #ffd15a 38%, #b67a18 72%, #fff0a8 100%)",clipPath:starClip,animation:'medalStarGlow 3.4s ease-in-out infinite'}}/>
+        <div className="relative mx-auto mb-1.5 h-[60px] w-[76px]" style={{animation:'medalFloat 3.2s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,218,120,0.55)) drop-shadow(0 8px 16px rgba(0,0,0,0.28))'}}>
+          <span className="absolute left-[18px] top-0 h-[30px] w-6 shadow-[inset_0_-8px_12px_rgba(0,0,0,0.18)]" style={{background:"linear-gradient(90deg, #b61d2b 0 28%, #f8f8f8 28% 42%, #1d3f82 42% 58%, #f8f8f8 58% 72%, #b61d2b 72% 100%)",clipPath:"polygon(0 0, 100% 0, 88% 100%, 50% 78%, 12% 100%)"}}/>
+          <span className="absolute bottom-0 left-1/2 h-[34px] w-[34px] -translate-x-1/2 shadow-[0_0_18px_rgba(255,215,100,0.68),inset_0_-6px_10px_rgba(100,60,8,0.24)]" style={{background:"linear-gradient(180deg, #fff7c8 0%, #ffd15a 38%, #b67a18 72%, #fff0a8 100%)",clipPath:starClip,animation:'medalStarGlow 3.4s ease-in-out infinite'}}/>
         </div>
-        <h1 className="m-0 bg-[linear-gradient(180deg,#fff9d6_0%,#ffd96a_36%,#b98520_66%,#fff0a8_100%)] bg-clip-text font-serif text-[clamp(42px,7.4vw,96px)] font-black leading-[0.96] tracking-wide text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'vdTitleHonor 3.8s ease-in-out infinite'}}>Happy Veterans Day!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-[#fff7d8]/95 drop-shadow-lg">Honoring courage, sacrifice, service, and the proud legacy of those who served</p>
+        <h1 className="m-0 bg-[linear-gradient(180deg,#fff9d6_0%,#ffd96a_36%,#b98520_66%,#fff0a8_100%)] bg-clip-text font-serif text-[clamp(24px,4vw,48px)] font-black leading-[0.96] tracking-wide text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'vdTitleHonor 3.8s ease-in-out infinite'}}>Happy Veterans Day!</h1>
+        
       </div>
     </div>
   );
@@ -1021,7 +1020,7 @@ const LaborDayBanner = ({ onClose }) => {
   const stars = [{left:'13%',top:'70%',delay:'0s',color:'#ffffff'},{left:'26%',top:'22%',delay:'0.5s',color:'#ef4444'},{left:'48%',top:'18%',delay:'1.1s',color:'#ffffff'},{left:'66%',top:'72%',delay:'0.3s',color:'#ef4444'},{left:'88%',top:'38%',delay:'1.6s',color:'#ffffff'}];
   const sparks = [{left:'10%',top:'42%',delay:'0s'},{left:'34%',top:'74%',delay:'0.7s'},{left:'58%',top:'30%',delay:'1.2s'},{left:'82%',top:'68%',delay:'0.35s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-[70px] text-center text-[#f8fbff] shadow-[0_16px_42px_rgba(8,21,48,0.38)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-8 text-center text-[#f8fbff] shadow-[0_16px_42px_rgba(8,21,48,0.38)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes laborGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes flagStripeWave{0%,100%{transform:skewY(-0.7deg) scaleX(1);opacity:0.62}50%{transform:skewY(0.8deg) scaleX(1.025);opacity:0.88}}
@@ -1047,10 +1046,9 @@ const LaborDayBanner = ({ onClose }) => {
       {/* Sparks */}
       {sparks.map((sp,i) => <span key={'ldsp'+i} className="pointer-events-none absolute z-[7] h-[9px] w-[9px] rounded-full bg-white shadow-[0_0_8px_#ffffff,0_0_18px_rgba(210,225,240,0.9),0_0_30px_rgba(220,38,38,0.58)]" style={{left:sp.left,top:sp.top,animation:'industrialSpark 2s ease-in-out infinite',animationDelay:sp.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-white/70 bg-[#07152f]/40 px-5 py-2.5 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.14em] text-white backdrop-blur-sm" style={{animation:'ldBadgeGlow 2.8s ease-in-out infinite'}}>★ Honoring the Workforce ★</div>
-        <div className="mb-2 inline-block text-[clamp(48px,8vw,92px)]" style={{animation:'iconSteelPulse 2.7s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,255,255,0.65)) drop-shadow(0 0 24px rgba(220,38,38,0.35))'}}>⚙️</div>
-        <h1 className="m-0 text-[clamp(42px,7.4vw,98px)] font-black uppercase leading-[0.95] tracking-wide text-white" style={{fontFamily:"'Impact','Haettenschweiler','Arial Black',system-ui,sans-serif",WebkitTextStroke:'2px rgba(7,21,47,0.6)',animation:'titleStrength 3s ease-in-out infinite',textShadow:'0 4px 0 #dc2626, 0 8px 0 rgba(7,21,47,0.75), 0 16px 28px rgba(0,0,0,0.32), 0 0 22px rgba(255,255,255,0.62)'}}>Happy Labor Day!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-black text-[#f8fbff]/95 drop-shadow-lg">Celebrating dedication, skill, strength, and the people who keep everything moving</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'iconSteelPulse 2.7s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,255,255,0.65)) drop-shadow(0 0 24px rgba(220,38,38,0.35))'}}>⚙️</div>
+        <h1 className="m-0 text-[clamp(24px,4vw,48px)] font-black uppercase leading-[0.95] tracking-wide text-white" style={{fontFamily:"'Impact','Haettenschweiler','Arial Black',system-ui,sans-serif",WebkitTextStroke:'2px rgba(7,21,47,0.6)',animation:'titleStrength 3s ease-in-out infinite',textShadow:'0 4px 0 #dc2626, 0 8px 0 rgba(7,21,47,0.75), 0 16px 28px rgba(0,0,0,0.32), 0 0 22px rgba(255,255,255,0.62)'}}>Happy Labor Day!</h1>
+        
       </div>
     </div>
   );
@@ -1069,7 +1067,7 @@ const EasterBanner = ({ onClose }) => {
   const petals = [{left:'10%',duration:'8.5s',delay:'0s',scale:1},{left:'21%',duration:'10s',delay:'-4s',scale:0.8},{left:'36%',duration:'9.2s',delay:'-2.2s',scale:1},{left:'52%',duration:'11s',delay:'-6.4s',scale:0.72},{left:'68%',duration:'8.8s',delay:'-3.1s',scale:1},{left:'82%',duration:'10.5s',delay:'-7.2s',scale:0.84},{left:'94%',duration:'9.6s',delay:'-5.2s',scale:1}];
   const sparkles = [{left:'12%',top:'34%',delay:'0s'},{left:'25%',top:'72%',delay:'0.6s'},{left:'50%',top:'20%',delay:'1.2s'},{left:'73%',top:'68%',delay:'0.35s'},{left:'88%',top:'35%',delay:'1.6s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-[78px] text-center text-white shadow-[0_16px_42px_rgba(180,120,190,0.28)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-10 text-center text-white shadow-[0_16px_42px_rgba(180,120,190,0.28)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes easterGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes pastelSparkleField{0%,100%{opacity:0.42}50%{opacity:0.82}}
@@ -1091,9 +1089,6 @@ const EasterBanner = ({ onClose }) => {
       {onClose && <button onClick={onClose} className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/70 bg-white/20 text-xl font-black leading-none text-white shadow-[0_0_18px_rgba(255,255,255,0.35)] backdrop-blur-md transition hover:scale-110 hover:rotate-6 hover:bg-white/30">×</button>}
       {/* Floating Eggs */}
       {eggs.map((e,i) => <span key={'ee'+i} className="pointer-events-none absolute top-[-48px] z-[6] h-[46px] w-[34px] rounded-[50%_50%_45%_45%] shadow-[0_0_12px_rgba(255,255,255,0.45),inset_-5px_-8px_12px_rgba(110,80,140,0.12)]" style={{left:e.left,background:e.bg,transform:`scale(${e.scale})`,animation:`eggFloatDown ${e.duration} linear infinite`,animationDelay:e.delay}}/>)}
-      {/* Bunnies */}
-      <span className="pointer-events-none absolute bottom-[34px] left-[9%] z-[8] h-[38px] w-12 rounded-[55%_55%_42%_42%] bg-white/90 shadow-[0_0_14px_rgba(255,255,255,0.68)]" style={{animation:'bunnyHop 2.8s ease-in-out infinite'}}><span className="absolute left-4 top-[15px] h-[5px] w-[5px] rounded-full bg-[#9f79b8]"/><span className="absolute bottom-[7px] right-[-10px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"/></span>
-      <span className="pointer-events-none absolute bottom-[34px] right-[11%] z-[8] h-[38px] w-12 rounded-[55%_55%_42%_42%] bg-white/90 shadow-[0_0_14px_rgba(255,255,255,0.68)] opacity-90" style={{animation:'bunnyHopSmall 2.8s ease-in-out infinite',animationDelay:'-1.3s'}}><span className="absolute left-4 top-[15px] h-[5px] w-[5px] rounded-full bg-[#9f79b8]"/><span className="absolute bottom-[7px] right-[-10px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"/></span>
       {/* Petals */}
       {petals.map((p,i) => <span key={'ep'+i} className="pointer-events-none absolute top-[-36px] z-[5] h-6 w-3.5 rounded-[80%_0_80%_0] opacity-80" style={{left:p.left,transform:`scale(${p.scale})`,background:"radial-gradient(circle at 35% 28%, rgba(255,255,255,0.5), transparent 28%), linear-gradient(135deg, #fff4b8, #ffb4d2)",animation:`easterPetalDrift ${p.duration} linear infinite`,animationDelay:p.delay}}/>)}
       {/* Sparkles */}
@@ -1102,10 +1097,9 @@ const EasterBanner = ({ onClose }) => {
       <span className="pointer-events-none absolute bottom-[30px] left-[18%] z-[9] h-6 w-6" style={{animation:'flowerWiggle 3.4s ease-in-out infinite'}}><span className="absolute inset-0" style={{background:"radial-gradient(circle at 50% 8%, #fff5a8 0 5px, transparent 6px), radial-gradient(circle at 88% 50%, #ffb4d2 0 5px, transparent 6px), radial-gradient(circle at 50% 92%, #c5b5ff 0 5px, transparent 6px), radial-gradient(circle at 12% 50%, #bff5d3 0 5px, transparent 6px), radial-gradient(circle at 50% 50%, #ffd76a 0 5px, transparent 6px)"}}/></span>
       <span className="pointer-events-none absolute bottom-[30px] left-[82%] z-[9] h-6 w-6" style={{animation:'flowerWiggle 3.4s ease-in-out infinite',animationDelay:'-1.4s'}}><span className="absolute inset-0" style={{background:"radial-gradient(circle at 50% 8%, #fff5a8 0 5px, transparent 6px), radial-gradient(circle at 88% 50%, #ffb4d2 0 5px, transparent 6px), radial-gradient(circle at 50% 92%, #c5b5ff 0 5px, transparent 6px), radial-gradient(circle at 12% 50%, #bff5d3 0 5px, transparent 6px), radial-gradient(circle at 50% 50%, #ffd76a 0 5px, transparent 6px)"}}/></span>
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-white/70 bg-white/25 px-5 py-2 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.12em] text-[#8b5fbf] shadow-[0_0_20px_rgba(255,255,255,0.45),inset_0_0_18px_rgba(255,255,255,0.22)] backdrop-blur-md" style={{animation:'easterBadgeHop 2.7s ease-in-out infinite'}}>🐣 Spring Egg Hunt ✨</div>
-        <div className="mb-2 inline-block text-[clamp(52px,8vw,96px)]" style={{animation:'bunnyEggBounce 2.5s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,255,255,0.86)) drop-shadow(0 0 26px rgba(255,197,220,0.55))'}}>🐰</div>
-        <h1 className="m-0 text-[clamp(42px,7.4vw,96px)] font-black leading-none tracking-wide text-white" style={{fontFamily:"'Trebuchet MS','Nunito','Arial Rounded MT Bold',system-ui,sans-serif",animation:'easterTitleFloat 3.2s ease-in-out infinite',textShadow:'0 3px 0 rgba(176,117,210,0.45), 0 7px 0 rgba(255,170,205,0.32), 0 12px 26px rgba(120,70,150,0.22), 0 0 24px rgba(255,255,255,0.82)'}}>Happy Easter!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-white/95 drop-shadow-lg">Pastel eggs, hopping bunnies, fresh flowers, and a bright spring morning</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'bunnyEggBounce 2.5s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,255,255,0.86)) drop-shadow(0 0 26px rgba(255,197,220,0.55))'}}>🐰</div>
+        <h1 className="m-0 text-[clamp(24px,4vw,48px)] font-black leading-none tracking-wide text-white" style={{fontFamily:"'Trebuchet MS','Nunito','Arial Rounded MT Bold',system-ui,sans-serif",animation:'easterTitleFloat 3.2s ease-in-out infinite',textShadow:'0 3px 0 rgba(176,117,210,0.45), 0 7px 0 rgba(255,170,205,0.32), 0 12px 26px rgba(120,70,150,0.22), 0 0 24px rgba(255,255,255,0.82)'}}>Happy Easter!</h1>
+        
       </div>
     </div>
   );
@@ -1117,7 +1111,7 @@ const SevenTenBanner = ({ onClose }) => {
   const orbs = [{left:'-70px',bottom:'-48px',size:'210px',delay:'0s'},{right:'-72px',top:'34px',size:'210px',delay:'-3s'},{left:'45%',top:'-90px',size:'170px',delay:'-5s'}];
   const sparkles = [{left:'12%',top:'68%',delay:'0s'},{left:'27%',top:'24%',delay:'0.45s'},{left:'52%',top:'72%',delay:'1.1s'},{left:'73%',top:'26%',delay:'0.75s'},{left:'89%',top:'62%',delay:'1.55s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-[70px] text-center text-[#fff9df] shadow-[0_16px_42px_rgba(70,35,4,0.4)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-8 text-center text-[#fff9df] shadow-[0_16px_42px_rgba(70,35,4,0.4)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes oilGoldGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes liquidShimmer{0%,18%{transform:translateX(-125%);opacity:0}34%{opacity:0.82}58%,100%{transform:translateX(125%);opacity:0}}
@@ -1145,10 +1139,9 @@ const SevenTenBanner = ({ onClose }) => {
       {/* Sparkles */}
       {sparkles.map((s,i) => <span key={'710s'+i} className="pointer-events-none absolute z-[6] h-[9px] w-[9px] rounded-full bg-[#fff3b0] shadow-[0_0_8px_#fff3b0,0_0_18px_rgba(255,214,100,0.95),0_0_32px_rgba(120,255,160,0.45)]" style={{left:s.left,top:s.top,animation:'s710SparkleFlash 2.1s ease-in-out infinite',animationDelay:s.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-[#ffea96]/65 bg-[#12371c]/35 px-5 py-2 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.14em] text-[#ffeaa0] shadow-[0_0_22px_rgba(255,210,90,0.34),inset_0_0_18px_rgba(255,255,255,0.12)] backdrop-blur-sm" style={{animation:'s710BadgeMelt 2.9s ease-in-out infinite'}}>✨ Liquid Gold Vibes ✨</div>
-        <div className="mb-2 inline-block text-[clamp(48px,8vw,92px)]" style={{animation:'oilDropPulse 2.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,226,120,0.9)) drop-shadow(0 0 28px rgba(255,174,40,0.55))'}}>🍯</div>
-        <h1 className="m-0 bg-[linear-gradient(180deg,#fff8cf_0%,#ffd85c_36%,#b77913_68%,#fff0a0_100%)] bg-clip-text font-sans text-[clamp(42px,7.4vw,98px)] font-black uppercase leading-[0.95] tracking-[0.045em] text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'titlePour 3.2s ease-in-out infinite'}}>Happy 7/10!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-[#fff9df]/95 drop-shadow-lg">Smooth golden shimmer, honeycomb glow, warm drops, and premium laid-back energy</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'oilDropPulse 2.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,226,120,0.9)) drop-shadow(0 0 28px rgba(255,174,40,0.55))'}}>🍯</div>
+        <h1 className="m-0 bg-[linear-gradient(180deg,#fff8cf_0%,#ffd85c_36%,#b77913_68%,#fff0a0_100%)] bg-clip-text font-sans text-[clamp(24px,4vw,48px)] font-black uppercase leading-[0.95] tracking-[0.045em] text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'titlePour 3.2s ease-in-out infinite'}}>Happy 7/10!</h1>
+        
       </div>
     </div>
   );
@@ -1161,7 +1154,7 @@ const FourTwentyBanner = ({ onClose }) => {
   const sparkles = [{left:'11%',top:'72%',delay:'0.2s'},{left:'35%',top:'20%',delay:'0.9s'},{left:'55%',top:'70%',delay:'1.4s'},{left:'83%',top:'36%',delay:'0.5s'}];
   const leafClip = "polygon(50% 0%, 58% 29%, 76% 10%, 68% 38%, 96% 28%, 73% 51%, 92% 63%, 64% 62%, 69% 91%, 50% 68%, 31% 91%, 36% 62%, 8% 63%, 27% 51%, 4% 28%, 32% 38%, 24% 10%, 42% 29%)";
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-16 text-center text-[#f7ffe8] shadow-[0_16px_42px_rgba(0,60,25,0.36)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-6 text-center text-[#f7ffe8] shadow-[0_16px_42px_rgba(0,60,25,0.36)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes mellowGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes ft420Shimmer{0%,18%{transform:translateX(-125%);opacity:0}34%{opacity:0.78}58%,100%{transform:translateX(125%);opacity:0}}
@@ -1194,10 +1187,9 @@ const FourTwentyBanner = ({ onClose }) => {
       {/* Peace Sign */}
       <span className="pointer-events-none absolute bottom-[22px] left-[8%] z-[7] text-[clamp(28px,4vw,46px)]" style={{animation:'peaceFloat 3s ease-in-out infinite',filter:'drop-shadow(0 0 10px rgba(255,220,100,0.6)) drop-shadow(0 0 18px rgba(120,255,110,0.4))'}}>✌️</span>
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-[#ffeea0]/60 bg-[#083e1c]/35 px-5 py-2 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.12em] text-[#fff0a8] shadow-[0_0_20px_rgba(255,210,95,0.3),inset_0_0_18px_rgba(255,255,255,0.12)] backdrop-blur-sm" style={{animation:'ft420BadgeFloat 2.8s ease-in-out infinite'}}>✌️ Good Vibes Only ✨</div>
-        <div className="mb-2 inline-block text-[clamp(48px,8vw,92px)]" style={{animation:'peacePulse 2.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,224,120,0.85)) drop-shadow(0 0 26px rgba(115,255,105,0.55))'}}>🌿</div>
-        <h1 className="m-0 text-[clamp(42px,7.4vw,98px)] font-black leading-[0.95] tracking-wide text-[#fff5b8]" style={{fontFamily:"'Trebuchet MS','Comic Sans MS',system-ui,sans-serif",animation:'groovyTitle 3.1s ease-in-out infinite',textShadow:'0 3px 0 #0a3b1f, 0 7px 0 rgba(0,45,18,0.38), 0 12px 26px rgba(0,0,0,0.28), 0 0 24px rgba(255,215,95,0.76), 0 0 42px rgba(155,255,105,0.35)'}}>Happy 4/20!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-[#f7ffe8]/95 drop-shadow-lg">Mellow moments, golden sunshine, floating leaves, and laid-back festival energy</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'peacePulse 2.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,224,120,0.85)) drop-shadow(0 0 26px rgba(115,255,105,0.55))'}}>🌿</div>
+        <h1 className="m-0 text-[clamp(24px,4vw,48px)] font-black leading-[0.95] tracking-wide text-[#fff5b8]" style={{fontFamily:"'Trebuchet MS','Comic Sans MS',system-ui,sans-serif",animation:'groovyTitle 3.1s ease-in-out infinite',textShadow:'0 3px 0 #0a3b1f, 0 7px 0 rgba(0,45,18,0.38), 0 12px 26px rgba(0,0,0,0.28), 0 0 24px rgba(255,215,95,0.76), 0 0 42px rgba(155,255,105,0.35)'}}>Happy 4/20!</h1>
+        
       </div>
     </div>
   );
@@ -1210,7 +1202,7 @@ const NewYearBanner = ({ onClose }) => {
   const sparkles = [{left:'12%',top:'66%',delay:'0s'},{left:'24%',top:'26%',delay:'0.45s'},{left:'49%',top:'18%',delay:'1.1s'},{left:'71%',top:'70%',delay:'0.75s'},{left:'88%',top:'28%',delay:'1.55s'}];
   const fwDots = "radial-gradient(circle, currentColor 0 3px, transparent 4px) 50% 0%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 85% 15%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 100% 50%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 85% 85%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 50% 100%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 15% 85%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 0% 50%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 15% 15%/8px 8px no-repeat";
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-[70px] text-center text-[#fff7d6] shadow-[0_16px_46px_rgba(0,0,0,0.48)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-8 text-center text-[#fff7d6] shadow-[0_16px_46px_rgba(0,0,0,0.48)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes midnightGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes goldSweep{0%,18%{transform:translateX(-125%);opacity:0}34%{opacity:0.85}58%,100%{transform:translateX(125%);opacity:0}}
@@ -1241,9 +1233,8 @@ const NewYearBanner = ({ onClose }) => {
       {/* Sparkles */}
       {sparkles.map((s,i) => <span key={'nys'+i} className="pointer-events-none absolute z-[8] h-[9px] w-[9px] rounded-full bg-[#fff3b0] shadow-[0_0_8px_#fff3b0,0_0_18px_rgba(255,214,100,0.95),0_0_32px_rgba(255,255,255,0.58)]" style={{left:s.left,top:s.top,animation:'nySparkleTwinkle 2s ease-in-out infinite',animationDelay:s.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-[#ffe28c]/65 bg-yellow-300/10 px-5 py-2 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.14em] text-[#ffe9a8] backdrop-blur-sm" style={{animation:'nyBadgeGlow 2.6s ease-in-out infinite'}}>✦ Midnight Celebration ✦</div>
-        <h1 className="m-0 bg-[linear-gradient(180deg,#fff8d2_0%,#ffd96a_36%,#b98520_64%,#fff0a6_100%)] bg-clip-text font-serif text-[clamp(42px,7.4vw,98px)] font-black uppercase leading-[0.95] tracking-[0.045em] text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'titleChampagnePop 2.8s ease-in-out infinite'}}>Happy New Year!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-[#fff7d6]/95 drop-shadow-lg">Champagne bubbles, golden fireworks, glittering lights, and a bright new beginning ✨</p>
+        <h1 className="m-0 bg-[linear-gradient(180deg,#fff8d2_0%,#ffd96a_36%,#b98520_64%,#fff0a6_100%)] bg-clip-text font-serif text-[clamp(24px,4vw,48px)] font-black uppercase leading-[0.95] tracking-[0.045em] text-transparent" style={{WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',animation:'titleChampagnePop 2.8s ease-in-out infinite'}}>Happy New Year!</h1>
+        
       </div>
     </div>
   );
@@ -1261,7 +1252,7 @@ const ThanksgivingBanner = ({ onClose }) => {
   ];
   const glows = [{left:'12%',top:'30%',delay:'0s'},{left:'28%',top:'74%',delay:'0.7s'},{left:'52%',top:'20%',delay:'1.3s'},{left:'73%',top:'68%',delay:'0.35s'},{left:'88%',top:'34%',delay:'1.7s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-16 text-center text-[#fff7df] shadow-[0_16px_42px_rgba(85,35,8,0.38)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-6 text-center text-[#fff7df] shadow-[0_16px_42px_rgba(85,35,8,0.38)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes harvestGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes goldenGlowField{0%,100%{opacity:0.42}50%{opacity:0.82}}
@@ -1288,10 +1279,9 @@ const ThanksgivingBanner = ({ onClose }) => {
       {/* Pumpkin */}
       <span className="pointer-events-none absolute bottom-3 left-1/2 z-[6] h-[46px] w-[74px] -translate-x-1/2 rounded-[50%] shadow-[inset_0_-8px_12px_rgba(85,30,6,0.22),0_8px_18px_rgba(50,18,5,0.28)]" style={{background:"radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0.18), transparent 28%), radial-gradient(ellipse at 18% 50%, #a94612 0 21%, transparent 22%), radial-gradient(ellipse at 38% 50%, #d86f1c 0 27%, transparent 28%), radial-gradient(ellipse at 62% 50%, #e58422 0 27%, transparent 28%), radial-gradient(ellipse at 82% 50%, #a94612 0 21%, transparent 22%), #c65b16",animation:'pumpkinGlow 3.2s ease-in-out infinite'}}/>
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-[#ffebaa]/60 bg-[#5c260a]/30 px-5 py-2 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.12em] text-[#ffe6a3] shadow-[0_0_18px_rgba(255,206,95,0.24),inset_0_0_18px_rgba(255,255,255,0.12)] backdrop-blur-sm" style={{animation:'tgBadgeFloat 2.8s ease-in-out infinite'}}>🍂 Gather & Give Thanks 🍂</div>
-        <div className="mb-3 inline-block text-[clamp(50px,8vw,96px)]" style={{animation:'turkeyBounce 2.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,220,130,0.78)) drop-shadow(0 0 26px rgba(210,85,20,0.42))'}}>🦃</div>
-        <h1 className="m-0 font-serif text-[clamp(40px,7vw,90px)] font-black leading-none tracking-wide text-[#fff0b8]" style={{animation:'tgTitleWarmth 3.4s ease-in-out infinite',textShadow:'0 3px 0 #6b2d10, 0 7px 0 rgba(80,30,8,0.34), 0 12px 26px rgba(45,15,5,0.34), 0 0 24px rgba(255,206,95,0.72)'}}>Happy Thanksgiving!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-[#fff7df]/95 drop-shadow-lg">Wishing you a cozy day filled with gratitude, good food, warm hearts, and golden moments ✨</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'turkeyBounce 2.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,220,130,0.78)) drop-shadow(0 0 26px rgba(210,85,20,0.42))'}}>🦃</div>
+        <h1 className="m-0 font-serif text-[clamp(24px,4vw,48px)] font-black leading-none tracking-wide text-[#fff0b8]" style={{animation:'tgTitleWarmth 3.4s ease-in-out infinite',textShadow:'0 3px 0 #6b2d10, 0 7px 0 rgba(80,30,8,0.34), 0 12px 26px rgba(45,15,5,0.34), 0 0 24px rgba(255,206,95,0.72)'}}>Happy Thanksgiving!</h1>
+        
       </div>
     </div>
   );
@@ -1302,7 +1292,7 @@ const StPatricksBanner = ({ onClose }) => {
   const coins = [{left:'12%',top:'24%',delay:'0s'},{left:'25%',top:'76%',delay:'0.55s'},{left:'46%',top:'18%',delay:'1.15s'},{left:'68%',top:'34%',delay:'0.25s'},{left:'86%',top:'72%',delay:'1.55s'}];
   const stars = [{left:'10%',top:'70%',delay:'0.2s'},{left:'38%',top:'72%',delay:'0.9s'},{left:'55%',top:'24%',delay:'1.4s'},{left:'84%',top:'38%',delay:'0.5s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-16 text-center text-[#fffbe0] shadow-[0_16px_42px_rgba(0,68,32,0.36)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-6 text-center text-[#fffbe0] shadow-[0_16px_42px_rgba(0,68,32,0.36)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes luckyGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes goldShimmer{0%,18%{transform:translateX(-125%);opacity:0}34%{opacity:0.78}58%,100%{transform:translateX(125%);opacity:0}}
@@ -1331,9 +1321,9 @@ const StPatricksBanner = ({ onClose }) => {
         <span className="absolute bottom-0 right-0 h-[58px] w-[88px] rounded-[12px_12px_28px_28px] bg-[linear-gradient(135deg,#101010,#2a2a2a_52%,#050505)] shadow-[inset_0_8px_12px_rgba(255,255,255,0.08),inset_0_-12px_18px_rgba(0,0,0,0.42),0_10px_24px_rgba(0,0,0,0.32)]"/>
       </div>
       <div className="relative z-10">
-        <div className="mb-3 inline-block text-[clamp(48px,8vw,92px)]" style={{animation:'luckyBounce 2.5s ease-in-out infinite',filter:'drop-shadow(0 0 10px rgba(255,231,120,0.9)) drop-shadow(0 0 24px rgba(70,255,145,0.5))'}}>☘️</div>
-        <h1 className="m-0 font-serif text-[clamp(38px,7vw,88px)] font-black uppercase leading-none tracking-wide text-[#fff4b0]" style={{animation:'titleCharm 3s ease-in-out infinite',textShadow:'0 3px 0 #063d1f, 0 7px 0 rgba(0,45,20,0.38), 0 12px 26px rgba(0,0,0,0.28), 0 0 22px rgba(255,215,80,0.78)'}}>Happy St. Patrick's Day!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-extrabold text-[#fffbe0]/95 drop-shadow-lg">May your day be filled with luck, laughter, golden moments, and Irish charm ✨</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'luckyBounce 2.5s ease-in-out infinite',filter:'drop-shadow(0 0 10px rgba(255,231,120,0.9)) drop-shadow(0 0 24px rgba(70,255,145,0.5))'}}>☘️</div>
+        <h1 className="m-0 font-serif text-[clamp(24px,4vw,48px)] font-black uppercase leading-none tracking-wide text-[#fff4b0]" style={{animation:'titleCharm 3s ease-in-out infinite',textShadow:'0 3px 0 #063d1f, 0 7px 0 rgba(0,45,20,0.38), 0 12px 26px rgba(0,0,0,0.28), 0 0 22px rgba(255,215,80,0.78)'}}>Happy St. Patrick's Day!</h1>
+        
       </div>
     </div>
   );
@@ -1358,7 +1348,7 @@ const ValentineBanner = ({ onClose }) => {
   ];
   const sparkles = [{left:'12%',top:'34%',delay:'0s'},{left:'25%',top:'72%',delay:'0.6s'},{left:'50%',top:'20%',delay:'1.2s'},{left:'73%',top:'68%',delay:'0.35s'},{left:'88%',top:'35%',delay:'1.6s'}];
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-16 text-center text-[#fff8f8] shadow-[0_16px_42px_rgba(150,20,55,0.32)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-6 text-center text-[#fff8f8] shadow-[0_16px_42px_rgba(150,20,55,0.32)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes valentineGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes shimmerSweep{0%,18%{transform:translateX(-125%);opacity:0}34%{opacity:0.75}58%,100%{transform:translateX(125%);opacity:0}}
@@ -1384,9 +1374,9 @@ const ValentineBanner = ({ onClose }) => {
       {/* Sparkles */}
       {sparkles.map((s,i) => <span key={'vs'+i} className="pointer-events-none absolute z-[6] h-2 w-2 rounded-full bg-white shadow-[0_0_8px_#ffffff,0_0_18px_rgba(255,220,230,0.95),0_0_30px_rgba(255,90,135,0.65)]" style={{left:s.left,top:s.top,animation:'vSparkleTwinkle 2.2s ease-in-out infinite',animationDelay:s.delay}}/>)}
       <div className="relative z-10">
-        <div className="mb-3 inline-block text-[clamp(50px,8vw,96px)]" style={{animation:'heartbeat 1.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,255,255,0.72)) drop-shadow(0 0 28px rgba(255,50,100,0.58))'}}>💗</div>
-        <h1 className="m-0 text-[clamp(40px,7vw,88px)] font-extrabold leading-none tracking-wide text-[#fff3f6]" style={{fontFamily:"Georgia,'Times New Roman','Brush Script MT',cursive,serif",animation:'vTitleFloat 3.4s ease-in-out infinite',textShadow:'0 3px 0 rgba(128,18,54,0.38), 0 8px 22px rgba(80,0,30,0.28), 0 0 22px rgba(255,255,255,0.52)'}}>Happy Valentine's Day!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-bold text-[#fff8f8]/90 drop-shadow-lg">Sending a little warmth, sweetness, and sparkle your way ✨</p>
+        <div className="mb-1 inline-block text-[clamp(28px,4vw,48px)]" style={{animation:'heartbeat 1.6s ease-in-out infinite',filter:'drop-shadow(0 0 12px rgba(255,255,255,0.72)) drop-shadow(0 0 28px rgba(255,50,100,0.58))'}}>💗</div>
+        <h1 className="m-0 text-[clamp(24px,4vw,48px)] font-extrabold leading-none tracking-wide text-[#fff3f6]" style={{fontFamily:"Georgia,'Times New Roman','Brush Script MT',cursive,serif",animation:'vTitleFloat 3.4s ease-in-out infinite',textShadow:'0 3px 0 rgba(128,18,54,0.38), 0 8px 22px rgba(80,0,30,0.28), 0 0 22px rgba(255,255,255,0.52)'}}>Happy Valentine's Day!</h1>
+        
       </div>
     </div>
   );
@@ -1398,7 +1388,7 @@ const FourthOfJulyBanner = ({ onClose }) => {
   const bursts = [{left:'18%',top:'44%',delay:'0.2s'},{left:'83%',top:'48%',delay:'0.8s'},{left:'53%',top:'15%',delay:'1.3s'}];
   const dotBg = "radial-gradient(circle, currentColor 0 3px, transparent 4px) 50% 0%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 85% 15%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 100% 50%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 85% 85%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 50% 100%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 15% 85%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 0% 50%/8px 8px no-repeat,radial-gradient(circle, currentColor 0 3px, transparent 4px) 15% 15%/8px 8px no-repeat";
   return (
-    <div className="relative w-full overflow-hidden rounded-b-[32px] px-14 py-14 pb-16 text-center text-white shadow-[0_16px_42px_rgba(0,22,82,0.38)] no-print" style={{isolation:'isolate'}}>
+    <div className="relative w-full overflow-hidden rounded-b-[32px] px-8 py-5 pb-6 text-center text-white shadow-[0_16px_42px_rgba(0,22,82,0.38)] no-print" style={{isolation:'isolate'}}>
       <style>{`
         @keyframes julyGradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
         @keyframes flagWave{0%,100%{transform:skewY(-0.8deg) scaleX(1);opacity:0.66}50%{transform:skewY(0.8deg) scaleX(1.02);opacity:0.9}}
@@ -1425,9 +1415,8 @@ const FourthOfJulyBanner = ({ onClose }) => {
       {/* Mini Flag */}
       <span className="pointer-events-none absolute bottom-7 left-[5%] z-[5] h-[58px] w-24 overflow-hidden rounded-md shadow-[0_8px_22px_rgba(0,0,0,0.32),0_0_18px_rgba(255,255,255,0.28)]" style={{transformOrigin:'left center',animation:'miniFlagWave 2.8s ease-in-out infinite'}}><span className="absolute inset-0" style={{background:"linear-gradient(180deg, #d91f2f 0 7.7%, #ffffff 7.7% 15.4%, #d91f2f 15.4% 23.1%, #ffffff 23.1% 30.8%, #d91f2f 30.8% 38.5%, #ffffff 38.5% 46.2%, #d91f2f 46.2% 53.9%, #ffffff 53.9% 61.6%, #d91f2f 61.6% 69.3%, #ffffff 69.3% 77%, #d91f2f 77% 84.7%, #ffffff 84.7% 92.4%, #d91f2f 92.4% 100%"}}/><span className="absolute left-0 top-0 h-8 w-[42px] bg-[#123fa3] pt-[3px] text-center text-[7px] leading-[9px] tracking-[1px] text-white">★ ★ ★<br/>★ ★ ★<br/>★ ★ ★</span></span>
       <div className="relative z-10">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border-2 border-white/70 bg-blue-950/40 px-5 py-2 font-sans text-[clamp(13px,1.6vw,17px)] font-black uppercase tracking-[0.14em] text-[#ffe9a8] shadow-[0_0_18px_rgba(255,255,255,0.28),inset_0_0_18px_rgba(255,255,255,0.14)] backdrop-blur-sm" style={{animation:'badgePop 2.4s ease-in-out infinite'}}>★ Fireworks Tonight ★</div>
         <h1 className="m-0 text-[clamp(40px,7.2vw,96px)] font-black uppercase leading-[0.96] tracking-wide text-white" style={{fontFamily:"'Impact','Haettenschweiler','Arial Black',system-ui,sans-serif",animation:'titleBoom 2.6s ease-in-out infinite',WebkitTextStroke:'2px rgba(5,21,88,0.55)',textShadow:'0 4px 0 #d91f2f, 0 8px 0 rgba(5,21,88,0.75), 0 16px 28px rgba(0,0,0,0.32), 0 0 22px rgba(255,255,255,0.65)'}}>Happy 4th of July!</h1>
-        <p className="mx-auto mt-5 max-w-3xl font-sans text-[clamp(15px,2vw,22px)] font-black text-[#fff3c4] drop-shadow-lg">Stars, stripes, fireworks, and freedom — let the celebration light up the sky ✨</p>
+        
       </div>
     </div>
   );
