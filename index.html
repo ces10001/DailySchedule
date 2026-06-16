@@ -702,7 +702,9 @@ const SplitCell = ({ value, shapes, editable, onUpdate, splitData, hl, allShapes
   </div>;
 };
 
-const TimeCell = ({ time }) => <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
+const TimeCell = ({ time, editable, onUpdate }) => editable && onUpdate ? 
+  <div className="schedule-cell bg-gray-100 text-xs"><input type="text" value={time} onChange={e=>onUpdate(e.target.value)} className="w-full bg-transparent text-xs border-0 p-0 text-center font-medium" style={{minWidth:'90px'}}/></div> :
+  <div className="schedule-cell bg-gray-100 text-xs">{time}</div>;
 const Header = ({ children, color }) => {
   const cols = { black:'bg-black text-white', green:'bg-[#67d50d] text-black', blue:'bg-[#bdd7ee] text-black', yellow:'bg-[#ffe699] text-black' };
   return <div className={'schedule-cell font-bold text-base '+(cols[color]||cols.black)}>{children}</div>;
@@ -1479,6 +1481,20 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
     onUpdate(s);
   };
   
+  // Update time across ALL sections for a given block index
+  const updBlockTime = (blockIdx, newTime) => {
+    if (!onUpdate) return;
+    const s = JSON.parse(JSON.stringify(sched));
+    if (s.lod[blockIdx]) s.lod[blockIdx].time = newTime;
+    if (s.reception[blockIdx]) s.reception[blockIdx].time = newTime;
+    if (s.ipad[blockIdx]) s.ipad[blockIdx].time = newTime;
+    if (s.medCheckout[blockIdx]) s.medCheckout[blockIdx].time = newTime;
+    if (s.auCheckout[blockIdx]) s.auCheckout[blockIdx].time = newTime;
+    if (s.vault[blockIdx]) s.vault[blockIdx].time = newTime;
+    s.manuallyEdited = true; s.editedAt = new Date().toISOString();
+    onUpdate(s);
+  };
+  
   // Build conflict function for a specific block + category
   const makeConflictFn = (blockIdx, currentCat, currentPath) => (candidate) => {
     if (!candidate || candidate === 'X' || candidate === 'RPH') return null;
@@ -1570,7 +1586,7 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
         <div className="flex-1">
           <div className="mb-2">
             <Header color="black">LEADER OF THE DAY</Header>
-            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'lod','lod.'+i+'.name')}/><TimeCell time={l.time}/></React.Fragment>)}</div>
+            <div className="grid grid-cols-2">{sched.lod.map((l,i) => <React.Fragment key={i}><NameCell name={l.name} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('lod.'+i+'.name',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'lod','lod.'+i+'.name')}/><TimeCell time={l.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/></React.Fragment>)}</div>
           </div>
           <div className="mb-2">
             <div className="schedule-cell font-bold text-base bg-[#67d50d]">FRONT END RECEPTION</div>
@@ -1579,10 +1595,10 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
               <div className="col-span-2"><Header color="green">RECEPTION 2</Header></div>
               <div className="col-span-2"><Header color="green">iPAD</Header></div>
               {sched.reception.map((r,i) => <React.Fragment key={i}>
-                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r1')}/><TimeCell time={r.time}/>
-                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r2')}/><TimeCell time={r.time}/>
+                <NameCell name={r.r1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r1')}/><TimeCell time={r.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
+                <NameCell name={r.r2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('reception.'+i+'.r2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'reception','reception.'+i+'.r2')}/><TimeCell time={r.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
                 <SplitCell value={sched.ipad[i].display} shapes={sh} editable={editable} onUpdate={v=>upd('ipad.'+i+'.display',v)} splitData={sched.ipad[i].split} hl={hl} allShapes={shapes}/>
-                <TimeCell time={sched.ipad[i].time}/>
+                <TimeCell time={sched.ipad[i].time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
               </React.Fragment>)}
             </div>
           </div>
@@ -1593,9 +1609,9 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
               <div className="col-span-2"><Header color="blue">MEDICAL CHECKOUT 2</Header></div>
               <div className="col-span-2"><Header color="blue">MED 3 / AU 1</Header></div>
               {sched.medCheckout.map((m,i) => <React.Fragment key={i}>
-                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.mc1')}/><TimeCell time={m.time}/>
-                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.mc2')}/><TimeCell time={m.time}/>
-                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.med3au1')}/><TimeCell time={m.time}/>
+                <NameCell name={m.mc1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.mc1')}/><TimeCell time={m.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
+                <NameCell name={m.mc2} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.mc2',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.mc2')}/><TimeCell time={m.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
+                <NameCell name={m.med3au1} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('medCheckout.'+i+'.med3au1',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','medCheckout.'+i+'.med3au1')}/><TimeCell time={m.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
               </React.Fragment>)}
             </div>
             <div className="grid grid-cols-6 mt-1">
@@ -1604,20 +1620,20 @@ const ScheduleDisplay = ({ sched: rawSched, emps, shapes, onUpdate, editable, on
               <div className="col-span-2"><Header color="blue">AU CHECKOUT 4</Header></div>
               {sched.auCheckout.map((a,i) => <React.Fragment key={i}>
                 <SplitCell value={a.au2} shapes={sh} editable={editable} onUpdate={v=>upd('auCheckout.'+i+'.au2',v)} splitData={a.au2Split} hl={hl} allShapes={shapes}/>
-                <TimeCell time={a.time}/>
-                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au3')}/><TimeCell time={a.time}/>
-                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au4')}/><TimeCell time={a.time}/>
+                <TimeCell time={a.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
+                <NameCell name={a.au3} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au3',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au3')}/><TimeCell time={a.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
+                <NameCell name={a.au4} shapes={sh} editable={editable} emps={emps} onUpdate={v=>upd('auCheckout.'+i+'.au4',v)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'register','auCheckout.'+i+'.au4')}/><TimeCell time={a.time} editable={editable} onUpdate={v=>updBlockTime(i,v)}/>
               </React.Fragment>)}
             </div>
           </div>
           <div className="grid grid-cols-4">
             <div className="col-span-2"><Header color="yellow">AU LEFT VAULT</Header></div>
             <div className="col-span-2"><Header color="yellow">MEDICAL RIGHT VAULT</Header></div>
-            <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
-            <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen}/>
+            <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen} editable={editable} onUpdate={v=>upd('vaultOpen',v)}/>
+            <div className="schedule-cell font-bold text-sm">RPH</div><TimeCell time={sched.vaultOpen} editable={editable} onUpdate={v=>upd('vaultOpen',v)}/>
             {sched.vault.map((v,i) => <React.Fragment key={i}>
-              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'vault','vault.'+i+'.au')}/><TimeCell time={v.time}/>
-              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'vault','vault.'+i+'.med')}/><TimeCell time={v.time}/>
+              <NameCell name={v.au} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.au',val)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'vault','vault.'+i+'.au')}/><TimeCell time={v.time} editable={editable} onUpdate={val=>upd('vault.'+i+'.time',val)}/>
+              <NameCell name={v.med} shapes={sh} editable={editable} emps={emps} onUpdate={val=>upd('vault.'+i+'.med',val)} hl={hl} allShapes={shapes} conflictFn={makeConflictFn(i,'vault','vault.'+i+'.med')}/><TimeCell time={v.time} editable={editable} onUpdate={val=>upd('vault.'+i+'.time',val)}/>
             </React.Fragment>)}
           </div>
         </div>
