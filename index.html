@@ -2853,8 +2853,8 @@ const App = () => {
       <main className={'max-w-[1800px] mx-auto ' + (tab === 'schedule' ? 'px-2 py-3' : 'px-4 py-6')}>
         {tab === 'schedule' && (
           <div className="fade-in">
-            <HolidayBanner holiday={getHoliday()}/>
-            <BirthdayBanner names={getBirthdaysToday(sorted)}/>
+            <div className="mb-4"><HolidayBanner holiday={getHoliday()}/></div>
+            <div className="mb-4"><BirthdayBanner names={getBirthdaysToday(sorted)}/></div>
             {todaySched ? <>
               <div className="no-print flex items-center justify-between mb-2">
                 <h2 className="text-lg font-bold">{getESTTime()>=20.25?"Tomorrow's":"Today's"} Schedule</h2>
